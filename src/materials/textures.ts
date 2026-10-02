@@ -1150,12 +1150,13 @@ function transpose(c: Canvas) {
 /**
  * Enamelled steel discs on a dark backing (the Kuwait Towers spheres): staggered rows of slightly
  * domed, glossy discs, each picking a shade from `palette` ("#hex,#hex,..."). Knobs: cols, rows,
- * size (disc diameter relative to the spacing), background.
+ * size (disc diameter relative to the spacing), jitter (random size variation 0..0.6), background.
  */
 const paintDisks: Painter = (c, p) => {
   const cols = p.int("cols", 6, 1, 64);
   const rows = Math.max(2, Math.round(p.int("rows", cols, 1, 64) / 2) * 2); // even, so the stagger wraps
   const fill = p.num("size", 0.9, 0.3, 1.0);
+  const jitter = p.num("jitter", 0, 0, 0.6);
   const bg = p.color(["background", "base"], hex("#20292e"));
   const listed = p
     .str("palette", "")
@@ -1181,14 +1182,15 @@ const paintDisks: Painter = (c, p) => {
       const id = j * 1000 + k;
       const pc = palette[Math.floor(rnd(id, 192, c.seed) * palette.length)];
       const tone = 0.9 + rnd(id, 193, c.seed) * 0.2;
-      forDisc(c.size, u, v, r, (i, du, dv) => {
-        const d = Math.sqrt(du * du + dv * dv) / r;
+      const rd = r * (1 - jitter * rnd(id, 194, c.seed));
+      forDisc(c.size, u, v, rd, (i, du, dv) => {
+        const d = Math.sqrt(du * du + dv * dv) / rd;
         const dome = Math.sqrt(Math.max(0, 1 - d * d));
         // glossy enamel: brighter toward the top-left, thin darker rim
-        const light = 0.82 + 0.22 * dome + 0.12 * Math.max(0, (-du - dv) / r) - 0.25 * smoothstep(0.88, 1, d);
+        const light = 0.82 + 0.22 * dome + 0.12 * Math.max(0, (-du - dv) / rd) - 0.25 * smoothstep(0.88, 1, d);
         const t = tone * light * (1 + fine[i] * 0.04);
         setCol(c, i, pc[0] * t, pc[1] * t, pc[2] * t);
-        c.h[i] = r * (0.25 + 0.15 * dome);
+        c.h[i] = rd * (0.25 + 0.15 * dome);
         c.rough[i] = -0.35;
         c.ao[i] = 1;
       });
