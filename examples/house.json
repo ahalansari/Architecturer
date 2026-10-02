@@ -552,6 +552,155 @@
             6.6
           ],
           "facing": "east"
+        },
+        {
+          "id": "car",
+          "type": "car",
+          "position": [
+            14.4,
+            1.5
+          ],
+          "facing": "south",
+          "materials": {
+            "body": "car_paint_blue"
+          }
+        },
+        {
+          "id": "patio_table",
+          "type": "outdoor_table",
+          "position": [
+            9.8,
+            -1.9
+          ]
+        },
+        {
+          "type": "garden_chair",
+          "position": [
+            9.45,
+            -2.65
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "garden_chair",
+          "position": [
+            10.15,
+            -2.65
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "garden_chair",
+          "position": [
+            9.45,
+            -1.15
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "garden_chair",
+          "position": [
+            10.15,
+            -1.15
+          ],
+          "facing": "south"
+        },
+        {
+          "id": "parasol",
+          "type": "parasol",
+          "position": [
+            9.8,
+            -1.9
+          ]
+        },
+        {
+          "id": "bbq",
+          "type": "bbq",
+          "position": [
+            11.75,
+            -2.4
+          ],
+          "facing": "west"
+        },
+        {
+          "id": "sun_lounger",
+          "type": "sun_lounger",
+          "position": [
+            7.9,
+            -1.9
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "tree",
+          "position": [
+            -3.5,
+            -3.5
+          ]
+        },
+        {
+          "type": "tree",
+          "position": [
+            -3.0,
+            12.5
+          ],
+          "options": {
+            "kind": "conifer"
+          }
+        },
+        {
+          "type": "tree",
+          "position": [
+            17.5,
+            10.5
+          ]
+        },
+        {
+          "type": "bush",
+          "position": [
+            -0.9,
+            6.7
+          ]
+        },
+        {
+          "type": "bush",
+          "position": [
+            -0.9,
+            9.7
+          ]
+        },
+        {
+          "id": "hedge_west",
+          "type": "hedge",
+          "position": [
+            -5.5,
+            2.0
+          ],
+          "width": 8.0,
+          "facing": "east"
+        },
+        {
+          "type": "trash_bin",
+          "position": [
+            12.9,
+            9.3
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "lamp_post",
+          "position": [
+            16.8,
+            -6.5
+          ]
+        },
+        {
+          "type": "mailbox",
+          "position": [
+            -4.6,
+            7.2
+          ],
+          "facing": "west"
         }
       ],
       "terraces": [
@@ -578,6 +727,55 @@
           ],
           "material": "paving_stone",
           "thickness": 0.15
+        }
+      ],
+      "slabs": [
+        {
+          "id": "driveway",
+          "polygon": [
+            [
+              12.6,
+              -7
+            ],
+            [
+              16.2,
+              -7
+            ],
+            [
+              16.2,
+              6.5
+            ],
+            [
+              12.6,
+              6.5
+            ]
+          ],
+          "material": "asphalt",
+          "thickness": 0.08,
+          "offset": 0.0
+        },
+        {
+          "id": "front_path",
+          "polygon": [
+            [
+              -5,
+              7.6
+            ],
+            [
+              -0.15,
+              7.6
+            ],
+            [
+              -0.15,
+              8.8
+            ],
+            [
+              -5,
+              8.8
+            ]
+          ],
+          "material": "paving_stone",
+          "thickness": 0.08
         }
       ]
     },
@@ -1116,6 +1314,31 @@
             11.5,
             0.5
           ]
+        },
+        {
+          "type": "garden_chair",
+          "position": [
+            1.9,
+            -0.8
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "garden_chair",
+          "position": [
+            4.7,
+            -0.8
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "planter",
+          "position": [
+            3.5,
+            -1.22
+          ],
+          "width": 0.6,
+          "depth": 0.4
         }
       ],
       "roofs": [

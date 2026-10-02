@@ -68,12 +68,14 @@ interface Item {
 /** Items that lie flat on the floor or hang overhead and never block anything. */
 const FLAT = new Set(["rug", "door_mat"]);
 const OVERHEAD = new Set(["ceiling_light"]);
-const SEATS = new Set(["chair", "office_chair", "bar_stool", "counter_stool", "armchair", "bench"]);
-const TABLES = new Set(["table", "desk", "kitchen_island", "coffee_table", "side_table", "dresser", "piano", "kitchen_counter"]);
+const SEATS = new Set(["chair", "office_chair", "bar_stool", "counter_stool", "armchair", "bench", "garden_chair"]);
+const TABLES = new Set(["table", "desk", "kitchen_island", "coffee_table", "side_table", "dresser", "piano", "kitchen_counter", "outdoor_table"]);
 /** Symmetric objects without a meaningful front. */
-const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat", "table", "coffee_table", "side_table", "floor_lamp", "table_lamp", "ceiling_light", "kitchen_island", "bunk_bed"]);
+const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat", "table", "coffee_table", "side_table", "floor_lamp", "table_lamp", "ceiling_light", "kitchen_island", "bunk_bed", "outdoor_table", "parasol", "planter", "bush", "tree", "hedge", "fence", "hot_tub", "lamp_post", "car", "bicycle"]);
+/** Canopies that other furniture is meant to stand under. */
+const CANOPY = new Set(["parasol", "tree"]);
 /** Things that are fine in front of a window. */
-const WINDOW_OK = new Set(["curtain", "plant", "shower", "floor_lamp", "table_lamp", "bathtub", "radiator"]);
+const WINDOW_OK = new Set(["curtain", "plant", "shower", "floor_lamp", "table_lamp", "bathtub", "radiator", "bush", "planter", "hedge", "fence", "trash_bin", "bicycle", "garden_chair", "sun_lounger"]);
 const FACING_NAMES: Record<number, string> = { 0: "south", 90: "east", 180: "north", 270: "west" };
 
 function items(lv: Project["levels"][number]): Item[] {
@@ -184,6 +186,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
         if (FLAT.has(A.type) || FLAT.has(B.type) || OVERHEAD.has(A.type) || OVERHEAD.has(B.type)) continue;
         if (Math.min(A.z1, B.z1) - Math.max(A.z0, B.z0) <= 0.02) continue; // stacked (tv on a stand, lamp on a table)
         if ((SEATS.has(A.type) && TABLES.has(B.type)) || (SEATS.has(B.type) && TABLES.has(A.type))) continue; // tucked-in chairs
+        if (CANOPY.has(A.type) || CANOPY.has(B.type)) continue; // things meant to stand under a parasol / tree
         const depth = overlapDepth(A.rect, B.rect);
         if (depth > 0.05) warn(`furniture ${label(A)} and ${label(B)} overlap by ${fmt(depth)} m`);
       }
@@ -257,7 +260,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       if (nodes.includes("outside") && nodes.some((n) => n !== "outside")) entrances++;
 
       for (const it of its) {
-        if (FLAT.has(it.type) || OVERHEAD.has(it.type) || it.z0 > 1.8) continue;
+        if (FLAT.has(it.type) || OVERHEAD.has(it.type) || CANOPY.has(it.type) || it.z0 > 1.8) continue;
         // clear zone 0.6 m deep on both sides of the doorway
         for (const side of [-1, 1]) {
           const zone = [at(u0, side * half), at(u1, side * half), at(u1, side * (half + 0.6)), at(u0, side * (half + 0.6))];
@@ -284,7 +287,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
         }
         const poly = ensureCCW(sector);
         for (const it of its) {
-          if (FLAT.has(it.type) || OVERHEAD.has(it.type) || it.z0 > 2.0 || reported.has(it.name)) continue;
+          if (FLAT.has(it.type) || OVERHEAD.has(it.type) || CANOPY.has(it.type) || it.z0 > 2.0 || reported.has(it.name)) continue;
           if (overlapDepth(it.rect, poly) > 0.03) {
             reported.add(it.name);
             warn(`furniture ${label(it)} is inside the swing of door '${o.id}' — move it, or flip the door with hinge/swing`);

@@ -17,7 +17,7 @@
  * Materials are referenced by slot; unspecified slots fall back to the type's defaults.
  */
 import { MeshBuilder } from "../geometry/mesh.js";
-import { m4, v3, type Vec2, type Vec3 } from "../geometry/math.js";
+import { m4, offsetPolygon, v3, type Vec2, type Vec3 } from "../geometry/math.js";
 
 export interface FurnitureSpec {
   width: number;
@@ -1485,6 +1485,801 @@ function buildDoorMat(mb: MeshBuilder, s: FurnitureSpec) {
 }
 
 // ---------------------------------------------------------------------------
+// outdoor, vehicles & landscape
+// ---------------------------------------------------------------------------
+
+/**
+ * Sweep a closed profile along X: `rings` are CCW loops in (y, z) (seen from +X) placed at
+ * increasing x. `edgeMat[k]` is the material of the strip leaving vertex k. Caps use capMat.
+ */
+function sweepX(
+  mb: MeshBuilder,
+  rings: Vec3[][],
+  edgeMat: (k: number, ring: number) => string,
+  caps: { mat: string; first: Vec3; last: Vec3 } | null,
+) {
+  const n = rings[0].length;
+  for (let r = 0; r + 1 < rings.length; r++) {
+    const A = rings[r], B = rings[r + 1];
+    for (let k = 0; k < n; k++) {
+      const j = (k + 1) % n;
+      mb.quad(edgeMat(k, r), A[k], A[j], B[j], B[k]);
+    }
+  }
+  if (caps) {
+    mb.polygon(caps.mat, rings[0], caps.first);
+    mb.polygon(caps.mat, rings[rings.length - 1], caps.last);
+  }
+}
+
+/** Cloud of ellipsoid blobs filling the box [cx±sx/2, cy±sy/2, z0..z0+sz] (bushes, crowns, shrubs). */
+function foliage(mb: MeshBuilder, mat: string, cx: number, cy: number, z0: number, sx: number, sy: number, sz: number, count: number, seed: number, seg = 10, ground = false) {
+  const rnd = rng(seed);
+  const blob = (x: number, y: number, z: number, rx: number, ry: number, rz: number) => {
+    rx = Math.min(rx, sx / 2), ry = Math.min(ry, sy / 2), rz = Math.min(rz, sz / 2);
+    x = clamp(x, cx - sx / 2 + rx, cx + sx / 2 - rx);
+    y = clamp(y, cy - sy / 2 + ry, cy + sy / 2 - ry);
+    z = clamp(z, z0 + rz, z0 + sz - rz);
+    mb.sphere(mat, [x, y, z], rx, seg, Math.max(5, seg - 3), [1, ry / rx, rz / rx]);
+  };
+  blob(cx, cy, z0 + sz * 0.55, sx * 0.36, sy * 0.36, sz * 0.4);
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * TAU + rnd() * 0.6;
+    const k = 0.75 + rnd() * 0.3;
+    const rx = sx * 0.25 * k, ry = sy * 0.25 * k, rz = sz * 0.3 * k;
+    const out = 0.55 + rnd() * 0.45;
+    const z = ground && i % 2 === 0 ? z0 + rz : z0 + sz * (0.3 + rnd() * 0.45);
+    blob(cx + Math.cos(a) * (sx / 2 - rx) * out, cy + Math.sin(a) * (sy / 2 - ry) * out, z, rx, ry, rz);
+  }
+  if (count >= 5) blob(cx + (rnd() - 0.5) * sx * 0.15, cy + (rnd() - 0.5) * sy * 0.15, z0 + sz, sx * 0.24, sy * 0.24, sz * 0.25);
+}
+
+/** Matrix whose local +Z runs along world +X (wheels, rings with a horizontal axle). */
+function axleX(x: number, y: number, z: number) {
+  return m4.fromBasis([0, 1, 0], [0, 0, 1], [1, 0, 0], [x, y, z]);
+}
+
+type CarStyle = "sedan" | "suv" | "hatchback" | "pickup";
+const CAR_SHAPES: Record<CarStyle, { zb: number; hood: number; w: number; r1: number; r2: number; t: number; tumble: number; fa: number; ra: number; cl: number; pillars: number[] }> = {
+  // fractions of length from the front (w = windshield base, r1/r2 = roof front/rear, t = rear glass base), zb/hood/cl of height
+  sedan: { zb: 0.6, hood: 0.1, w: 0.31, r1: 0.45, r2: 0.7, t: 0.83, tumble: 0.13, fa: 0.19, ra: 0.2, cl: 0.11, pillars: [0.45] },
+  hatchback: { zb: 0.58, hood: 0.09, w: 0.29, r1: 0.44, r2: 0.86, t: 0.96, tumble: 0.12, fa: 0.17, ra: 0.15, cl: 0.11, pillars: [0.42] },
+  suv: { zb: 0.56, hood: 0.05, w: 0.26, r1: 0.38, r2: 0.93, t: 0.975, tumble: 0.08, fa: 0.17, ra: 0.18, cl: 0.14, pillars: [0.36, 0.7] },
+  pickup: { zb: 0.55, hood: 0.05, w: 0.25, r1: 0.37, r2: 0.56, t: 0.575, tumble: 0.08, fa: 0.16, ra: 0.22, cl: 0.15, pillars: [] },
+};
+
+function buildCar(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: L, height: h } = s;
+  const M = s.materials;
+  const style = optStr(s, "style", ["sedan", "suv", "hatchback", "pickup"] as const, "sedan");
+  const S = CAR_SHAPES[style];
+  const hw = w / 2 - Math.min(0.08, w * 0.045); // body half width (mirrors stick out to w/2)
+  const yF = -L / 2 + 0.03, yR = L / 2 - 0.03; // body ends (bumpers reach the box)
+  const at = (f: number) => -L / 2 + f * L;
+  const R = clamp(Math.min(0.23 * h, 0.075 * L, 0.2 * w), 0.12, 0.5);
+  const Ra = R + 0.03;
+  const c = Math.max(S.cl * h, 0.08);
+  const zb = S.zb * h, zHood = zb - S.hood * h;
+  const zDeck = style === "sedan" ? zb - 0.025 * h : zb;
+  const yFa = Math.max(at(S.fa), yF + Ra + 0.05), yRa = Math.min(L / 2 - S.ra * L, yR - Ra - 0.05);
+  const yW = at(S.w), yR1 = at(S.r1), yR2 = at(S.r2), yT = at(S.t);
+  // ---- lower body side profile (CCW in y,z) with wheel arches ----
+  const P: Vec2[] = [];
+  const PM: string[] = [];
+  const add = (y: number, z: number, m = M.body) => { P.push([y, z]); PM.push(m); };
+  const arch = (ya: number) => {
+    const half = Math.sqrt(Math.max(0, Ra * Ra - (R - c) * (R - c)));
+    const b = Math.asin(clamp((c - R) / Ra, -1, 1)); // negative
+    add(ya - half, c, M.trim);
+    const n = 9;
+    for (let i = 1; i < n; i++) {
+      const th = Math.PI - b - ((Math.PI - 2 * b) * i) / n;
+      add(ya + Ra * Math.cos(th), R + Ra * Math.sin(th), M.trim);
+    }
+    add(ya + half, c);
+  };
+  add(yF + 0.1, c + 0.05);
+  arch(yFa);
+  arch(yRa);
+  add(yR - 0.1, c + 0.05);
+  const zRT = style === "sedan" ? zDeck : zb;
+  add(yR, c + 0.17);
+  add(yR, zRT - 0.07);
+  add(yR - 0.05, zRT);
+  if (style === "sedan") add(yT + 0.08, zDeck);
+  if (yT < yR - 0.1) add(yT, zb);
+  add(yW, zb);
+  add(yF + 0.28, zHood + 0.03);
+  add(yF + 0.06, zHood);
+  add(yF, zHood - 0.07);
+  add(yF, c + 0.18);
+  // ---- body: profile swept across the width with rounded (chamfered) sides ----
+  const bodyRing = (x: number, off: number): Vec3[] => (off > 0 ? offsetPolygon(P, -off) : P).map(([y, z]) => [x, y, z] as Vec3);
+  const offs: [number, number][] = [[hw, 0.055], [hw - 0.022, 0.018], [hw - 0.075, 0]];
+  const rings = [...offs.map(([x, o]) => bodyRing(-x, o)), ...[...offs].reverse().map(([x, o]) => bodyRing(x, o))];
+  sweepX(mb, rings, (k) => PM[k], { mat: M.body, first: [-1, 0, 0], last: [1, 0, 0] });
+  // ---- cabin (greenhouse) with tumblehome ----
+  const zr = h;
+  const zbot = zb - 0.06;
+  const cwb = hw - 0.04, cwt = cwb - S.tumble * (w / 1.8);
+  const xs = (z: number) => cwb - (cwb - cwt) * clamp((z - zb) / (zr - zb), 0, 1);
+  const wsY = (z: number) => yW + ((yR1 - yW) * (z - zb)) / (zr - zb); // windshield line
+  const rwY = (z: number) => yT + ((yR2 - yT) * (z - zb)) / (zr - zb); // rear glass line
+  const Q: Vec2[] = [
+    [wsY(zbot), zbot],
+    [Math.min(rwY(zbot), yR - 0.06), zbot],
+    [rwY(zr - 0.04), zr - 0.04],
+    [yR2 - 0.06, zr],
+    [yR1 + 0.06, zr],
+    [wsY(zr - 0.04), zr - 0.04],
+  ];
+  const QM = [M.body, M.glass, M.body, M.body, M.body, M.glass];
+  const cabRing = (sx: number, off: number): Vec3[] =>
+    (off > 0 ? offsetPolygon(Q, -off) : Q).map(([y, z]) => [sx * (xs(z) - (off > 0 ? 0 : 0.035)), y, z] as Vec3);
+  const crings = [cabRing(-1, 0.035), cabRing(-1, 0), cabRing(1, 0), cabRing(1, 0.035)];
+  const k = (cwb - cwt) / (zr - zb);
+  sweepX(mb, crings, (e, r) => (r === 1 ? QM[e] : e === 1 || e === 5 ? M.body : QM[e]), { mat: M.glass, first: [-1, 0, k], last: [1, 0, k] });
+  for (const f of S.pillars) {
+    const yb = yR1 + (yR2 - yR1) * f;
+    for (const sx of [-1, 1]) beam(mb, M.body, [sx * (xs(zb) + 0.003), yb, zb - 0.01], [sx * (xs(zr - 0.04) + 0.003), yb, zr - 0.035], 0.07, 0.012);
+  }
+  // ---- interior seen through the glass ----
+  const ix = cwb - 0.06;
+  mb.box(M.interior, [-ix, Math.max(yW, wsY(zbot)) + 0.05, zb], [ix, Math.min(yT, yR - 0.1) - 0.05, zb + 0.01]);
+  mb.box(M.interior, [-ix, yW - 0.02, zb], [ix, yW + 0.26, zb + Math.min(0.12, (zr - zb) * 0.25)]);
+  const seat = (y: number) => {
+    for (const sx of style === "pickup" && y > yR1 + 0.5 ? [] : [-1, 1]) {
+      const sxw = Math.min(0.5, ix * 0.8);
+      mb.box(M.interior, [sx > 0 ? ix * 0.1 : -ix * 0.1 - sxw, y - 0.45, zb + 0.01], [sx > 0 ? ix * 0.1 + sxw : -ix * 0.1, y, zb + 0.08]);
+      mb.box(M.interior, [sx > 0 ? ix * 0.1 : -ix * 0.1 - sxw, y, zb + 0.01], [sx > 0 ? ix * 0.1 + sxw : -ix * 0.1, y + 0.1, zb + Math.min(0.42, (zr - zb) * 0.68)]);
+    }
+  };
+  seat(Math.min(yR1 + 0.25, yR2 - 0.15));
+  if (yR2 - yR1 > 1.0) seat(yR2 - 0.1);
+  // ---- pickup bed ----
+  if (style === "pickup") {
+    const y0 = Math.max(yT, rwY(zbot)) + 0.03, top = zb + 0.26;
+    for (const sx of [-1, 1]) mb.box(M.body, [sx > 0 ? hw - 0.075 : -hw + 0.015, y0, zb - 0.04], [sx > 0 ? hw - 0.015 : -hw + 0.075, yR - 0.02, top]);
+    mb.box(M.body, [-hw + 0.075, y0, zb - 0.04], [hw - 0.075, y0 + 0.05, top]);
+    mb.box(M.body, [-hw + 0.075, yR - 0.08, zb - 0.04], [hw - 0.075, yR - 0.02, top - 0.02]);
+    mb.box(M.trim, [-hw + 0.075, y0 + 0.05, zb], [hw - 0.075, yR - 0.08, zb + 0.012]);
+  }
+  // ---- bumpers, grille, lights ----
+  const bw = 2 * hw - 0.06;
+  softBox(mb, M.body, 0, -L / 2 + 0.07, c + 0.03, bw, 0.14, 0.2, 0.08, 0.025);
+  softBox(mb, M.body, 0, L / 2 - 0.07, c + 0.03, bw, 0.14, 0.2, 0.08, 0.025);
+  mb.box(M.trim, [-bw / 2 + 0.06, -L / 2 + 0.03, c + 0.02], [bw / 2 - 0.06, -L / 2 + 0.12, c + 0.06]);
+  const gz0 = c + 0.25, gz1 = zHood - 0.09;
+  if (gz1 - gz0 > 0.04) mb.box(M.trim, [-Math.min(0.36, hw * 0.42), yF - 0.006, gz0], [Math.min(0.36, hw * 0.42), yF + 0.02, gz1]);
+  const lz1 = zHood - 0.075, lz0 = Math.max(c + 0.25, lz1 - 0.07);
+  for (const sx of [-1, 1]) {
+    const xa = sx * Math.min(0.38, hw * 0.45) + sx * 0.02, xb = sx * (hw - 0.09);
+    mb.box(M.lights_front, [Math.min(xa, xb), yF - 0.005, lz0], [Math.max(xa, xb), yF + 0.02, lz1]);
+    const tz1 = zRT - 0.09, tz0 = Math.max(c + 0.25, tz1 - 0.08);
+    const ta = sx * hw * 0.5, tb = sx * (hw - 0.09);
+    mb.box(M.lights_rear, [Math.min(ta, tb), yR - 0.02, tz0], [Math.max(ta, tb), yR + 0.005, tz1]);
+  }
+  // ---- doors (seams + handles) and mirrors ----
+  const seams = style === "pickup" ? [yW + 0.08, yR2 + 0.02] : style === "sedan" || style === "suv" ? [yW + 0.08, yR1 + (yR2 - yR1) * S.pillars[0], Math.min(yT - 0.05, yRa - Ra - 0.05)] : [yW + 0.08, yR1 + (yR2 - yR1) * S.pillars[0], yRa - Ra - 0.05];
+  for (const sx of [-1, 1]) {
+    for (const y of seams) mb.box(M.trim, [sx > 0 ? hw - 0.003 : -hw - 0.002, y - 0.003, c + 0.12], [sx > 0 ? hw + 0.002 : -hw + 0.003, y + 0.003, zb - 0.09]);
+    for (let i = 0; i + 1 < seams.length; i++) {
+      const y = seams[i + 1] - 0.16;
+      mb.box(M.trim, [sx > 0 ? hw - 0.002 : -hw - 0.01, y, zb - 0.13], [sx > 0 ? hw + 0.01 : -hw + 0.002, y + 0.11, zb - 0.105]);
+    }
+    const my = yW + 0.12;
+    mb.box(M.body, [sx > 0 ? cwb - 0.01 : -w / 2 + 0.06, my - 0.02, zb + 0.03], [sx > 0 ? w / 2 - 0.06 : -cwb + 0.01, my + 0.02, zb + 0.06]);
+    softBox(mb, M.body, sx * (w / 2 - 0.065), my, zb + 0.02, 0.13, 0.08, 0.11, 0.025, 0.01);
+    mb.box(M.glass, [sx > 0 ? w / 2 - 0.12 : -w / 2 + 0.01, my + 0.04, zb + 0.035], [sx > 0 ? w / 2 - 0.01 : -w / 2 + 0.12, my + 0.042, zb + 0.12]);
+  }
+  // ---- wheels ----
+  for (const ya of [yFa, yRa])
+    for (const sx of [-1, 1]) {
+      const xo = sx * (hw - 0.012), xi = sx * (hw - 0.012 - Math.min(0.24, w * 0.13));
+      mb.rod(M.tires, [xi, ya, R], [xo, ya, R], R, 16);
+      mb.rod(M.rims, [xo - sx * 0.01, ya, R], [xo + sx * 0.006, ya, R], R * 0.64, 14);
+      mb.rod(M.trim, [xo + sx * 0.006, ya, R], [xo + sx * 0.008, ya, R], R * 0.5, 14);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * TAU;
+        beam(mb, M.rims, [xo + sx * 0.007, ya, R], [xo + sx * 0.007, ya + Math.cos(a) * R * 0.52, R + Math.sin(a) * R * 0.52], 0.006, 0.07);
+      }
+      mb.rod(M.rims, [xo + sx * 0.006, ya, R], [xo + sx * 0.012, ya, R], R * 0.14, 10);
+    }
+}
+
+function buildGardenChair(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const L = 0.045;
+  const seatH = clamp(h * 0.47, 0.3, 0.46);
+  const armH = Math.min(h - 0.15, seatH + 0.22);
+  const lean = (14 * Math.PI) / 180;
+  const z0b = seatH - 0.04;
+  const lenB = (h - z0b - L * Math.sin(lean)) / Math.cos(lean);
+  const yb0 = d / 2 - L / 2 - 0.005 - lenB * Math.sin(lean);
+  const lx = w / 2 - L / 2;
+  for (const sx of [-1, 1]) {
+    mb.block(M.frame, sx * lx, -d / 2 + L / 2 + 0.02, 0, L, L, armH - 0.025, { skip: ["+z"] });
+    mb.block(M.frame, sx * lx, yb0, 0, L, L, z0b + 0.02);
+    mb.box(M.frame, [sx * lx - 0.012, -d / 2 + L + 0.02, seatH - 0.1], [sx * lx + 0.012, yb0 - L / 2, seatH - 0.02]);
+    mb.box(M.frame, [sx * lx - 0.012, -d / 2 + L + 0.02, 0.1], [sx * lx + 0.012, yb0 - L / 2, 0.14]);
+    // armrest
+    mb.box(M.frame, [sx > 0 ? w / 2 - 0.075 : -w / 2, -d / 2, armH - 0.025], [sx > 0 ? w / 2 : -w / 2 + 0.075, yb0 + 0.12, armH]);
+  }
+  mb.box(M.frame, [-lx + L / 2, -d / 2 + 0.02, seatH - 0.1], [lx - L / 2, -d / 2 + 0.045, seatH - 0.02]);
+  // seat slats
+  const sy0 = -d / 2 + 0.02, sy1 = yb0 + L / 2;
+  const n = Math.max(3, Math.round((sy1 - sy0) / 0.075));
+  const sw = (sy1 - sy0 - 0.012 * (n - 1)) / n;
+  for (let i = 0; i < n; i++) mb.box(M.seat, [-lx + L / 2, sy0 + i * (sw + 0.012), seatH - 0.02], [lx - L / 2, sy0 + i * (sw + 0.012) + sw, seatH]);
+  // reclined back with horizontal slats
+  mb.with(m4.mul(m4.translation(0, yb0, z0b), m4.rotationX(-lean)), () => {
+    for (const sx of [-1, 1]) mb.block(M.frame, sx * (lx - 0.03), 0, 0, L * 0.8, L, lenB);
+    const top = lenB - 0.02, bot = Math.max(0.12, (armH - z0b) * 0.6);
+    const k = Math.max(2, Math.round((top - bot) / 0.085));
+    const sh = (top - bot - 0.02 * (k - 1)) / k;
+    for (let i = 0; i < k; i++) mb.box(M.seat, [-lx + 0.02, -L / 2 - 0.02, bot + i * (sh + 0.02)], [lx - 0.02, -L / 2, bot + i * (sh + 0.02) + sh]);
+  });
+}
+
+function buildSunLounger(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const cushion = optBool(s, "cushion", true);
+  const fz = clamp(h * 0.38, 0.2, 0.4);
+  const t = cushion ? 0.085 : 0.03;
+  const Lb = Math.min(0.75, d * 0.38);
+  const th = Math.asin(clamp((h - fz + 0.025 - t) / Lb, 0, Math.sin((65 * Math.PI) / 180)));
+  const yh = d / 2 - Lb * Math.cos(th) - t * Math.sin(th) - 0.01;
+  const rw = 0.04;
+  // frame rails + legs
+  for (const sx of [-1, 1]) {
+    mb.box(M.frame, [sx > 0 ? w / 2 - rw : -w / 2, -d / 2, fz - 0.11], [sx > 0 ? w / 2 : -w / 2 + rw, d / 2, fz - 0.025]);
+    for (const y of [-d / 2 + 0.04, d / 2 - 0.04]) mb.block(M.frame, sx * (w / 2 - rw / 2), y, 0, rw, 0.05, fz - 0.11, { skip: ["+z"] });
+  }
+  for (const y of [-d / 2, d / 2 - 0.04]) mb.box(M.frame, [-w / 2 + rw, y, fz - 0.11], [w / 2 - rw, y + 0.04, fz - 0.04]);
+  // flat slats
+  const n = Math.max(4, Math.round((yh - (-d / 2 + 0.04)) / 0.09));
+  const sl = (yh - 0.01 - (-d / 2 + 0.04) - 0.015 * (n - 1)) / n;
+  for (let i = 0; i < n; i++) {
+    const y0 = -d / 2 + 0.04 + i * (sl + 0.015);
+    mb.box(M.frame, [-w / 2 + rw, y0, fz - 0.045], [w / 2 - rw, y0 + sl, fz - 0.025]);
+  }
+  if (cushion) softBox(mb, M.cushion, 0, (-d / 2 + 0.02 + yh) / 2, fz - 0.025, w - 0.04, yh + d / 2 - 0.02, t - 0.025, 0.04, 0.02);
+  // backrest raised around the hinge
+  mb.with(m4.mul(m4.translation(0, yh, fz - 0.025), m4.rotationX(th)), () => {
+    for (const sx of [-1, 1]) mb.box(M.frame, [sx > 0 ? w / 2 - rw - 0.03 : -w / 2 + rw, 0, -0.04], [sx > 0 ? w / 2 - rw : -w / 2 + rw + 0.03, Lb, 0]);
+    const k = Math.max(3, Math.round(Lb / 0.09));
+    const bl = (Lb - 0.015 * (k - 1)) / k;
+    for (let i = 0; i < k; i++) mb.box(M.frame, [-w / 2 + rw + 0.03, i * (bl + 0.015), -0.02], [w / 2 - rw - 0.03, i * (bl + 0.015) + bl, 0]);
+    if (cushion) softBox(mb, M.cushion, 0, Lb / 2, 0, w - 0.04, Lb, t - 0.025, 0.04, 0.02);
+  });
+  // strut under the backrest
+  const yS = yh + Lb * 0.55 * Math.cos(th), zS = fz - 0.025 + Lb * 0.55 * Math.sin(th) - 0.04;
+  for (const sx of [-1, 1]) mb.rod(M.frame, [sx * (w / 2 - rw - 0.05), Math.min(yS + 0.25, d / 2 - 0.06), fz - 0.06], [sx * (w / 2 - rw - 0.05), yS, zS], 0.012, 6);
+}
+
+function buildOutdoorTable(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const t = 0.03;
+  if (optBool(s, "round", false)) {
+    ecyl(mb, M.top, 0, 0, h - t, w / 2, d / 2, t, 24);
+    const k = Math.SQRT1_2 * 0.82;
+    const L = 0.05;
+    for (const sx of [-1, 1])
+      for (const sy of [-1, 1]) mb.block(M.legs, sx * (w / 2) * k, sy * (d / 2) * k, 0, L, L, h - t, { skip: ["+z"] });
+    for (const sy of [-1, 1]) mb.box(M.legs, [-(w / 2) * k, sy * (d / 2) * k - 0.012, h - t - 0.08], [(w / 2) * k, sy * (d / 2) * k + 0.012, h - t]);
+    mb.box(M.legs, [-0.012, -(d / 2) * k, 0.15], [0.012, (d / 2) * k, 0.19]);
+    return;
+  }
+  const n = Math.max(3, Math.round(d / 0.095));
+  const g = 0.01;
+  const sw = (d - g * (n - 1)) / n;
+  for (let i = 0; i < n; i++) mb.box(M.top, [-w / 2, -d / 2 + i * (sw + g), h - t], [w / 2, -d / 2 + i * (sw + g) + sw, h]);
+  const L = clamp(Math.min(w, d) * 0.07, 0.045, 0.08);
+  legs4(mb, M.legs, w, d, 0.04, L, 0, h - t);
+  const lx = w / 2 - 0.04 - L, ly = d / 2 - 0.04 - L;
+  for (const sg of [-1, 1]) {
+    mb.box(M.legs, [-lx, sg * (ly + L / 2) - 0.011, h - t - 0.08], [lx, sg * (ly + L / 2) + 0.011, h - t]);
+    mb.box(M.legs, [sg * (lx + L / 2) - 0.011, -ly, h - t - 0.08], [sg * (lx + L / 2) + 0.011, ly, h - t]);
+  }
+}
+
+function buildParasol(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const open = optBool(s, "open", true);
+  const R = w / 2 - 0.005;
+  mb.with(m4.scaling(1, d / w, 1), () => {
+    const br = Math.min(0.28, R * 0.4);
+    mb.cylinder(M.base, [0, 0, 0], br, br * 0.92, 0.08, 16);
+    mb.cylinder(M.base, [0, 0, 0.08], 0.06, 0.045, 0.1, 10, { bottom: false });
+    const apex = h - 0.08;
+    mb.cylinder(M.pole, [0, 0, 0.18], 0.022, 0.022, apex - 0.18, 10, { bottom: false, top: false });
+    mb.cylinder(M.pole, [0, 0, apex - 0.01], 0.03, 0.012, h - apex + 0.01, 8, { bottom: false });
+    if (!open) {
+      const z0 = h * 0.42;
+      mb.cylinder(M.canopy, [0, 0, z0], 0.03, 0.11, (apex - z0) * 0.62, 10, { top: false });
+      mb.cylinder(M.canopy, [0, 0, z0 + (apex - z0) * 0.62], 0.11, 0.03, (apex - z0) * 0.38, 10, { bottom: false });
+      return;
+    }
+    const rimZ = h - clamp(h * 0.17, 0.3, 0.55);
+    const n = 8;
+    const rim: Vec3[] = [], rimLo: Vec3[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + Math.PI / n;
+      rim.push([Math.cos(a) * R, Math.sin(a) * R, rimZ]);
+      rimLo.push([Math.cos(a) * (R - 0.012), Math.sin(a) * (R - 0.012), rimZ - 0.01]);
+    }
+    const A: Vec3 = [0, 0, apex], Alo: Vec3 = [0, 0, apex - 0.012];
+    const val = 0.07;
+    for (let i = 0; i < n; i++) {
+      const p = rim[i], q = rim[(i + 1) % n];
+      mb.triangle(M.canopy, p, q, A);
+      mb.triangle(M.canopy, Alo, rimLo[(i + 1) % n], rimLo[i]);
+      // valance flap (both sides)
+      mb.quad(M.canopy, [p[0], p[1], p[2] - val], [q[0], q[1], q[2] - val], q, p);
+      const pi = rimLo[i], qi = rimLo[(i + 1) % n];
+      mb.quad(M.canopy, [qi[0], qi[1], rimZ - val], [pi[0], pi[1], rimZ - val], [pi[0], pi[1], rimZ - 0.01], [qi[0], qi[1], rimZ - 0.01]);
+      mb.quad(M.canopy, [p[0], p[1], rimZ - val], [pi[0], pi[1], rimZ - val], [qi[0], qi[1], rimZ - val], [q[0], q[1], rimZ - val]);
+      // rib + stretcher
+      const rp: Vec3 = [rimLo[i][0] * 0.97, rimLo[i][1] * 0.97, rimZ - 0.015];
+      mb.rod(M.pole, [0, 0, apex - 0.03], rp, 0.006, 4);
+      mb.rod(M.pole, [0, 0, rimZ - 0.35], [rp[0] * 0.5, rp[1] * 0.5, (apex + rimZ) / 2 - 0.03], 0.005, 4);
+    }
+    mb.cylinder(M.pole, [0, 0, rimZ - 0.38], 0.035, 0.035, 0.06, 10);
+  });
+}
+
+function buildBbq(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  if (optStr(s, "style", ["gas", "kettle"] as const, "gas") === "kettle") {
+    const R = Math.min(Math.min(w, d) / 2 - 0.03, (h - 0.1) * 0.33);
+    const zc = h - 0.07 - R;
+    mb.sphere(M.body, [0, 0, zc], R, 16, 12);
+    mb.cylinder(M.lid, [0, 0, zc - 0.012], R + 0.004, R + 0.004, 0.024, 16, { top: false, bottom: false });
+    // top handle
+    for (const sx of [-1, 1]) mb.rod(M.handles, [sx * 0.06, 0, zc + R - 0.01], [sx * 0.06, 0, h - 0.015], 0.006, 6);
+    mb.rod(M.handles, [-0.08, 0, h - 0.015], [0.08, 0, h - 0.015], 0.015, 8);
+    mb.cylinder(M.handles, [0, 0, zc + R - 0.005], 0.04, 0.04, 0.012, 10, { bottom: false });
+    // side handles
+    for (const sx of [-1, 1]) mb.rod(M.handles, [sx * (R - 0.01), -0.07, zc - 0.03], [sx * (R + 0.02), 0.07, zc - 0.03], 0.01, 6);
+    // legs, rack, ash pan, wheels
+    const feet: Vec3[] = [];
+    for (let i = 0; i < 3; i++) {
+      const a = Math.PI / 2 + (i / 3) * TAU;
+      const top: Vec3 = [Math.cos(a) * R * 0.55, Math.sin(a) * R * 0.55, zc - R * 0.8];
+      const bot: Vec3 = [Math.cos(a) * (Math.min(w, d) / 2 - 0.03), Math.sin(a) * (Math.min(w, d) / 2 - 0.03), 0.06];
+      mb.rod(M.body, bot, top, 0.012, 6);
+      feet.push(bot);
+    }
+    const rz = (zc - R) * 0.35;
+    const pt = (f: Vec3): Vec3 => { const t = (rz - 0.06) / (zc - R * 0.8 - 0.06); return [f[0] + (f[0] * 0.55 * R / Math.hypot(f[0], f[1]) - f[0]) * t, f[1] + (f[1] * 0.55 * R / Math.hypot(f[0], f[1]) - f[1]) * t, rz]; };
+    for (let i = 0; i < 3; i++) mb.rod(M.body, pt(feet[i]), pt(feet[(i + 1) % 3]), 0.008, 6);
+    mb.cylinder(M.lid, [0, 0, zc - R - 0.12], R * 0.3, R * 0.35, 0.05, 12);
+    mb.rod(M.handles, [0, 0, zc - R - 0.07], [0, 0, zc - R + 0.01], 0.006, 6);
+    for (const f of feet.slice(1)) mb.rod(M.wheels, [f[0] - 0.02, f[1], 0.06], [f[0] + 0.02, f[1], 0.06], 0.06, 12);
+    mb.cylinder(M.body, [feet[0][0], feet[0][1], 0], 0.02, 0.02, 0.06, 8, { top: false });
+    return;
+  }
+  const cw = Math.min(w * 0.58, 0.8);
+  const hd = Math.min(0.3, h * 0.26);
+  const zf = h - hd;
+  const yFace = -d / 2 + 0.06;
+  // cart + doors
+  mb.box(M.body, [-cw / 2, yFace, 0.14], [cw / 2, d / 2 - 0.02, zf - 0.2]);
+  front(mb, M.body, M.handles, -cw / 2, 0, 0.14, zf - 0.2, yFace, "bar_v", -0.05, (zf - 0.06) / 2, 0.2);
+  front(mb, M.body, M.handles, 0, cw / 2, 0.14, zf - 0.2, yFace, "bar_v", 0.05, (zf - 0.06) / 2, 0.2);
+  mb.box(M.body, [-cw / 2 + 0.01, yFace + 0.02, 0.06], [cw / 2 - 0.01, d / 2 - 0.04, 0.14], { skip: ["+z"] });
+  for (const sx of [-1, 1]) {
+    mb.rod(M.wheels, [sx * (cw / 2 - 0.06), -d / 2 + 0.12, 0.06], [sx * (cw / 2 - 0.02), -d / 2 + 0.12, 0.06], 0.06, 12);
+    mb.rod(M.wheels, [sx * (cw / 2 - 0.06), d / 2 - 0.1, 0.06], [sx * (cw / 2 - 0.02), d / 2 - 0.1, 0.06], 0.06, 12);
+  }
+  // firebox + control panel + knobs
+  mb.box(M.body, [-cw / 2, yFace, zf - 0.2], [cw / 2, d / 2 - 0.02, zf]);
+  mb.box(M.lid, [-cw / 2 + 0.01, -d / 2 + 0.03, zf - 0.18], [cw / 2 - 0.01, yFace, zf - 0.04], { skip: ["+y"] });
+  const nk = 4;
+  for (let i = 0; i < nk; i++) mb.with(facingFront(-cw / 2 + (cw * (i + 0.5)) / nk, -d / 2 + 0.03, zf - 0.11), () => mb.cylinder(M.handles, [0, 0, 0], 0.02, 0.017, 0.025, 10, { bottom: false }));
+  // side shelves
+  for (const sx of [-1, 1]) {
+    const x0 = sx > 0 ? cw / 2 : -w / 2, x1 = sx > 0 ? w / 2 : -cw / 2;
+    if (x1 - x0 > 0.05) {
+      mb.box(M.lid, [x0, -d / 2 + 0.06, zf - 0.03], [x1, d / 2 - 0.06, zf]);
+      mb.box(M.body, [sx > 0 ? cw / 2 : x0 + 0.03, -0.02, zf - 0.12], [sx > 0 ? x1 - 0.03 : -cw / 2, 0.02, zf - 0.03]);
+    }
+  }
+  // domed lid
+  const ry = (d - 0.12) / 2, rz = hd;
+  const prof: Vec2[] = [];
+  const n = 12;
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI;
+    prof.push([Math.cos(a) * ry + 0.02, Math.sin(a) * rz * (i === 0 || i === n ? 1 : 1)]);
+  }
+  mb.with(m4.fromBasis([0, 1, 0], [0, 0, 1], [1, 0, 0], [-cw / 2 + 0.01, 0, zf]), () => mb.prism(M.lid, prof, 0, cw - 0.02));
+  const hy = 0.02 - ry - 0.035, hz = zf + rz * 0.35;
+  for (const sx of [-1, 1]) mb.rod(M.handles, [sx * cw * 0.3, hy + 0.035, hz], [sx * cw * 0.3, hy, hz], 0.006, 6);
+  mb.rod(M.handles, [-cw * 0.36, hy, hz], [cw * 0.36, hy, hz], 0.012, 8);
+}
+
+function buildOutdoorSofa(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const arms = optBool(s, "arms", true);
+  const legH = 0.06;
+  const baseTop = clamp(h * 0.36, 0.2, 0.32);
+  const armW = arms ? 0.08 : 0;
+  const armTop = Math.min(h - 0.05, baseTop + 0.25);
+  const backT = 0.06;
+  const ct = clamp(h * 0.18, 0.1, 0.16);
+  const iw = w - 2 * armW;
+  const n = Math.round(optNum(s, "seats", clamp(Math.round(iw / 0.68), 1, 6), 1, 8));
+  // base frame
+  mb.box(M.frame, [-w / 2 + armW, -d / 2 + 0.01, legH], [w / 2 - armW, d / 2 - backT, baseTop]);
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.block(M.frame, sx * (w / 2 - 0.04), sy * (d / 2 - 0.04), 0, 0.07, 0.07, legH, { skip: ["+z"] });
+  // slatted arms
+  const slats = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, alongY: boolean) => {
+    const len = alongY ? y1 - y0 : x1 - x0;
+    const k = Math.max(2, Math.round(len / 0.08));
+    const sw = 0.035, gap = (len - k * sw) / (k - 1);
+    for (let i = 0; i < k; i++) {
+      const a = (alongY ? y0 : x0) + i * (sw + gap);
+      if (alongY) mb.box(M.frame, [x0 + 0.01, a, z0], [x1 - 0.01, a + sw, z1]);
+      else mb.box(M.frame, [a, y0 + 0.01, z0], [a + sw, y1 - 0.01, z1]);
+    }
+  };
+  if (arms)
+    for (const sx of [-1, 1]) {
+      const x0 = sx > 0 ? w / 2 - armW : -w / 2, x1 = x0 + armW;
+      mb.box(M.frame, [x0, -d / 2, armTop - 0.035], [x1, d / 2, armTop]);
+      mb.box(M.frame, [x0, -d / 2, 0], [x1, -d / 2 + 0.07, armTop - 0.035], { skip: ["+z"] });
+      mb.box(M.frame, [x0, d / 2 - 0.07, 0], [x1, d / 2, armTop - 0.035], { skip: ["+z"] });
+      mb.box(M.frame, [x0, -d / 2 + 0.07, legH], [x1, d / 2 - 0.07, legH + 0.05]);
+      slats(x0, x1, -d / 2 + 0.07, d / 2 - 0.07, legH + 0.05, armTop - 0.035, true);
+    }
+  // slatted back panel
+  const bTop = Math.min(h - 0.1, baseTop + ct + 0.3);
+  mb.box(M.frame, [-w / 2 + armW, d / 2 - backT, legH], [w / 2 - armW, d / 2, baseTop]);
+  mb.box(M.frame, [-w / 2 + armW, d / 2 - backT, bTop - 0.04], [w / 2 - armW, d / 2, bTop]);
+  slats(-w / 2 + armW, w / 2 - armW, d / 2 - backT, d / 2, baseTop, bTop - 0.04, false);
+  // cushions
+  seatCushions(mb, M.cushions, -iw / 2, iw / 2, -d / 2 + 0.01, d / 2 - backT, n, baseTop, ct);
+  // keep the leaning cushions' tops inside the footprint on shallow sofas
+  const lean = Math.tan((9 * Math.PI) / 180) * (h - 0.02 - baseTop - ct);
+  backCushions(mb, M.cushions, -iw / 2, iw / 2, n, d / 2 - Math.max(backT, lean + 0.005), baseTop + ct, h - 0.02, clamp(d * 0.17, 0.1, 0.18));
+}
+
+function buildPlanter(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const bh = Math.min(0.5, h * 0.5);
+  const wall = clamp(Math.min(w, d) * 0.06, 0.02, 0.05);
+  const outline = roundRect(0, 0, w, d, 0.01, 1);
+  const hole = roundRect(0, 0, w - 2 * wall, d - 2 * wall, 0.008, 1);
+  basinSlab(mb, M.box, M.box, outline, hole, hole, 0, bh, 0.05);
+  mb.flat(M.soil, hole, bh - 0.045);
+  const sx = w - 2 * wall - 0.01, sy = d - 2 * wall - 0.01;
+  const nClumps = Math.max(1, Math.round(sx / Math.max(sy, 0.35)));
+  const cw = sx / nClumps;
+  for (let i = 0; i < nClumps; i++) foliage(mb, M.foliage, -sx / 2 + cw * (i + 0.5), 0, bh - 0.06, cw * 1.05 > sx ? sx : cw * 1.05, sy, h - bh + 0.06, 5, 17 + i * 13, 9);
+}
+
+function buildBush(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  foliage(mb, s.materials.foliage, 0, 0, 0, w, d, h, 7, Math.round(w * 101 + h * 37), 10, true);
+}
+
+/** A palm frond: drooping leaf with a raised midrib, closed thin volume. */
+function frond(mb: MeshBuilder, mat: string, base: Vec3, a: number, len: number, wid: number) {
+  const dir: Vec3 = [Math.cos(a), Math.sin(a), 0], side: Vec3 = [-Math.sin(a), Math.cos(a), 0];
+  const n = 7, th = 0.012;
+  const C: Vec3[] = [], Lp: Vec3[] = [], Rp: Vec3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const z = base[2] + len * (0.35 * t - 0.75 * t * t);
+    const c: Vec3 = [base[0] + dir[0] * len * t, base[1] + dir[1] * len * t, z];
+    const wv = wid * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (t < 0.05 ? 0 : 1);
+    C.push(c);
+    Lp.push([c[0] + side[0] * wv, c[1] + side[1] * wv, z - 0.035 * (wv / wid)]);
+    Rp.push([c[0] - side[0] * wv, c[1] - side[1] * wv, z - 0.035 * (wv / wid)]);
+  }
+  const dn = (p: Vec3): Vec3 => [p[0], p[1], p[2] - th];
+  const q = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) => mb.quad(mat, d, c, b, a);
+  for (let i = 0; i < n; i++) {
+    // top (faces up)
+    q(C[i], Lp[i], Lp[i + 1], C[i + 1]);
+    q(C[i], C[i + 1], Rp[i + 1], Rp[i]);
+    // bottom (faces down)
+    q(dn(C[i]), dn(C[i + 1]), dn(Lp[i + 1]), dn(Lp[i]));
+    q(dn(C[i]), dn(Rp[i]), dn(Rp[i + 1]), dn(C[i + 1]));
+    // edges
+    q(Lp[i], dn(Lp[i]), dn(Lp[i + 1]), Lp[i + 1]);
+    q(Rp[i], Rp[i + 1], dn(Rp[i + 1]), dn(Rp[i]));
+  }
+}
+
+function buildTree(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const kind = optStr(s, "kind", ["deciduous", "conifer", "palm"] as const, "deciduous");
+  const m = Math.min(w, d);
+  const seed = Math.round(w * 131 + d * 71 + h * 13);
+  if (kind === "conifer") {
+    const rt = clamp(m * 0.04, 0.05, 0.2);
+    mb.cylinder(M.trunk, [0, 0, 0], rt * 1.3, rt * 0.6, h * 0.35, 8);
+    const z0 = h * 0.12, n = 4;
+    const step = (h - z0) / (n + 0.6);
+    for (let i = 0; i < n; i++) {
+      const zb = z0 + i * step;
+      const top = i === n - 1 ? h : zb + step * 1.7;
+      const f = 1 - i / (n + 0.4);
+      ecyl(mb, M.needles, 0, 0, zb, (w / 2) * f, (d / 2) * f, top - zb, 12, i === n - 1 ? 0.02 : 0.12);
+    }
+    return;
+  }
+  if (kind === "palm") {
+    const reach = m / 2 - 0.04;
+    const lean = Math.min(m * 0.08, 0.25);
+    const zt = h - 0.17;
+    const segs = 7;
+    const pts: Vec3[] = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      pts.push([lean * t * t, 0, zt * t]);
+    }
+    for (let i = 0; i < segs; i++) {
+      const r0 = 0.15 - 0.05 * (i / segs), r1 = 0.15 - 0.05 * ((i + 1) / segs);
+      const a = pts[i], b = pts[i + 1];
+      mb.with(m4.fromBasis([1, 0, 0], [0, 1, 0], v3.norm(v3.sub(b, a)), a), () => mb.cylinder(M.trunk, [0, 0, 0], r0 * 1.12, r1, v3.len(v3.sub(b, a)), 8, { top: true, bottom: i === 0 }));
+    }
+    const top = pts[segs];
+    mb.sphere(M.foliage, top, 0.16, 8, 6);
+    const fr = Math.min(reach - lean, m / 2 - lean - 0.04);
+    for (let i = 0; i < 11; i++) frond(mb, M.foliage, [top[0], top[1], top[2] + 0.04], (i / 11) * TAU + 0.3, fr * (i % 2 ? 0.88 : 1), clamp(fr * 0.17, 0.1, 0.28));
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU;
+      mb.sphere(M.trunk, [top[0] + Math.cos(a) * 0.12, Math.sin(a) * 0.12, top[2] - 0.12], 0.07, 8, 6);
+    }
+    return;
+  }
+  // deciduous
+  const rt = clamp(m * 0.045, 0.06, 0.3);
+  const crownZ = h * 0.38;
+  mb.cylinder(M.trunk, [0, 0, 0], rt * 1.6, rt, 0.25, 8, { top: false });
+  mb.cylinder(M.trunk, [0, 0, 0.25], rt, rt * 0.6, crownZ + (h - crownZ) * 0.35 - 0.25, 8, { bottom: false });
+  const rnd = rng(seed);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * TAU + rnd();
+    mb.rod(M.trunk, [0, 0, crownZ * 0.9], [Math.cos(a) * w * 0.22, Math.sin(a) * d * 0.22, crownZ + (h - crownZ) * 0.35], rt * 0.35, 6);
+  }
+  foliage(mb, M.foliage, 0, 0, crownZ, w, d, h - crownZ, 8, seed, 10);
+}
+
+function buildHedge(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  softBox(mb, M.foliage, 0, 0, 0, w, d, h, Math.min(0.12, d * 0.3), Math.min(0.08, d * 0.2, h * 0.2), false);
+}
+
+function buildFence(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const style = optStr(s, "style", ["picket", "panel", "slats"] as const, "picket");
+  const P = clamp(Math.min(d, 0.1), 0.04, 0.1);
+  const capS = Math.min(P + 0.015, d, w / 4);
+  const PP = Math.max(P, capS);
+  const nb = Math.max(1, Math.ceil((w - PP) / 2.0));
+  const span = (w - PP) / nb;
+  const posts: number[] = [];
+  for (let i = 0; i <= nb; i++) posts.push(-w / 2 + PP / 2 + i * span);
+  for (const x of posts) {
+    mb.block(M.posts, x, 0, 0, P, P, h - 0.03, { skip: ["+z"] });
+    mb.block(M.posts, x, 0, h - 0.03, capS, capS, 0.02);
+    mb.cylinder(M.posts, [x, 0, h - 0.01], capS * 0.4, capS * 0.15, 0.01, 4, { bottom: false });
+  }
+  const bt = Math.min(0.02, d * 0.25);
+  const yb0 = -P / 2 + 0.005; // board front
+  for (let i = 0; i < nb; i++) {
+    const x0 = posts[i] + P / 2, x1 = posts[i + 1] - P / 2;
+    if (style === "slats") {
+      const k = Math.max(2, Math.round((h - 0.1) / 0.11));
+      const sh = (h - 0.1 - 0.02 * (k - 1)) / k;
+      for (let j = 0; j < k; j++) mb.box(M.boards, [x0, -bt / 2, 0.05 + j * (sh + 0.02)], [x1, bt / 2, 0.05 + j * (sh + 0.02) + sh]);
+      continue;
+    }
+    // rails behind the boards
+    for (const z of style === "picket" ? [h * 0.2, h * 0.68] : [h * 0.15, h * 0.5, h - 0.15]) mb.box(M.posts, [x0, yb0 + bt, z], [x1, Math.min(yb0 + bt + 0.035, P / 2), z + 0.07]);
+    if (style === "panel") {
+      const bw = 0.1;
+      const k = Math.max(1, Math.round((x1 - x0) / bw));
+      const ww = (x1 - x0) / k;
+      for (let j = 0; j < k; j++) mb.box(M.boards, [x0 + j * ww + 0.0015, yb0, 0.04], [x0 + (j + 1) * ww - 0.0015, yb0 + bt, h - 0.07]);
+      mb.box(M.boards, [x0, yb0 - 0.004, h - 0.07], [x1, yb0 + bt + 0.035, h - 0.045]);
+    } else {
+      const pw = 0.075, gap = 0.05;
+      const k = Math.max(1, Math.floor((x1 - x0 + gap) / (pw + gap)));
+      const used = k * pw + (k - 1) * gap;
+      const top = h - 0.05;
+      for (let j = 0; j < k; j++) {
+        const a = x0 + (x1 - x0 - used) / 2 + j * (pw + gap);
+        const prof: Vec2[] = [[a, 0.05], [a + pw, 0.05], [a + pw, top - 0.045], [a + pw / 2, top], [a, top - 0.045]];
+        mb.with(m4.fromBasis([1, 0, 0], [0, 0, 1], [0, -1, 0], [0, yb0 + bt, 0]), () => mb.prism(M.boards, prof, 0, bt));
+      }
+    }
+  }
+}
+
+function buildHotTub(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const st = 0.1;
+  const r = Math.min(0.15, Math.min(w, d) * 0.08);
+  const outline = roundRect(0, 0, w, d, r, 3);
+  loft(mb, M.cabinet, outline, 0, outline, h - st);
+  mb.flat(M.cabinet, outline, 0, true);
+  const rim = clamp(Math.min(w, d) * 0.08, 0.1, 0.2);
+  const hole = roundRect(0, 0, w - 2 * rim, d - 2 * rim, Math.min(0.3, (Math.min(w, d) - 2 * rim) * 0.25), 3);
+  const bottom = roundRect(0, 0, w - 2 * rim - 0.3, d - 2 * rim - 0.3, Math.min(0.2, (Math.min(w, d) - 2 * rim - 0.3) * 0.25), 3);
+  const depth = Math.max(0.2, h - 0.12);
+  basinSlab(mb, M.shell, M.shell, outline, hole, bottom, h - st, h, depth);
+  const tw = 0.13 / depth;
+  mb.flat(M.water, hole.map((p, i) => [p[0] + (bottom[i][0] - p[0]) * tw, p[1] + (bottom[i][1] - p[1]) * tw] as Vec2), h - 0.13);
+  // seats under water
+  const sz = h - depth;
+  const sh = Math.min(0.35, depth * 0.5);
+  for (const sy of [-1, 1]) mb.box(M.shell, [-(w - 2 * rim) / 2 + 0.3, sy > 0 ? (d - 2 * rim) / 2 - 0.25 - 0.15 : -(d - 2 * rim) / 2 + 0.15, sz], [(w - 2 * rim) / 2 - 0.3, sy > 0 ? (d - 2 * rim) / 2 - 0.15 : -(d - 2 * rim) / 2 + 0.4, sz + sh]);
+}
+
+function buildTrashBin(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const wr = clamp(h * 0.1, 0.06, 0.12);
+  const ya = d / 2 - wr - 0.01;
+  const zTop = h - 0.065;
+  const lo = roundRect(0, -0.03, w * 0.78, d * 0.72, 0.05, 2);
+  const hi = roundRect(0, -0.01, w - 0.05, d - 0.08, 0.06, 2);
+  loft(mb, M.body, lo, 0.03, hi, zTop);
+  mb.flat(M.body, lo, 0.03, true);
+  mb.flat(M.body, hi, zTop);
+  softBox(mb, M.body, 0, -0.01, zTop - 0.04, w - 0.02, d - 0.06, 0.04, 0.06, 0.008);
+  // lid with front lip
+  softBox(mb, M.lid, 0, -0.01, zTop, w, d - 0.04, h - zTop - 0.005, 0.06, 0.01);
+  mb.box(M.lid, [-w * 0.3, -d / 2, zTop - 0.025], [w * 0.3, -d / 2 + 0.03, zTop + 0.01]);
+  // handle bar + hinge at the back
+  mb.rod(M.lid, [-w / 2 + 0.07, d / 2 - 0.025, zTop - 0.04], [w / 2 - 0.07, d / 2 - 0.025, zTop - 0.04], 0.018, 8);
+  for (const sx of [-1, 1]) mb.box(M.body, [sx * (w / 2 - 0.12) - 0.02, d / 2 - 0.06, zTop - 0.06], [sx * (w / 2 - 0.12) + 0.02, d / 2 - 0.02, zTop - 0.02]);
+  // wheels + axle, front foot
+  for (const sx of [-1, 1]) {
+    mb.rod(M.wheels, [sx * (w / 2 - 0.06), ya, wr], [sx * (w / 2 - 0.005), ya, wr], wr, 14);
+    mb.rod(M.body, [sx * (w / 2 - 0.004), ya, wr], [sx * (w / 2 - 0.0005), ya, wr], wr * 0.4, 10);
+  }
+  mb.rod(M.body, [-w / 2 + 0.06, ya, wr], [w / 2 - 0.06, ya, wr], 0.012, 8);
+  mb.box(M.body, [-w * 0.25, -d * 0.36 - 0.03, 0], [w * 0.25, -d * 0.36 + 0.06, 0.04]);
+}
+
+function buildBicycle(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = clamp(Math.min(0.34, h * 0.33, d * 0.195), 0.15, 0.4);
+  const yFa = -d / 2 + R + 0.012, yRa = d / 2 - R - 0.012;
+  const wb = yRa - yFa;
+  const kh = h / 1.05;
+  const tr = 0.017;
+  const wheel = (y: number) => {
+    mb.with(axleX(0, y, R), () => {
+      tube(mb, M.tires, 0, 0, -0.02, 0.02, R, R, 0.04, 24);
+      tube(mb, M.metal, 0, 0, -0.012, 0.012, R - 0.04, R - 0.04, 0.02, 24);
+      mb.cylinder(M.metal, [0, 0, -0.045], 0.022, 0.022, 0.09, 10);
+    });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU;
+      const sx = i % 2 ? 1 : -1;
+      mb.rod(M.metal, [sx * 0.035, y, R], [0, y + Math.cos(a) * (R - 0.055), R + Math.sin(a) * (R - 0.055)], 0.0018, 3);
+    }
+  };
+  wheel(yFa);
+  wheel(yRa);
+  const BB: Vec3 = [0, yRa - 0.42 * (wb / 1.04), R * 0.82];
+  const ST: Vec3 = [0, BB[1] + 0.15 * kh, BB[2] + 0.52 * kh];
+  const HT: Vec3 = [0, yFa + 0.28 * (wb / 1.04), 0.85 * h];
+  const HB: Vec3 = [0, yFa + 0.22 * (wb / 1.04), 0.68 * h];
+  const tube2 = (a: Vec3, b: Vec3, r = tr) => mb.rod(M.frame, a, b, r, 8);
+  tube2(BB, ST);
+  tube2(ST, [0, ST[1] - 0.005, ST[2] + 0.04], tr * 1.1);
+  tube2(ST, HT, tr * 0.9);
+  tube2(HB, BB, tr * 1.15);
+  tube2(HB, HT, tr * 1.3);
+  for (const sx of [-1, 1]) {
+    mb.rod(M.frame, [sx * 0.012, BB[1], BB[2]], [sx * 0.05, yRa, R], 0.011, 6);
+    mb.rod(M.frame, [sx * 0.01, ST[1] - 0.01, ST[2] - 0.03], [sx * 0.05, yRa, R], 0.009, 6);
+    mb.rod(M.frame, [sx * 0.015, HB[1], HB[2]], [sx * 0.045, yFa, R], 0.012, 6);
+  }
+  // seat post + saddle
+  const saddleZ = Math.min(h - 0.06, 0.9 * h);
+  const SP: Vec3 = [0, ST[1] + (saddleZ - ST[2]) * 0.3, saddleZ];
+  mb.rod(M.metal, ST, SP, 0.013, 8);
+  softBox(mb, M.saddle, 0, SP[1] - 0.04, saddleZ, 0.15, 0.27, 0.05, 0.06, 0.018);
+  mb.box(M.saddle, [-0.03, SP[1] - 0.17, saddleZ + 0.005], [0.03, SP[1] - 0.09, saddleZ + 0.045]);
+  // stem + handlebar
+  const bz = h - 0.03;
+  const SB: Vec3 = [0, HT[1] + 0.05, bz];
+  mb.rod(M.metal, HT, [0, HT[1] - 0.01, bz - 0.04], 0.014, 8);
+  mb.rod(M.metal, [0, HT[1] - 0.01, bz - 0.04], SB, 0.013, 8);
+  const hx = Math.min(0.28, w / 2 - 0.02);
+  mb.rod(M.metal, [-hx + 0.1, SB[1], bz], [hx - 0.1, SB[1], bz], 0.012, 8);
+  for (const sx of [-1, 1]) {
+    mb.rod(M.metal, [sx * (hx - 0.1), SB[1], bz], [sx * (hx - 0.11), SB[1] + 0.03, bz], 0.012, 8);
+    mb.rod(M.saddle, [sx * (hx - 0.11), SB[1] + 0.03, bz], [sx * hx, SB[1] + 0.03, bz], 0.016, 8);
+  }
+  // drivetrain
+  mb.rod(M.metal, [0.04, BB[1], BB[2]], [0.05, BB[1], BB[2]], 0.09, 16);
+  mb.rod(M.metal, [-0.045, BB[1], BB[2]], [0.045, BB[1], BB[2]], 0.025, 8);
+  const ca = 0.6;
+  for (const sx of [-1, 1]) {
+    const py = BB[1] - sx * Math.cos(ca) * 0.17, pz = BB[2] + sx * Math.sin(ca) * 0.17;
+    beam(mb, M.metal, [sx * 0.065, BB[1], BB[2]], [sx * 0.065, py, pz], 0.015, 0.03);
+    mb.box(M.saddle, [sx > 0 ? 0.075 : -0.16, py - 0.04, pz - 0.012], [sx > 0 ? 0.16 : -0.075, py + 0.04, pz + 0.012]);
+  }
+  mb.rod(M.metal, [0.05, BB[1], BB[2] + 0.09], [0.05, yRa, R + 0.035], 0.004, 4);
+  mb.rod(M.metal, [0.05, BB[1], BB[2] - 0.09], [0.05, yRa, R - 0.035], 0.004, 4);
+  mb.rod(M.metal, [0.05, yRa, R], [0.06, yRa, R], 0.04, 10);
+}
+
+function buildLampPost(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const k = Math.min(w, d) / 0.4;
+  const head = Math.min(0.62, h * 0.2);
+  mb.cylinder(M.pole, [0, 0, 0], 0.17 * k, 0.12 * k, 0.08, 12);
+  mb.cylinder(M.pole, [0, 0, 0.08], 0.12 * k, 0.07 * k, 0.32, 12, { bottom: false });
+  mb.cylinder(M.pole, [0, 0, 0.4], 0.055 * k, 0.04 * k, h - head - 0.4, 10, { bottom: false, top: false });
+  mb.cylinder(M.pole, [0, 0, h - head], 0.065 * k, 0.065 * k, 0.05, 10);
+  const z0 = h - head + 0.05;
+  const gl = head * 0.5;
+  mb.cylinder(M.pole, [0, 0, z0], 0.05 * k, 0.13 * k, head * 0.1, 6, { bottom: true, top: false });
+  const zg = z0 + head * 0.1;
+  mb.cylinder(M.light, [0, 0, zg], 0.12 * k, 0.15 * k, gl, 6, { bottom: true, top: false });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU;
+    mb.rod(M.pole, [Math.cos(a) * 0.125 * k, Math.sin(a) * 0.125 * k, zg], [Math.cos(a) * 0.155 * k, Math.sin(a) * 0.155 * k, zg + gl], 0.008, 4);
+  }
+  const zr = zg + gl;
+  mb.cylinder(M.pole, [0, 0, zr], 0.195 * k, 0.04 * k, h - zr - 0.06, 6);
+  mb.cylinder(M.pole, [0, 0, h - 0.06], 0.025 * k, 0.004, 0.06, 8, { bottom: false });
+}
+
+function buildMailbox(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const r = (w - 0.06) / 2;
+  const hb = Math.min(0.12, h * 0.1);
+  const zb = h - hb - r;
+  const P = Math.min(0.09, w * 0.4);
+  mb.block(M.post, 0, 0.05 * (d / 0.5), 0, P, P, zb, { skip: ["+z"] });
+  mb.box(M.post, [-r, -0.1, zb - 0.025], [r, d / 2 - 0.05, zb]);
+  const D = (inset: number): Vec2[] => {
+    const pts: Vec2[] = [[-r + inset, -hb + inset], [r - inset, -hb + inset]];
+    for (let i = 0; i <= 10; i++) {
+      const a = (i / 10) * Math.PI;
+      pts.push([Math.cos(a) * (r - inset), Math.sin(a) * (r - inset)]);
+    }
+    return pts;
+  };
+  const len = d - 0.025;
+  mb.with(m4.fromBasis([1, 0, 0], [0, 0, 1], [0, -1, 0], [0, d / 2 - 0.005, zb + hb]), () => {
+    mb.prism(M.box, D(0), 0, len);
+    mb.prism(M.box, D(0.006), len, len + 0.012);
+  });
+  mb.box(M.box, [-0.02, -d / 2, zb + hb + r * 0.55], [0.02, -d / 2 + 0.01, zb + hb + r * 0.75]);
+  // flag on the +X side
+  const fx = r + 0.004;
+  mb.box(M.flag, [fx, 0.02, zb + 0.03], [fx + 0.008, 0.045, zb + hb + r + 0.03 > h ? h - 0.01 : zb + hb + r]);
+  mb.box(M.flag, [fx, 0.045, zb + hb + r - 0.08], [fx + 0.008, 0.13, zb + hb + r - 0.005]);
+}
+
+// ---------------------------------------------------------------------------
 // registry
 // ---------------------------------------------------------------------------
 
@@ -1848,6 +2643,119 @@ export const FURNITURE: Record<string, FurnitureType> = {
     slots: { main: "concrete" },
     options: { segments: { description: "Number of sides", default: 16 } },
     build: buildCylinder,
+  }),
+  car: def({
+    description: "Passenger car, nose toward -Y (length = depth): body with wheel arches, glass cabin, bumpers, lights, mirrors; style sedan | suv | hatchback | pickup.",
+    defaults: { width: 1.8, depth: 4.5, height: 1.45 },
+    slots: { body: "car_paint_red", glass: "glass_tinted", tires: "tire_rubber", rims: "metal_aluminum", lights_front: "emissive_light", lights_rear: "emissive_red", interior: "fabric_gray", trim: "plastic_black" },
+    options: { style: { description: "sedan | suv | hatchback | pickup", default: "sedan" } },
+    build: buildCar,
+  }),
+  garden_chair: def({
+    description: "Slatted wooden garden armchair with reclined back.",
+    defaults: { width: 0.6, depth: 0.62, height: 0.88 },
+    slots: { frame: "wood_teak", seat: "wood_teak" },
+    build: buildGardenChair,
+  }),
+  sun_lounger: def({
+    description: "Sun lounger: slatted bed with raised backrest at +Y (feet toward -Y), optional cushion.",
+    defaults: { width: 0.7, depth: 2.0, height: 0.85 },
+    slots: { frame: "wood_teak", cushion: "fabric_white" },
+    options: { cushion: { description: "Add a cushion", default: true } },
+    build: buildSunLounger,
+  }),
+  outdoor_table: def({
+    description: "Slatted teak garden table on square legs; round=true gives a round top.",
+    defaults: { width: 1.4, depth: 0.9, height: 0.74 },
+    slots: { top: "wood_teak", legs: "wood_teak" },
+    options: { round: { description: "Round/oval top", default: false } },
+    build: buildOutdoorTable,
+  }),
+  parasol: def({
+    description: "Patio umbrella: weighted base, pole, 8-panel canopy (footprint = canopy); open=false gives a furled umbrella.",
+    defaults: { width: 2.6, depth: 2.6, height: 2.5 },
+    slots: { canopy: "fabric_beige", pole: "wood_teak", base: "concrete" },
+    options: { open: { description: "Canopy open", default: true } },
+    build: buildParasol,
+  }),
+  bbq: def({
+    description: "Barbecue grill facing -Y: style gas (cart with domed lid, knobs, side shelves) or kettle (round charcoal grill).",
+    defaults: { width: 1.2, depth: 0.6, height: 1.15 },
+    slots: { body: "metal_black", lid: "metal_steel", handles: "chrome", wheels: "rubber_black" },
+    options: { style: { description: "gas | kettle", default: "gas" } },
+    build: buildBbq,
+  }),
+  outdoor_sofa: def({
+    description: "Low lounge sofa: slatted teak frame with thick seat and back cushions.",
+    defaults: { width: 2.0, depth: 0.85, height: 0.75 },
+    slots: { frame: "wood_teak", cushions: "fabric_white" },
+    options: {
+      seats: { description: "Number of seat cushions (auto from width)", default: "auto" },
+      arms: { description: "Slatted armrests", default: true },
+    },
+    build: buildOutdoorSofa,
+  }),
+  planter: def({
+    description: "Box planter with soil and a leafy shrub; height includes the plant (box is ~half).",
+    defaults: { width: 1.0, depth: 0.45, height: 0.9 },
+    slots: { box: "wood_teak", soil: "dirt", foliage: "plant_green" },
+    build: buildPlanter,
+  }),
+  bush: def({
+    description: "Rounded shrub made of foliage clumps filling the box.",
+    defaults: { width: 1.0, depth: 1.0, height: 0.9 },
+    slots: { foliage: "plant_green" },
+    build: buildBush,
+  }),
+  tree: def({
+    description: "Tree; footprint = canopy. kind deciduous (trunk + leafy crown) | conifer (stacked cones) | palm (curved trunk + fronds).",
+    defaults: { width: 2.4, depth: 2.4, height: 3.0 },
+    slots: { trunk: "bark", foliage: "plant_green", needles: "plant_dark_green" },
+    options: { kind: { description: "deciduous | conifer | palm", default: "deciduous" } },
+    build: buildTree,
+  }),
+  hedge: def({
+    description: "Clipped box hedge; width = length along X.",
+    defaults: { width: 2.0, depth: 0.6, height: 1.2 },
+    slots: { foliage: "plant_dark_green" },
+    build: buildHedge,
+  }),
+  fence: def({
+    description: "Fence section; width = length along X (posts every <= 2 m). style picket | panel (close boards) | slats (horizontal).",
+    defaults: { width: 2.0, depth: 0.1, height: 1.0 },
+    slots: { boards: "wood_painted_white", posts: "wood_painted_white" },
+    options: { style: { description: "picket | panel | slats", default: "picket" } },
+    build: buildFence,
+  }),
+  hot_tub: def({
+    description: "Square hot tub: wood cabinet, acrylic shell with seats and water.",
+    defaults: { width: 2.1, depth: 2.1, height: 0.9 },
+    slots: { cabinet: "wood_dark", shell: "plastic_white", water: "water" },
+    build: buildHotTub,
+  }),
+  trash_bin: def({
+    description: "Wheelie bin: tapered body, hinged lid, handle and wheels at the back (+Y).",
+    defaults: { width: 0.58, depth: 0.74, height: 1.07 },
+    slots: { body: "plastic_green", lid: "plastic_green", wheels: "rubber_black" },
+    build: buildTrashBin,
+  }),
+  bicycle: def({
+    description: "Bicycle, front wheel toward -Y (length = depth, width = handlebar).",
+    defaults: { width: 0.6, depth: 1.75, height: 1.05 },
+    slots: { frame: "car_paint_blue", tires: "tire_rubber", metal: "chrome", saddle: "leather_black" },
+    build: buildBicycle,
+  }),
+  lamp_post: def({
+    description: "Classic street / garden lamp post with a glowing hexagonal lantern.",
+    defaults: { width: 0.4, depth: 0.4, height: 3.5 },
+    slots: { pole: "metal_black", light: "emissive_light" },
+    build: buildLampPost,
+  }),
+  mailbox: def({
+    description: "Post-mounted rural mailbox, door facing -Y, flag on the +X side.",
+    defaults: { width: 0.25, depth: 0.5, height: 1.2 },
+    slots: { box: "metal_black", post: "wood_painted_white", flag: "car_paint_red" },
+    build: buildMailbox,
   }),
 };
 

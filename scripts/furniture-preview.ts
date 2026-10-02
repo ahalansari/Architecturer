@@ -34,6 +34,11 @@ const COLORS: Record<string, [number, number, number]> = {
   plastic_white: [238, 238, 238], plastic_black: [32, 32, 35], rubber_black: [24, 24, 24], marble_white: [232, 232, 226],
   marble_black: [40, 40, 42], tiles_white: [240, 240, 240], mirror: [195, 220, 235], emissive_light: [255, 236, 160],
   plant_green: [70, 135, 52], concrete: [150, 150, 145], stone_gray: [122, 122, 118],
+  car_paint_red: [170, 25, 30], car_paint_blue: [35, 75, 145], car_paint_white: [240, 240, 236], car_paint_black: [22, 22, 26],
+  car_paint_silver: [185, 188, 192], tire_rubber: [28, 28, 29], emissive_red: [255, 60, 45], plastic_green: [47, 91, 55],
+  wood_teak: [163, 113, 63], wicker: [199, 154, 98], wicker_gray: [138, 135, 132], bark: [80, 60, 44],
+  plant_dark_green: [44, 90, 46], glass_tinted: [90, 110, 118], metal_aluminum: [205, 208, 212], fabric_white: [240, 238, 232],
+  dirt: [122, 92, 64], water: [61, 107, 128], wood_dark: [62, 42, 31], plastic_gray: [140, 141, 144],
 };
 function colorOf(mat: string): [number, number, number] {
   if (COLORS[mat]) return COLORS[mat];
@@ -264,6 +269,9 @@ const variants: [string, Record<string, unknown>][] = [
   ["table", { round: true }], ["side_table", { round: false }], ["desk", { drawers: "left" }], ["tv", { mount: "wall" }],
   ["bathroom_sink", { style: "pedestal" }], ["sectional_sofa", { chaise: "left" }], ["mirror", { round: true }],
   ["ceiling_light", { style: "flush" }], ["sofa", { arms: false, seats: 2 }], ["rug", { border: false }], ["curtain", { open: 1 }],
+  ["car", { style: "suv" }], ["car", { style: "hatchback" }], ["car", { style: "pickup" }], ["tree", { kind: "conifer" }], ["tree", { kind: "palm" }],
+  ["fence", { style: "panel" }], ["fence", { style: "slats" }], ["bbq", { style: "kettle" }], ["parasol", { open: false }], ["outdoor_table", { round: true }],
+  ["sun_lounger", { cushion: false }],
 ];
 let bad = 0;
 const check = (type: string, dims: { width: number; depth: number; height: number }, opts: Record<string, unknown>, label: string) => {
