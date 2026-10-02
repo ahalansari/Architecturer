@@ -1146,6 +1146,58 @@ function transpose(c: Canvas) {
     }
 }
 
+
+/**
+ * Enamelled steel discs on a dark backing (the Kuwait Towers spheres): staggered rows of slightly
+ * domed, glossy discs, each picking a shade from `palette` ("#hex,#hex,..."). Knobs: cols, rows,
+ * size (disc diameter relative to the spacing), background.
+ */
+const paintDisks: Painter = (c, p) => {
+  const cols = p.int("cols", 6, 1, 64);
+  const rows = Math.max(2, Math.round(p.int("rows", cols, 1, 64) / 2) * 2); // even, so the stagger wraps
+  const fill = p.num("size", 0.9, 0.3, 1.0);
+  const bg = p.color(["background", "base"], hex("#20292e"));
+  const listed = p
+    .str("palette", "")
+    .split(/[,;\s]+/)
+    .map((x) => parseColor(x))
+    .filter((x): x is RGB => !!x);
+  const palette = listed.length
+    ? listed
+    : ["#1d4d68", "#276a86", "#3a87a1", "#5ea7b8", "#2b6656", "#4c8c78", "#73868f", "#a7b6bd"].map(hex);
+  const fine = fbm(c, 64, 64, 2, 191);
+  for (let i = 0; i < c.n; i++) {
+    setCol(c, i, bg[0], bg[1], bg[2]);
+    c.h[i] = 0;
+    c.rough[i] = 0.15;
+    c.ao[i] = 0.75;
+  }
+  const r = (0.5 * fill) / Math.max(cols, rows);
+  for (let j = 0; j < rows; j++) {
+    const v = (j + 0.5) / rows;
+    const offset = (j % 2) * (0.5 / cols);
+    for (let k = 0; k < cols; k++) {
+      const u = (k + 0.5) / cols + offset;
+      const id = j * 1000 + k;
+      const pc = palette[Math.floor(rnd(id, 192, c.seed) * palette.length)];
+      const tone = 0.9 + rnd(id, 193, c.seed) * 0.2;
+      forDisc(c.size, u, v, r, (i, du, dv) => {
+        const d = Math.sqrt(du * du + dv * dv) / r;
+        const dome = Math.sqrt(Math.max(0, 1 - d * d));
+        // glossy enamel: brighter toward the top-left, thin darker rim
+        const light = 0.82 + 0.22 * dome + 0.12 * Math.max(0, (-du - dv) / r) - 0.25 * smoothstep(0.88, 1, d);
+        const t = tone * light * (1 + fine[i] * 0.04);
+        setCol(c, i, pc[0] * t, pc[1] * t, pc[2] * t);
+        c.h[i] = r * (0.25 + 0.15 * dome);
+        c.rough[i] = -0.35;
+        c.ao[i] = 1;
+      });
+    }
+  }
+  c.cavity = 30;
+  c.cavityRadius = 0.01;
+};
+
 const PAINTERS: Record<TexturePattern, Painter> = {
   none: paintNone,
   brick: paintBrick,
@@ -1166,6 +1218,7 @@ const PAINTERS: Record<TexturePattern, Painter> = {
   gravel: paintGravel,
   paving: paintPaving,
   siding: paintSiding,
+  disks: paintDisks,
 };
 
 // ---------------------------------------------------------------------------

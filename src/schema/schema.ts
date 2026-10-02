@@ -210,6 +210,93 @@ export const TerraceSchema = z
   })
   .describe("Terrace, balcony, deck or patio: floor slab plus railings/parapet on the free edges, all in one element");
 
+const Vec3 = z.tuple([z.number(), z.number(), z.number()]).describe("[x, y, z] in meters; z relative to the level elevation");
+
+export const BandSchema = z
+  .object({
+    from: z.number().describe("Band start height (same frame as the profile heights)"),
+    to: z.number().describe("Band end height"),
+    material: z.union([Mat, z.literal("none")]).describe("Material for this height range, or 'none' to leave an opening (e.g. where a ring attaches)"),
+    inner: z.boolean().optional().describe("Hollow shapes: add the inner surface for this band. Default true, except for glass/water materials"),
+    frame: z
+      .object({
+        material: Mat.default("metal_black"),
+        columns: z.number().int().min(3).default(24).describe("Mullions around the circumference"),
+        rows: z.number().int().min(1).default(1).describe("Horizontal divisions inside the band"),
+        diagonals: z.boolean().default(true).describe("Triangulate the panels (geodesic look)"),
+        radius: z.number().positive().default(0.05).describe("Mullion radius"),
+        nodes: z.boolean().default(true).describe("Round node plates where members meet"),
+      })
+      .optional()
+      .describe("Add a glazing frame / lattice over this band"),
+  })
+  .describe("A height range of a revolved shape with its own material (windows, stripes, openings)");
+
+const RevolveCommon = {
+  id: Id.optional(),
+  name: z.string().optional(),
+  material: Mat,
+  segments: z.number().int().min(6).max(256).default(48).describe("Facets around the circumference"),
+  bands: z.array(BandSchema).default([]),
+  hollow: z
+    .object({
+      thickness: z.number().positive().default(0.3),
+      innerMaterial: Mat.default("plaster_white"),
+    })
+    .optional()
+    .describe("Make the shell walk-in: adds an inner surface so interiors (floors inside a sphere) look closed"),
+  uvRadius: z
+    .number()
+    .positive()
+    .optional()
+    .describe("Radius used for texture mapping around (default: the largest radius). Pick it so 2*pi*uvRadius is a whole number of texture tiles to hide the seam"),
+};
+
+export const ShapeSchema = z
+  .discriminatedUnion("type", [
+    z.object({
+      type: z.literal("revolve"),
+      position: Point.describe("Axis position"),
+      base: z.number().default(0).describe("Height of profile z=0 relative to the level elevation"),
+      profile: z
+        .array(z.tuple([z.number().min(0), z.number()]))
+        .min(2)
+        .describe("[[radius, height], ...] listed from the BOTTOM to the TOP. Start/end at radius 0 to close the solid (e.g. [[0,0],[8,0],[5,10],...,[0,187]])"),
+      ...RevolveCommon,
+    }),
+    z.object({
+      type: z.literal("sphere"),
+      center: Vec3,
+      radius: z.number().positive(),
+      rings: z.number().int().min(4).max(128).default(32).describe("Facets from pole to pole"),
+      ...RevolveCommon,
+    }),
+    z.object({
+      type: z.literal("cylinder"),
+      id: Id.optional(),
+      name: z.string().optional(),
+      position: Point,
+      base: z.number().default(0),
+      radius: z.number().positive(),
+      radiusTop: z.number().min(0).optional().describe("Default: radius (0 = cone)"),
+      height: z.number().positive(),
+      segments: z.number().int().min(3).max(256).default(32),
+      material: Mat,
+    }),
+    z.object({
+      type: z.literal("box"),
+      id: Id.optional(),
+      name: z.string().optional(),
+      center: Vec3,
+      size: Vec3.describe("[width, depth, height]"),
+      rotation: z.number().default(0).describe("Degrees counter-clockwise around the vertical axis"),
+      material: Mat,
+    }),
+  ])
+  .describe(
+    "Free-form solids for landmarks and structures the architectural elements can't express: revolve (towers, domes, spheres-with-rings, columns with entasis), sphere, cylinder/cone, box. Static geometry; collides as itself.",
+  );
+
 export const LevelSchema = z
   .object({
     id: Id,
@@ -230,9 +317,24 @@ export const LevelSchema = z
     columns: z.array(ColumnSchema).default([]),
     railings: z.array(RailingSchema).default([]),
     terraces: z.array(TerraceSchema).default([]),
+    shapes: z.array(ShapeSchema).default([]),
     roofs: z.array(RoofSchema).default([]),
   })
   .describe("One storey of the building");
+
+export const ElevatorSchema = z
+  .object({
+    id: Id,
+    stops: z
+      .array(
+        z.object({
+          level: Id,
+          at: Point.describe("Landing point in front of the elevator doors on that level (must be inside a room or floor)"),
+        }),
+      )
+      .min(2),
+  })
+  .describe("Connects levels for circulation checks (rooms reached only by elevator). Model the shaft and doors with walls/openings/shapes");
 
 export const ProjectSchema = z
   .object({
@@ -263,6 +365,7 @@ export const ProjectSchema = z
       })
       .prefault({}),
     levels: z.array(LevelSchema).min(1),
+    elevators: z.array(ElevatorSchema).default([]),
   })
   .describe("Architecturer building plan");
 
@@ -279,9 +382,12 @@ export type Column = z.output<typeof ColumnSchema>;
 export type Roof = z.output<typeof RoofSchema>;
 export type Railing = z.output<typeof RailingSchema>;
 export type Terrace = z.output<typeof TerraceSchema>;
+export type Shape = z.output<typeof ShapeSchema>;
+export type Band = z.output<typeof BandSchema>;
+export type Elevator = z.output<typeof ElevatorSchema>;
 
 /** Element collections on a level, in a fixed order (used by editing tools). */
-export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "roofs"] as const;
+export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs"] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 export function directionToDegrees(d: number | "north" | "south" | "east" | "west"): number {

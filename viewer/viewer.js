@@ -166,12 +166,23 @@ async function loadModel(keepCamera) {
     }
   });
   scene.add(model);
-  // frame on the building (ignore the ground plane)
+  // frame on the building: skip flat things (ground, sea, plazas) so big sites don't push the camera away
+  const all = new THREE.Box3().setFromObject(model);
   bounds = new THREE.Box3();
+  model.updateMatrixWorld(true);
   model.traverse((o) => {
-    if (o.userData?.kind === "level") bounds.expandByObject(o);
+    if (!o.isMesh || !o.visible || /-(conv)?colonly$/.test(o.name)) return;
+    const b = new THREE.Box3().setFromObject(o);
+    if (b.max.y - b.min.y < 0.6) return;
+    bounds.union(b);
   });
-  if (bounds.isEmpty()) bounds.setFromObject(model);
+  if (bounds.isEmpty()) bounds.copy(all);
+  // scale clipping and fog to the scene
+  const span = all.getSize(new THREE.Vector3()).length();
+  camera.far = Math.max(1000, span * 3);
+  camera.updateProjectionMatrix();
+  scene.fog.near = Math.max(80, bounds.getSize(new THREE.Vector3()).length() * 1.5);
+  scene.fog.far = Math.max(250, span * 2);
   const c = bounds.getCenter(new THREE.Vector3());
   const r = bounds.getSize(new THREE.Vector3()).length();
   sun.position.set(c.x + r * 0.6, c.y + r, c.z + r * 0.8);

@@ -4,6 +4,7 @@ import { buildOpening, checkOverlaps, placeOpening, type PlacedOpening } from ".
 import { buildRoof } from "./elements/roofs.js";
 import { buildStair, COLLIDER, type StairResult } from "./elements/stairs.js";
 import { buildTerrace } from "./elements/terraces.js";
+import { buildShape, shapeFootprint } from "./elements/shapes.js";
 import { buildWallSegment, expandWalls, resolveJoins, splitJunctions, type WallSegment } from "./elements/walls.js";
 import { deg2rad, ensureCCW, offsetPolygon, polygonArea, type Vec2 } from "./geometry/math.js";
 import { MeshBuilder } from "./geometry/mesh.js";
@@ -246,6 +247,14 @@ export function buildProject(project: Project): BuildOutput {
     const extT = loop?.thickness ?? D.exteriorWallThickness ?? D.wallThickness;
     const extMat = loop?.exteriorMaterial ?? loop?.material ?? D.exteriorMaterial ?? D.wallMaterial;
 
+    // ---- free-form shapes ----
+    const shapesNode = node("shapes", "group");
+    lv.shapes.forEach((sh, i) => {
+      const mb = new MeshBuilder();
+      buildShape(mb, sh, z);
+      shapesNode.children.push(node(sh.id ?? `${sh.type}${i}`, "shape", mb, { id: sh.id, name: sh.name, type: sh.type }));
+    });
+
     // ---- terraces / balconies ----
     const terracesNode = node("terraces", "group");
     lv.terraces.forEach((t, i) => {
@@ -270,7 +279,7 @@ export function buildProject(project: Project): BuildOutput {
     for (const h of holes) if (!usedHoles.has(h)) warn("a stairwell arriving at this level is not inside any slab");
 
     levelNode.children.push(
-      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, stairsNode, furnNode, structNode, roofsNode].filter(
+      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, shapesNode, stairsNode, furnNode, structNode, roofsNode].filter(
         (n) => n.meshes.length || n.children.length,
       ),
     );
@@ -285,6 +294,11 @@ export function buildProject(project: Project): BuildOutput {
       pts.push(...infos[i].segments.flatMap((sg) => [sg.aL, sg.aR, sg.bL, sg.bR]), ...infos[i].stairOutlines.flat());
       pts.push(...lv.slabs.flatMap((s) => s.polygon), ...lv.rooms.flatMap((r) => r.polygon), ...lv.railings.flatMap((r) => r.points));
       pts.push(...lv.terraces.flatMap((t) => t.polygon));
+      for (const sh of lv.shapes) {
+        const fp = shapeFootprint(sh, 0, 0);
+        if (fp) pts.push([fp.center[0] - fp.max, fp.center[1] - fp.max], [fp.center[0] + fp.max, fp.center[1] + fp.max]);
+        else if (sh.type === "box") pts.push([sh.center[0] - sh.size[0] / 2, sh.center[1] - sh.size[1] / 2], [sh.center[0] + sh.size[0] / 2, sh.center[1] + sh.size[1] / 2]);
+      }
       pts.push(...lv.columns.map((c) => c.position), ...lv.furniture.map((f) => f.position));
     });
     for (const p of pts) {

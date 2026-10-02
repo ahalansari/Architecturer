@@ -2,6 +2,7 @@ import type { LevelInfo } from "../build.js";
 import { segDir } from "../elements/walls.js";
 import { FURNITURE } from "../elements/furniture.js";
 import { terraceGuards } from "../elements/terraces.js";
+import { shapeFootprint } from "../elements/shapes.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
@@ -410,6 +411,40 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       prio: 2.5,
       cands,
     });
+  }
+
+  // a cut through a solid is filled like a wall; a hollow shell is drawn as a ring of its wall thickness
+  const cutSection = (sh: (typeof lv.shapes)[number], ctr: Vec2, r: number) => {
+    const hollow = "hollow" in sh && sh.hollow;
+    return hollow
+      ? `<circle cx="${X(ctr[0])}" cy="${Y(ctr[1])}" r="${((r - hollow.thickness / 2) * S).toFixed(1)}" fill="none" stroke="#3a3a3a" stroke-width="${Math.max(2, hollow.thickness * S).toFixed(1)}"/>`
+      : `<circle cx="${X(ctr[0])}" cy="${Y(ctr[1])}" r="${(r * S).toFixed(1)}" fill="#3a3a3a"/>`;
+  };
+  // free-form shapes from lower levels that pass through this floor (e.g. a tower shaft through a sphere): cut section only
+  c.project.levels.forEach((other, oi) => {
+    if (oi === li) return;
+    for (const sh of other.shapes) {
+      const fp = shapeFootprint(sh, c.levels[oi].elevation, info.elevation + 1.2);
+      if (fp?.cut) out.push(cutSection(sh, fp.center, fp.cut));
+    }
+  });
+  // free-form shapes on this level: cut section at 1.2 m (solid, like walls) and widest extent overhead (dashed)
+  for (const sh of lv.shapes) {
+    if (sh.type === "box") {
+      const [w, d] = sh.size;
+      const rot = deg2rad(sh.rotation);
+      const corner = (x: number, y: number) => v2.add([sh.center[0], sh.center[1]], v2.rotate([x, y], rot));
+      out.push(`<polygon points="${poly([corner(-w / 2, -d / 2), corner(w / 2, -d / 2), corner(w / 2, d / 2), corner(-w / 2, d / 2)])}" fill="none" stroke="#7a7a7a" stroke-width="1" stroke-dasharray="5 3"/>`);
+      continue;
+    }
+    const fp = shapeFootprint(sh, info.elevation, info.elevation + 1.2);
+    if (!fp) continue;
+    const [cx, cy] = fp.center;
+    if (fp.max > (fp.cut ?? 0) + 0.05)
+      out.push(`<circle cx="${X(cx)}" cy="${Y(cy)}" r="${(fp.max * S).toFixed(1)}" fill="none" stroke="#6d7f8f" stroke-width="1.2" stroke-dasharray="7 4"/>`);
+    if (fp.cut) out.push(cutSection(sh, fp.center, fp.cut));
+    if (labels && sh.name)
+      L.push({ lines: [{ text: sh.name, size: fs - 3, color: "#4a5a68" }], prio: 3, optional: true, cands: [{ x: X(cx), y: Y(cy - fp.max) + fs + 2, cost: 0 }, { x: X(cx), y: Y(cy + fp.max) - 4, cost: 2 }] });
   }
 
   // columns

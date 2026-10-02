@@ -19,6 +19,7 @@ export const TEXTURE_PATTERNS = [
   "gravel",
   "paving",
   "siding",
+  "disks",
 ] as const;
 export type TexturePattern = (typeof TEXTURE_PATTERNS)[number];
 

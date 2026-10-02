@@ -1,0 +1,6452 @@
+{
+ "name": "Kuwait Towers",
+ "description": "The Kuwait Towers (1979, VBB / Sune Lindström & Malene Bjørn): main tower 187 m with a restaurant sphere and a revolving observation sphere, second tower 147 m (water), third tower 113 m (floodlights). Spheres clad in enamelled steel discs. Dimensions estimated from photos scaled to published heights.",
+ "defaults": {
+  "wallThickness": 0.2,
+  "exteriorWallThickness": 0.3,
+  "wallMaterial": "paint_white",
+  "exteriorMaterial": "kt_white"
+ },
+ "site": {
+  "ground": false
+ },
+ "materials": {
+  "kt_white": {
+   "base": "plaster_white",
+   "color": "#f3f3f0",
+   "roughness": 0.6
+  },
+  "kt_glass": {
+   "base": "glass_tinted",
+   "color": "#3d4f5c",
+   "opacity": 0.62,
+   "roughness": 0.05
+  },
+  "kt_discs": {
+   "base": "enamel_discs",
+   "scale": 3.2,
+   "params": {
+    "cols": 8,
+    "rows": 8,
+    "size": 0.9,
+    "palette": "#173f58,#1f5470,#1f5470,#2a6d88,#2a6d88,#3a86a0,#24564c,#2f6a5c,#3f7d6c,#5b7883,#8fa6af",
+    "background": "#1b2428"
+   }
+  }
+ },
+ "levels": [
+  {
+   "id": "plaza",
+   "name": "Plaza & entrance",
+   "elevation": 0,
+   "height": 4.5,
+   "walls": [
+    {
+     "id": "lobby_wall",
+     "points": [
+      [
+       13,
+       0
+      ],
+      [
+       12.75,
+       2.54
+      ],
+      [
+       12.01,
+       4.97
+      ],
+      [
+       10.81,
+       7.22
+      ],
+      [
+       9.19,
+       9.19
+      ],
+      [
+       7.22,
+       10.81
+      ],
+      [
+       4.97,
+       12.01
+      ],
+      [
+       2.54,
+       12.75
+      ],
+      [
+       0,
+       13
+      ],
+      [
+       -2.54,
+       12.75
+      ],
+      [
+       -4.97,
+       12.01
+      ],
+      [
+       -7.22,
+       10.81
+      ],
+      [
+       -9.19,
+       9.19
+      ],
+      [
+       -10.81,
+       7.22
+      ],
+      [
+       -12.01,
+       4.97
+      ],
+      [
+       -12.75,
+       2.54
+      ],
+      [
+       -13,
+       0
+      ],
+      [
+       -12.75,
+       -2.54
+      ],
+      [
+       -12.01,
+       -4.97
+      ],
+      [
+       -10.81,
+       -7.22
+      ],
+      [
+       -9.19,
+       -9.19
+      ],
+      [
+       -7.22,
+       -10.81
+      ],
+      [
+       -4.97,
+       -12.01
+      ],
+      [
+       -2.54,
+       -12.75
+      ],
+      [
+       0,
+       -13
+      ],
+      [
+       2.54,
+       -12.75
+      ],
+      [
+       4.97,
+       -12.01
+      ],
+      [
+       7.22,
+       -10.81
+      ],
+      [
+       9.19,
+       -9.19
+      ],
+      [
+       10.81,
+       -7.22
+      ],
+      [
+       12.01,
+       -4.97
+      ],
+      [
+       12.75,
+       -2.54
+      ]
+     ],
+     "closed": true,
+     "thickness": 0.3,
+     "material": "kt_white"
+    }
+   ],
+   "openings": [
+    {
+     "id": "entrance",
+     "type": "door",
+     "at": [
+      1.27,
+      -12.88
+     ],
+     "style": "double",
+     "width": 2,
+     "height": 2.6,
+     "panelMaterial": "glass_tinted",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win0",
+     "type": "window",
+     "at": [
+      -12.38,
+      -3.76
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win1",
+     "type": "window",
+     "at": [
+      -8.21,
+      -10
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win2",
+     "type": "window",
+     "at": [
+      8.21,
+      -10
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win3",
+     "type": "window",
+     "at": [
+      12.38,
+      -3.76
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win4",
+     "type": "window",
+     "at": [
+      12.38,
+      3.76
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win5",
+     "type": "window",
+     "at": [
+      8.21,
+      10
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win6",
+     "type": "window",
+     "at": [
+      1.27,
+      12.88
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win7",
+     "type": "window",
+     "at": [
+      -3.76,
+      12.38
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win8",
+     "type": "window",
+     "at": [
+      -10,
+      8.21
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    },
+    {
+     "id": "lobby_win9",
+     "type": "window",
+     "at": [
+      -12.88,
+      1.27
+     ],
+     "width": 2.2,
+     "height": 2.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "frameMaterial": "metal_aluminum"
+    }
+   ],
+   "rooms": [
+    {
+     "id": "lobby",
+     "name": "Entrance lobby & gift shop",
+     "polygon": [
+      [
+       13,
+       0
+      ],
+      [
+       12.75,
+       2.54
+      ],
+      [
+       12.01,
+       4.97
+      ],
+      [
+       10.81,
+       7.22
+      ],
+      [
+       9.19,
+       9.19
+      ],
+      [
+       7.22,
+       10.81
+      ],
+      [
+       4.97,
+       12.01
+      ],
+      [
+       2.54,
+       12.75
+      ],
+      [
+       0,
+       13
+      ],
+      [
+       -2.54,
+       12.75
+      ],
+      [
+       -4.97,
+       12.01
+      ],
+      [
+       -7.22,
+       10.81
+      ],
+      [
+       -9.19,
+       9.19
+      ],
+      [
+       -10.81,
+       7.22
+      ],
+      [
+       -12.01,
+       4.97
+      ],
+      [
+       -12.75,
+       2.54
+      ],
+      [
+       -13,
+       0
+      ],
+      [
+       -12.75,
+       -2.54
+      ],
+      [
+       -12.01,
+       -4.97
+      ],
+      [
+       -10.81,
+       -7.22
+      ],
+      [
+       -9.19,
+       -9.19
+      ],
+      [
+       -7.22,
+       -10.81
+      ],
+      [
+       -4.97,
+       -12.01
+      ],
+      [
+       -2.54,
+       -12.75
+      ],
+      [
+       0,
+       -13
+      ],
+      [
+       2.54,
+       -12.75
+      ],
+      [
+       4.97,
+       -12.01
+      ],
+      [
+       7.22,
+       -10.81
+      ],
+      [
+       9.19,
+       -9.19
+      ],
+      [
+       10.81,
+       -7.22
+      ],
+      [
+       12.01,
+       -4.97
+      ],
+      [
+       12.75,
+       -2.54
+      ]
+     ],
+     "floorMaterial": "marble_white",
+     "ceilingMaterial": "paint_white"
+    }
+   ],
+   "terraces": [
+    {
+     "id": "plaza_deck",
+     "name": "Promenade plaza",
+     "polygon": [
+      [
+       54,
+       3
+      ],
+      [
+       53.65,
+       10.06
+      ],
+      [
+       52.62,
+       17.05
+      ],
+      [
+       50.9,
+       23.9
+      ],
+      [
+       48.52,
+       30.55
+      ],
+      [
+       45.5,
+       36.94
+      ],
+      [
+       41.87,
+       43
+      ],
+      [
+       37.66,
+       48.68
+      ],
+      [
+       32.91,
+       53.91
+      ],
+      [
+       27.68,
+       58.66
+      ],
+      [
+       22,
+       62.87
+      ],
+      [
+       15.94,
+       66.5
+      ],
+      [
+       9.55,
+       69.52
+      ],
+      [
+       2.9,
+       71.9
+      ],
+      [
+       -3.95,
+       73.62
+      ],
+      [
+       -10.94,
+       74.65
+      ],
+      [
+       -18,
+       75
+      ],
+      [
+       -25.06,
+       74.65
+      ],
+      [
+       -32.05,
+       73.62
+      ],
+      [
+       -38.9,
+       71.9
+      ],
+      [
+       -45.55,
+       69.52
+      ],
+      [
+       -51.94,
+       66.5
+      ],
+      [
+       -58,
+       62.87
+      ],
+      [
+       -63.68,
+       58.66
+      ],
+      [
+       -68.91,
+       53.91
+      ],
+      [
+       -73.66,
+       48.68
+      ],
+      [
+       -77.87,
+       43
+      ],
+      [
+       -81.5,
+       36.94
+      ],
+      [
+       -84.52,
+       30.55
+      ],
+      [
+       -86.9,
+       23.9
+      ],
+      [
+       -88.62,
+       17.05
+      ],
+      [
+       -89.65,
+       10.06
+      ],
+      [
+       -90,
+       3
+      ],
+      [
+       -89.65,
+       -4.06
+      ],
+      [
+       -88.62,
+       -11.05
+      ],
+      [
+       -86.9,
+       -17.9
+      ],
+      [
+       -84.52,
+       -24.55
+      ],
+      [
+       -81.5,
+       -30.94
+      ],
+      [
+       -77.87,
+       -37
+      ],
+      [
+       -73.66,
+       -42.68
+      ],
+      [
+       -68.91,
+       -47.91
+      ],
+      [
+       -63.68,
+       -52.66
+      ],
+      [
+       -58,
+       -56.87
+      ],
+      [
+       -51.94,
+       -60.5
+      ],
+      [
+       -45.55,
+       -63.52
+      ],
+      [
+       -38.9,
+       -65.9
+      ],
+      [
+       -32.05,
+       -67.62
+      ],
+      [
+       -25.06,
+       -68.65
+      ],
+      [
+       -18,
+       -69
+      ],
+      [
+       -10.94,
+       -68.65
+      ],
+      [
+       -3.95,
+       -67.62
+      ],
+      [
+       2.9,
+       -65.9
+      ],
+      [
+       9.55,
+       -63.52
+      ],
+      [
+       15.94,
+       -60.5
+      ],
+      [
+       22,
+       -56.87
+      ],
+      [
+       27.68,
+       -52.66
+      ],
+      [
+       32.91,
+       -47.91
+      ],
+      [
+       37.66,
+       -42.68
+      ],
+      [
+       41.87,
+       -37
+      ],
+      [
+       45.5,
+       -30.94
+      ],
+      [
+       48.52,
+       -24.55
+      ],
+      [
+       50.9,
+       -17.9
+      ],
+      [
+       52.62,
+       -11.05
+      ],
+      [
+       53.65,
+       -4.06
+      ]
+     ],
+     "material": "paving_stone",
+     "thickness": 1.2,
+     "edgeMaterial": "concrete"
+    }
+   ],
+   "shapes": [
+    {
+     "type": "box",
+     "id": "sea",
+     "name": "Arabian Gulf",
+     "center": [
+      -18,
+      3,
+      -1.6
+     ],
+     "size": [
+      900,
+      900,
+      0.2
+     ],
+     "material": "water"
+    },
+    {
+     "type": "revolve",
+     "id": "main_shaft",
+     "name": "Main tower shaft (187 m)",
+     "position": [
+      0,
+      0
+     ],
+     "material": "kt_white",
+     "segments": 48,
+     "profile": [
+      [
+       0,
+       0
+      ],
+      [
+       9,
+       0
+      ],
+      [
+       8.6,
+       0.6
+      ],
+      [
+       7.2,
+       2.5
+      ],
+      [
+       6.2,
+       5.5
+      ],
+      [
+       5.6,
+       10
+      ],
+      [
+       5.2,
+       20
+      ],
+      [
+       4.9,
+       40
+      ],
+      [
+       4.7,
+       59
+      ],
+      [
+       4.6,
+       76
+      ],
+      [
+       4.3,
+       93
+      ],
+      [
+       3.9,
+       106
+      ],
+      [
+       3.6,
+       113
+      ],
+      [
+       3.4,
+       121
+      ],
+      [
+       3,
+       131
+      ],
+      [
+       2.5,
+       138
+      ],
+      [
+       1.9,
+       146
+      ],
+      [
+       1.3,
+       156
+      ],
+      [
+       0.8,
+       166
+      ],
+      [
+       0.45,
+       176
+      ],
+      [
+       0.15,
+       185
+      ],
+      [
+       0.05,
+       187
+      ],
+      [
+       0,
+       187
+      ]
+     ]
+    },
+    {
+     "type": "sphere",
+     "id": "main_lower_sphere",
+     "name": "Restaurant sphere (water tank below)",
+     "center": [
+      0,
+      0,
+      76
+     ],
+     "radius": 17,
+     "rings": 44,
+     "segments": 72,
+     "material": "kt_discs",
+     "uvRadius": 16.81,
+     "hollow": {
+      "thickness": 0.35,
+      "innerMaterial": "paint_gray"
+     },
+     "bands": [
+      {
+       "from": 77.3,
+       "to": 87.2,
+       "material": "none"
+      }
+     ]
+    },
+    {
+     "type": "revolve",
+     "id": "restaurant_ring",
+     "name": "Restaurant ring",
+     "position": [
+      0,
+      0
+     ],
+     "material": "kt_white",
+     "segments": 72,
+     "profile": [
+      [
+       16.95,
+       77.3
+      ],
+      [
+       19.6,
+       78.6
+      ],
+      [
+       20.6,
+       85.6
+      ],
+      [
+       20.95,
+       85.8
+      ],
+      [
+       20.95,
+       86.25
+      ],
+      [
+       12.79,
+       87.2
+      ]
+     ],
+     "hollow": {
+      "thickness": 0.3,
+      "innerMaterial": "paint_gray"
+     },
+     "bands": [
+      {
+       "from": 78.6,
+       "to": 85.6,
+       "material": "kt_glass",
+       "frame": {
+        "material": "metal_aluminum",
+        "columns": 72,
+        "rows": 2,
+        "diagonals": false,
+        "radius": 0.045,
+        "nodes": false
+       }
+      }
+     ]
+    },
+    {
+     "type": "sphere",
+     "id": "main_upper_sphere",
+     "name": "Observation sphere",
+     "center": [
+      0,
+      0,
+      121
+     ],
+     "radius": 10,
+     "rings": 32,
+     "segments": 48,
+     "material": "kt_discs",
+     "uvRadius": 10.19,
+     "hollow": {
+      "thickness": 0.3,
+      "innerMaterial": "paint_gray"
+     },
+     "bands": [
+      {
+       "from": 117.6,
+       "to": 125.4,
+       "material": "kt_glass",
+       "frame": {
+        "material": "metal_black",
+        "columns": 24,
+        "rows": 3,
+        "diagonals": true,
+        "radius": 0.06,
+        "nodes": true
+       }
+      }
+     ]
+    },
+    {
+     "type": "revolve",
+     "id": "second_shaft",
+     "name": "Second tower shaft (147 m)",
+     "position": [
+      -40,
+      -4
+     ],
+     "material": "kt_white",
+     "segments": 40,
+     "profile": [
+      [
+       0,
+       0
+      ],
+      [
+       7.2,
+       0
+      ],
+      [
+       6.9,
+       0.6
+      ],
+      [
+       5.6,
+       2.5
+      ],
+      [
+       4.8,
+       5.5
+      ],
+      [
+       4.3,
+       10
+      ],
+      [
+       4,
+       30
+      ],
+      [
+       3.8,
+       57
+      ],
+      [
+       3.7,
+       71
+      ],
+      [
+       3.4,
+       85
+      ],
+      [
+       2.9,
+       92
+      ],
+      [
+       2.2,
+       100
+      ],
+      [
+       1.6,
+       110
+      ],
+      [
+       1,
+       122
+      ],
+      [
+       0.5,
+       135
+      ],
+      [
+       0.15,
+       145
+      ],
+      [
+       0,
+       147
+      ]
+     ]
+    },
+    {
+     "type": "sphere",
+     "id": "second_sphere",
+     "name": "Second tower sphere (water tank)",
+     "center": [
+      -40,
+      -4,
+      71
+     ],
+     "radius": 14,
+     "rings": 36,
+     "segments": 64,
+     "material": "kt_discs",
+     "uvRadius": 13.75
+    },
+    {
+     "type": "revolve",
+     "id": "third_tower",
+     "name": "Third tower (floodlights)",
+     "position": [
+      -20,
+      13
+     ],
+     "material": "kt_white",
+     "segments": 24,
+     "profile": [
+      [
+       0,
+       0
+      ],
+      [
+       3.4,
+       0
+      ],
+      [
+       3.1,
+       0.5
+      ],
+      [
+       2.4,
+       2.5
+      ],
+      [
+       2,
+       6
+      ],
+      [
+       1.8,
+       20
+      ],
+      [
+       1.5,
+       50
+      ],
+      [
+       1.1,
+       75
+      ],
+      [
+       0.7,
+       92
+      ],
+      [
+       0.35,
+       104
+      ],
+      [
+       0.1,
+       112
+      ],
+      [
+       0,
+       113
+      ]
+     ]
+    }
+   ],
+   "furniture": [
+    {
+     "id": "ticket_desk",
+     "type": "kitchen_counter",
+     "position": [
+      -5.6,
+      -9.7
+     ],
+     "rotation": 150,
+     "width": 2.4,
+     "materials": {
+      "counter": "marble_white",
+      "cabinet": "wood_walnut"
+     }
+    },
+    {
+     "id": "gift_shelf0",
+     "type": "bookshelf",
+     "position": [
+      6.2,
+      -10.74
+     ],
+     "rotation": 570,
+     "width": 1.4,
+     "options": {
+      "books": true
+     }
+    },
+    {
+     "id": "gift_shelf1",
+     "type": "bookshelf",
+     "position": [
+      9.5,
+      -7.97
+     ],
+     "rotation": 590,
+     "width": 1.4,
+     "options": {
+      "books": true
+     }
+    },
+    {
+     "id": "lobby_plant0",
+     "type": "plant",
+     "position": [
+      -10.33,
+      -4.82
+     ]
+    },
+    {
+     "id": "lobby_plant1",
+     "type": "plant",
+     "position": [
+      10.33,
+      -4.82
+     ]
+    },
+    {
+     "id": "lift_door_ground",
+     "type": "box",
+     "position": [
+      0,
+      -9.15
+     ],
+     "rotation": 0,
+     "width": 1.6,
+     "depth": 0.12,
+     "height": 2.4,
+     "materials": {
+      "main": "metal_steel"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      45.21,
+      13.01
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      46.67,
+      24.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      39.02,
+      32.06
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      27.25,
+      48.25
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      21.97,
+      58.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      11.06,
+      60.02
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      -7.99,
+      66.21
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      -18,
+      71
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      -28.01,
+      66.21
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      -47.06,
+      60.02
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      -57.97,
+      58.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      -63.25,
+      48.25
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      -75.02,
+      32.06
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      -82.67,
+      24.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      -81.21,
+      13.01
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      -81.21,
+      -7.01
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      -82.67,
+      -18.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      -75.02,
+      -26.06
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      -63.25,
+      -42.25
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      -57.97,
+      -52.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      -47.06,
+      -54.02
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      -28.01,
+      -60.21
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      -18,
+      -65
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      -7.99,
+      -60.21
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      11.06,
+      -54.02
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      21.97,
+      -52.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      27.25,
+      -42.25
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "tree",
+     "position": [
+      39.02,
+      -26.06
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "lamp_post",
+     "position": [
+      46.67,
+      -18.01
+     ]
+    },
+    {
+     "type": "tree",
+     "position": [
+      45.21,
+      -7.01
+     ],
+     "width": 4,
+     "depth": 4,
+     "height": 9,
+     "options": {
+      "kind": "palm"
+     }
+    },
+    {
+     "type": "bench",
+     "position": [
+      33.92,
+      23.98
+     ],
+     "rotation": 292,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      3.88,
+      54.55
+     ],
+     "rotation": 337,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      -38.98,
+      54.92
+     ],
+     "rotation": 382,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      -69.55,
+      24.88
+     ],
+     "rotation": 427,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      -69.92,
+      -17.98
+     ],
+     "rotation": 472,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      -39.88,
+      -48.55
+     ],
+     "rotation": 517,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      2.98,
+      -48.92
+     ],
+     "rotation": 562,
+     "width": 1.8
+    },
+    {
+     "type": "bench",
+     "position": [
+      33.55,
+      -18.88
+     ],
+     "rotation": 607,
+     "width": 1.8
+    }
+   ],
+   "roofs": [
+    {
+     "id": "lobby_roof",
+     "type": "flat",
+     "polygon": [
+      [
+       13,
+       0
+      ],
+      [
+       12.75,
+       2.54
+      ],
+      [
+       12.01,
+       4.97
+      ],
+      [
+       10.81,
+       7.22
+      ],
+      [
+       9.19,
+       9.19
+      ],
+      [
+       7.22,
+       10.81
+      ],
+      [
+       4.97,
+       12.01
+      ],
+      [
+       2.54,
+       12.75
+      ],
+      [
+       0,
+       13
+      ],
+      [
+       -2.54,
+       12.75
+      ],
+      [
+       -4.97,
+       12.01
+      ],
+      [
+       -7.22,
+       10.81
+      ],
+      [
+       -9.19,
+       9.19
+      ],
+      [
+       -10.81,
+       7.22
+      ],
+      [
+       -12.01,
+       4.97
+      ],
+      [
+       -12.75,
+       2.54
+      ],
+      [
+       -13,
+       0
+      ],
+      [
+       -12.75,
+       -2.54
+      ],
+      [
+       -12.01,
+       -4.97
+      ],
+      [
+       -10.81,
+       -7.22
+      ],
+      [
+       -9.19,
+       -9.19
+      ],
+      [
+       -7.22,
+       -10.81
+      ],
+      [
+       -4.97,
+       -12.01
+      ],
+      [
+       -2.54,
+       -12.75
+      ],
+      [
+       0,
+       -13
+      ],
+      [
+       2.54,
+       -12.75
+      ],
+      [
+       4.97,
+       -12.01
+      ],
+      [
+       7.22,
+       -10.81
+      ],
+      [
+       9.19,
+       -9.19
+      ],
+      [
+       10.81,
+       -7.22
+      ],
+      [
+       12.01,
+       -4.97
+      ],
+      [
+       12.75,
+       -2.54
+      ]
+     ],
+     "overhang": 0.6,
+     "thickness": 0.4,
+     "material": "concrete",
+     "edgeMaterial": "kt_white"
+    }
+   ]
+  },
+  {
+   "id": "cafe",
+   "name": "Café & lounge (lower sphere)",
+   "elevation": 78.7,
+   "height": 3.6,
+   "autoSlab": false,
+   "slabs": [
+    {
+     "id": "cafe_floor",
+     "polygon": [
+      [
+       19.35,
+       0
+      ],
+      [
+       19.28,
+       1.69
+      ],
+      [
+       19.06,
+       3.36
+      ],
+      [
+       18.69,
+       5.01
+      ],
+      [
+       18.18,
+       6.62
+      ],
+      [
+       17.54,
+       8.18
+      ],
+      [
+       16.76,
+       9.67
+      ],
+      [
+       15.85,
+       11.1
+      ],
+      [
+       14.82,
+       12.44
+      ],
+      [
+       13.68,
+       13.68
+      ],
+      [
+       12.44,
+       14.82
+      ],
+      [
+       11.1,
+       15.85
+      ],
+      [
+       9.68,
+       16.76
+      ],
+      [
+       8.18,
+       17.54
+      ],
+      [
+       6.62,
+       18.18
+      ],
+      [
+       5.01,
+       18.69
+      ],
+      [
+       3.36,
+       19.06
+      ],
+      [
+       1.69,
+       19.28
+      ],
+      [
+       0,
+       19.35
+      ],
+      [
+       -1.69,
+       19.28
+      ],
+      [
+       -3.36,
+       19.06
+      ],
+      [
+       -5.01,
+       18.69
+      ],
+      [
+       -6.62,
+       18.18
+      ],
+      [
+       -8.18,
+       17.54
+      ],
+      [
+       -9.67,
+       16.76
+      ],
+      [
+       -11.1,
+       15.85
+      ],
+      [
+       -12.44,
+       14.82
+      ],
+      [
+       -13.68,
+       13.68
+      ],
+      [
+       -14.82,
+       12.44
+      ],
+      [
+       -15.85,
+       11.1
+      ],
+      [
+       -16.76,
+       9.67
+      ],
+      [
+       -17.54,
+       8.18
+      ],
+      [
+       -18.18,
+       6.62
+      ],
+      [
+       -18.69,
+       5.01
+      ],
+      [
+       -19.06,
+       3.36
+      ],
+      [
+       -19.28,
+       1.69
+      ],
+      [
+       -19.35,
+       0
+      ],
+      [
+       -19.28,
+       -1.69
+      ],
+      [
+       -19.06,
+       -3.36
+      ],
+      [
+       -18.69,
+       -5.01
+      ],
+      [
+       -18.18,
+       -6.62
+      ],
+      [
+       -17.54,
+       -8.18
+      ],
+      [
+       -16.76,
+       -9.68
+      ],
+      [
+       -15.85,
+       -11.1
+      ],
+      [
+       -14.82,
+       -12.44
+      ],
+      [
+       -13.68,
+       -13.68
+      ],
+      [
+       -12.44,
+       -14.82
+      ],
+      [
+       -11.1,
+       -15.85
+      ],
+      [
+       -9.68,
+       -16.76
+      ],
+      [
+       -8.18,
+       -17.54
+      ],
+      [
+       -6.62,
+       -18.18
+      ],
+      [
+       -5.01,
+       -18.69
+      ],
+      [
+       -3.36,
+       -19.06
+      ],
+      [
+       -1.69,
+       -19.28
+      ],
+      [
+       0,
+       -19.35
+      ],
+      [
+       1.69,
+       -19.28
+      ],
+      [
+       3.36,
+       -19.06
+      ],
+      [
+       5.01,
+       -18.69
+      ],
+      [
+       6.62,
+       -18.18
+      ],
+      [
+       8.18,
+       -17.54
+      ],
+      [
+       9.68,
+       -16.76
+      ],
+      [
+       11.1,
+       -15.85
+      ],
+      [
+       12.44,
+       -14.82
+      ],
+      [
+       13.68,
+       -13.68
+      ],
+      [
+       14.82,
+       -12.44
+      ],
+      [
+       15.85,
+       -11.1
+      ],
+      [
+       16.76,
+       -9.68
+      ],
+      [
+       17.54,
+       -8.18
+      ],
+      [
+       18.18,
+       -6.62
+      ],
+      [
+       18.69,
+       -5.01
+      ],
+      [
+       19.06,
+       -3.36
+      ],
+      [
+       19.28,
+       -1.69
+      ]
+     ],
+     "thickness": 0.15,
+     "material": "concrete"
+    }
+   ],
+   "rooms": [
+    {
+     "id": "cafe_room",
+     "name": "Café & lounge",
+     "polygon": [
+      [
+       19.35,
+       0
+      ],
+      [
+       19.28,
+       1.69
+      ],
+      [
+       19.06,
+       3.36
+      ],
+      [
+       18.69,
+       5.01
+      ],
+      [
+       18.18,
+       6.62
+      ],
+      [
+       17.54,
+       8.18
+      ],
+      [
+       16.76,
+       9.67
+      ],
+      [
+       15.85,
+       11.1
+      ],
+      [
+       14.82,
+       12.44
+      ],
+      [
+       13.68,
+       13.68
+      ],
+      [
+       12.44,
+       14.82
+      ],
+      [
+       11.1,
+       15.85
+      ],
+      [
+       9.68,
+       16.76
+      ],
+      [
+       8.18,
+       17.54
+      ],
+      [
+       6.62,
+       18.18
+      ],
+      [
+       5.01,
+       18.69
+      ],
+      [
+       3.36,
+       19.06
+      ],
+      [
+       1.69,
+       19.28
+      ],
+      [
+       0,
+       19.35
+      ],
+      [
+       -1.69,
+       19.28
+      ],
+      [
+       -3.36,
+       19.06
+      ],
+      [
+       -5.01,
+       18.69
+      ],
+      [
+       -6.62,
+       18.18
+      ],
+      [
+       -8.18,
+       17.54
+      ],
+      [
+       -9.67,
+       16.76
+      ],
+      [
+       -11.1,
+       15.85
+      ],
+      [
+       -12.44,
+       14.82
+      ],
+      [
+       -13.68,
+       13.68
+      ],
+      [
+       -14.82,
+       12.44
+      ],
+      [
+       -15.85,
+       11.1
+      ],
+      [
+       -16.76,
+       9.67
+      ],
+      [
+       -17.54,
+       8.18
+      ],
+      [
+       -18.18,
+       6.62
+      ],
+      [
+       -18.69,
+       5.01
+      ],
+      [
+       -19.06,
+       3.36
+      ],
+      [
+       -19.28,
+       1.69
+      ],
+      [
+       -19.35,
+       0
+      ],
+      [
+       -19.28,
+       -1.69
+      ],
+      [
+       -19.06,
+       -3.36
+      ],
+      [
+       -18.69,
+       -5.01
+      ],
+      [
+       -18.18,
+       -6.62
+      ],
+      [
+       -17.54,
+       -8.18
+      ],
+      [
+       -16.76,
+       -9.68
+      ],
+      [
+       -15.85,
+       -11.1
+      ],
+      [
+       -14.82,
+       -12.44
+      ],
+      [
+       -13.68,
+       -13.68
+      ],
+      [
+       -12.44,
+       -14.82
+      ],
+      [
+       -11.1,
+       -15.85
+      ],
+      [
+       -9.68,
+       -16.76
+      ],
+      [
+       -8.18,
+       -17.54
+      ],
+      [
+       -6.62,
+       -18.18
+      ],
+      [
+       -5.01,
+       -18.69
+      ],
+      [
+       -3.36,
+       -19.06
+      ],
+      [
+       -1.69,
+       -19.28
+      ],
+      [
+       0,
+       -19.35
+      ],
+      [
+       1.69,
+       -19.28
+      ],
+      [
+       3.36,
+       -19.06
+      ],
+      [
+       5.01,
+       -18.69
+      ],
+      [
+       6.62,
+       -18.18
+      ],
+      [
+       8.18,
+       -17.54
+      ],
+      [
+       9.68,
+       -16.76
+      ],
+      [
+       11.1,
+       -15.85
+      ],
+      [
+       12.44,
+       -14.82
+      ],
+      [
+       13.68,
+       -13.68
+      ],
+      [
+       14.82,
+       -12.44
+      ],
+      [
+       15.85,
+       -11.1
+      ],
+      [
+       16.76,
+       -9.68
+      ],
+      [
+       17.54,
+       -8.18
+      ],
+      [
+       18.18,
+       -6.62
+      ],
+      [
+       18.69,
+       -5.01
+      ],
+      [
+       19.06,
+       -3.36
+      ],
+      [
+       19.28,
+       -1.69
+      ]
+     ],
+     "floorMaterial": "wood_floor_walnut",
+     "ceilingMaterial": false
+    }
+   ],
+   "furniture": [
+    {
+     "type": "sofa",
+     "position": [
+      14.88,
+      3.99
+     ],
+     "rotation": 105,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      16.42,
+      4.4
+     ],
+     "rotation": 105
+    },
+    {
+     "type": "sofa",
+     "position": [
+      10.89,
+      10.89
+     ],
+     "rotation": 135,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      12.02,
+      12.02
+     ],
+     "rotation": 135
+    },
+    {
+     "type": "sofa",
+     "position": [
+      3.99,
+      14.88
+     ],
+     "rotation": 165,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      4.4,
+      16.42
+     ],
+     "rotation": 165
+    },
+    {
+     "type": "sofa",
+     "position": [
+      -3.99,
+      14.88
+     ],
+     "rotation": 195,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      -4.4,
+      16.42
+     ],
+     "rotation": 195
+    },
+    {
+     "type": "sofa",
+     "position": [
+      -10.89,
+      10.89
+     ],
+     "rotation": 225,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      -12.02,
+      12.02
+     ],
+     "rotation": 225
+    },
+    {
+     "type": "sofa",
+     "position": [
+      -14.88,
+      3.99
+     ],
+     "rotation": 255,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      -16.42,
+      4.4
+     ],
+     "rotation": 255
+    },
+    {
+     "type": "sofa",
+     "position": [
+      -14.88,
+      -3.99
+     ],
+     "rotation": 285,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      -16.42,
+      -4.4
+     ],
+     "rotation": 285
+    },
+    {
+     "type": "sofa",
+     "position": [
+      -10.89,
+      -10.89
+     ],
+     "rotation": 315,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      -12.02,
+      -12.02
+     ],
+     "rotation": 315
+    },
+    {
+     "type": "sofa",
+     "position": [
+      10.89,
+      -10.89
+     ],
+     "rotation": 405,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      12.02,
+      -12.02
+     ],
+     "rotation": 405
+    },
+    {
+     "type": "sofa",
+     "position": [
+      14.88,
+      -3.99
+     ],
+     "rotation": 435,
+     "width": 2,
+     "materials": {
+      "body": "fabric_beige",
+      "cushions": "fabric_beige"
+     }
+    },
+    {
+     "type": "coffee_table",
+     "position": [
+      16.42,
+      -4.4
+     ],
+     "rotation": 435
+    },
+    {
+     "type": "side_table",
+     "position": [
+      10.6,
+      0
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      10.57,
+      0.85
+     ],
+     "rotation": 0
+    },
+    {
+     "type": "chair",
+     "position": [
+      10.57,
+      -0.85
+     ],
+     "rotation": 180
+    },
+    {
+     "type": "side_table",
+     "position": [
+      9.55,
+      4.6
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      9.15,
+      5.35
+     ],
+     "rotation": 25.71
+    },
+    {
+     "type": "chair",
+     "position": [
+      9.89,
+      3.82
+     ],
+     "rotation": 205.71
+    },
+    {
+     "type": "side_table",
+     "position": [
+      6.61,
+      8.29
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      5.92,
+      8.79
+     ],
+     "rotation": 51.43
+    },
+    {
+     "type": "chair",
+     "position": [
+      7.25,
+      7.73
+     ],
+     "rotation": 231.43
+    },
+    {
+     "type": "side_table",
+     "position": [
+      2.36,
+      10.33
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      1.52,
+      10.49
+     ],
+     "rotation": 77.14
+    },
+    {
+     "type": "chair",
+     "position": [
+      3.18,
+      10.11
+     ],
+     "rotation": 257.14
+    },
+    {
+     "type": "side_table",
+     "position": [
+      -2.36,
+      10.33
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      -3.18,
+      10.11
+     ],
+     "rotation": 102.86
+    },
+    {
+     "type": "chair",
+     "position": [
+      -1.52,
+      10.49
+     ],
+     "rotation": 282.86
+    },
+    {
+     "type": "side_table",
+     "position": [
+      -6.61,
+      8.29
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      -7.25,
+      7.73
+     ],
+     "rotation": 128.57
+    },
+    {
+     "type": "chair",
+     "position": [
+      -5.92,
+      8.79
+     ],
+     "rotation": 308.57
+    },
+    {
+     "type": "side_table",
+     "position": [
+      -9.55,
+      4.6
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      -9.89,
+      3.82
+     ],
+     "rotation": 154.29
+    },
+    {
+     "type": "chair",
+     "position": [
+      -9.15,
+      5.35
+     ],
+     "rotation": 334.29
+    },
+    {
+     "type": "side_table",
+     "position": [
+      -10.6,
+      0
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      -10.57,
+      -0.85
+     ],
+     "rotation": 180
+    },
+    {
+     "type": "chair",
+     "position": [
+      -10.57,
+      0.85
+     ],
+     "rotation": 360
+    },
+    {
+     "type": "side_table",
+     "position": [
+      -9.55,
+      -4.6
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      -9.15,
+      -5.35
+     ],
+     "rotation": 205.71
+    },
+    {
+     "type": "chair",
+     "position": [
+      -9.89,
+      -3.82
+     ],
+     "rotation": 385.71
+    },
+    {
+     "type": "side_table",
+     "position": [
+      -6.61,
+      -8.29
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      -5.92,
+      -8.79
+     ],
+     "rotation": 231.43
+    },
+    {
+     "type": "chair",
+     "position": [
+      -7.25,
+      -7.73
+     ],
+     "rotation": 411.43
+    },
+    {
+     "type": "side_table",
+     "position": [
+      6.61,
+      -8.29
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      7.25,
+      -7.73
+     ],
+     "rotation": 308.57
+    },
+    {
+     "type": "chair",
+     "position": [
+      5.92,
+      -8.79
+     ],
+     "rotation": 488.57
+    },
+    {
+     "type": "side_table",
+     "position": [
+      9.55,
+      -4.6
+     ],
+     "width": 0.8,
+     "depth": 0.8,
+     "height": 0.74
+    },
+    {
+     "type": "chair",
+     "position": [
+      9.89,
+      -3.82
+     ],
+     "rotation": 334.29
+    },
+    {
+     "type": "chair",
+     "position": [
+      9.15,
+      -5.35
+     ],
+     "rotation": 514.29
+    },
+    {
+     "id": "coffee_bar",
+     "type": "kitchen_counter",
+     "position": [
+      0,
+      6.4
+     ],
+     "rotation": 180,
+     "width": 3.2,
+     "materials": {
+      "counter": "marble_black",
+      "cabinet": "wood_walnut"
+     }
+    },
+    {
+     "type": "bar_stool",
+     "position": [
+      -0.9,
+      7.45
+     ],
+     "rotation": 360,
+     "id": "bar_stool0"
+    },
+    {
+     "type": "bar_stool",
+     "position": [
+      0,
+      7.45
+     ],
+     "rotation": 360,
+     "id": "bar_stool1"
+    },
+    {
+     "type": "bar_stool",
+     "position": [
+      0.9,
+      7.45
+     ],
+     "rotation": 360,
+     "id": "bar_stool2"
+    },
+    {
+     "id": "lift_door_cafe",
+     "type": "box",
+     "position": [
+      0,
+      -4.62
+     ],
+     "width": 1.4,
+     "depth": 0.1,
+     "height": 2.3,
+     "materials": {
+      "main": "metal_steel"
+     }
+    }
+   ]
+  },
+  {
+   "id": "horizon",
+   "name": "Horizon restaurant (lower sphere)",
+   "elevation": 82.3,
+   "height": 3.9,
+   "autoSlab": false,
+   "slabs": [
+    {
+     "id": "horizon_floor",
+     "polygon": [
+      [
+       19.95,
+       0
+      ],
+      [
+       19.87,
+       1.74
+      ],
+      [
+       19.65,
+       3.46
+      ],
+      [
+       19.27,
+       5.16
+      ],
+      [
+       18.75,
+       6.82
+      ],
+      [
+       18.08,
+       8.43
+      ],
+      [
+       17.28,
+       9.97
+      ],
+      [
+       16.34,
+       11.44
+      ],
+      [
+       15.28,
+       12.82
+      ],
+      [
+       14.11,
+       14.11
+      ],
+      [
+       12.82,
+       15.28
+      ],
+      [
+       11.44,
+       16.34
+      ],
+      [
+       9.98,
+       17.28
+      ],
+      [
+       8.43,
+       18.08
+      ],
+      [
+       6.82,
+       18.75
+      ],
+      [
+       5.16,
+       19.27
+      ],
+      [
+       3.46,
+       19.65
+      ],
+      [
+       1.74,
+       19.87
+      ],
+      [
+       0,
+       19.95
+      ],
+      [
+       -1.74,
+       19.87
+      ],
+      [
+       -3.46,
+       19.65
+      ],
+      [
+       -5.16,
+       19.27
+      ],
+      [
+       -6.82,
+       18.75
+      ],
+      [
+       -8.43,
+       18.08
+      ],
+      [
+       -9.97,
+       17.28
+      ],
+      [
+       -11.44,
+       16.34
+      ],
+      [
+       -12.82,
+       15.28
+      ],
+      [
+       -14.11,
+       14.11
+      ],
+      [
+       -15.28,
+       12.82
+      ],
+      [
+       -16.34,
+       11.44
+      ],
+      [
+       -17.28,
+       9.97
+      ],
+      [
+       -18.08,
+       8.43
+      ],
+      [
+       -18.75,
+       6.82
+      ],
+      [
+       -19.27,
+       5.16
+      ],
+      [
+       -19.65,
+       3.46
+      ],
+      [
+       -19.87,
+       1.74
+      ],
+      [
+       -19.95,
+       0
+      ],
+      [
+       -19.87,
+       -1.74
+      ],
+      [
+       -19.65,
+       -3.46
+      ],
+      [
+       -19.27,
+       -5.16
+      ],
+      [
+       -18.75,
+       -6.82
+      ],
+      [
+       -18.08,
+       -8.43
+      ],
+      [
+       -17.28,
+       -9.98
+      ],
+      [
+       -16.34,
+       -11.44
+      ],
+      [
+       -15.28,
+       -12.82
+      ],
+      [
+       -14.11,
+       -14.11
+      ],
+      [
+       -12.82,
+       -15.28
+      ],
+      [
+       -11.44,
+       -16.34
+      ],
+      [
+       -9.98,
+       -17.28
+      ],
+      [
+       -8.43,
+       -18.08
+      ],
+      [
+       -6.82,
+       -18.75
+      ],
+      [
+       -5.16,
+       -19.27
+      ],
+      [
+       -3.46,
+       -19.65
+      ],
+      [
+       -1.74,
+       -19.87
+      ],
+      [
+       0,
+       -19.95
+      ],
+      [
+       1.74,
+       -19.87
+      ],
+      [
+       3.46,
+       -19.65
+      ],
+      [
+       5.16,
+       -19.27
+      ],
+      [
+       6.82,
+       -18.75
+      ],
+      [
+       8.43,
+       -18.08
+      ],
+      [
+       9.98,
+       -17.28
+      ],
+      [
+       11.44,
+       -16.34
+      ],
+      [
+       12.82,
+       -15.28
+      ],
+      [
+       14.11,
+       -14.11
+      ],
+      [
+       15.28,
+       -12.82
+      ],
+      [
+       16.34,
+       -11.44
+      ],
+      [
+       17.28,
+       -9.98
+      ],
+      [
+       18.08,
+       -8.43
+      ],
+      [
+       18.75,
+       -6.82
+      ],
+      [
+       19.27,
+       -5.16
+      ],
+      [
+       19.65,
+       -3.46
+      ],
+      [
+       19.87,
+       -1.74
+      ]
+     ],
+     "thickness": 0.3,
+     "material": "concrete"
+    }
+   ],
+   "rooms": [
+    {
+     "id": "horizon_room",
+     "name": "Horizon buffet restaurant",
+     "polygon": [
+      [
+       19.95,
+       0
+      ],
+      [
+       19.87,
+       1.74
+      ],
+      [
+       19.65,
+       3.46
+      ],
+      [
+       19.27,
+       5.16
+      ],
+      [
+       18.75,
+       6.82
+      ],
+      [
+       18.08,
+       8.43
+      ],
+      [
+       17.28,
+       9.97
+      ],
+      [
+       16.34,
+       11.44
+      ],
+      [
+       15.28,
+       12.82
+      ],
+      [
+       14.11,
+       14.11
+      ],
+      [
+       12.82,
+       15.28
+      ],
+      [
+       11.44,
+       16.34
+      ],
+      [
+       9.98,
+       17.28
+      ],
+      [
+       8.43,
+       18.08
+      ],
+      [
+       6.82,
+       18.75
+      ],
+      [
+       5.16,
+       19.27
+      ],
+      [
+       3.46,
+       19.65
+      ],
+      [
+       1.74,
+       19.87
+      ],
+      [
+       0,
+       19.95
+      ],
+      [
+       -1.74,
+       19.87
+      ],
+      [
+       -3.46,
+       19.65
+      ],
+      [
+       -5.16,
+       19.27
+      ],
+      [
+       -6.82,
+       18.75
+      ],
+      [
+       -8.43,
+       18.08
+      ],
+      [
+       -9.97,
+       17.28
+      ],
+      [
+       -11.44,
+       16.34
+      ],
+      [
+       -12.82,
+       15.28
+      ],
+      [
+       -14.11,
+       14.11
+      ],
+      [
+       -15.28,
+       12.82
+      ],
+      [
+       -16.34,
+       11.44
+      ],
+      [
+       -17.28,
+       9.97
+      ],
+      [
+       -18.08,
+       8.43
+      ],
+      [
+       -18.75,
+       6.82
+      ],
+      [
+       -19.27,
+       5.16
+      ],
+      [
+       -19.65,
+       3.46
+      ],
+      [
+       -19.87,
+       1.74
+      ],
+      [
+       -19.95,
+       0
+      ],
+      [
+       -19.87,
+       -1.74
+      ],
+      [
+       -19.65,
+       -3.46
+      ],
+      [
+       -19.27,
+       -5.16
+      ],
+      [
+       -18.75,
+       -6.82
+      ],
+      [
+       -18.08,
+       -8.43
+      ],
+      [
+       -17.28,
+       -9.98
+      ],
+      [
+       -16.34,
+       -11.44
+      ],
+      [
+       -15.28,
+       -12.82
+      ],
+      [
+       -14.11,
+       -14.11
+      ],
+      [
+       -12.82,
+       -15.28
+      ],
+      [
+       -11.44,
+       -16.34
+      ],
+      [
+       -9.98,
+       -17.28
+      ],
+      [
+       -8.43,
+       -18.08
+      ],
+      [
+       -6.82,
+       -18.75
+      ],
+      [
+       -5.16,
+       -19.27
+      ],
+      [
+       -3.46,
+       -19.65
+      ],
+      [
+       -1.74,
+       -19.87
+      ],
+      [
+       0,
+       -19.95
+      ],
+      [
+       1.74,
+       -19.87
+      ],
+      [
+       3.46,
+       -19.65
+      ],
+      [
+       5.16,
+       -19.27
+      ],
+      [
+       6.82,
+       -18.75
+      ],
+      [
+       8.43,
+       -18.08
+      ],
+      [
+       9.98,
+       -17.28
+      ],
+      [
+       11.44,
+       -16.34
+      ],
+      [
+       12.82,
+       -15.28
+      ],
+      [
+       14.11,
+       -14.11
+      ],
+      [
+       15.28,
+       -12.82
+      ],
+      [
+       16.34,
+       -11.44
+      ],
+      [
+       17.28,
+       -9.98
+      ],
+      [
+       18.08,
+       -8.43
+      ],
+      [
+       18.75,
+       -6.82
+      ],
+      [
+       19.27,
+       -5.16
+      ],
+      [
+       19.65,
+       -3.46
+      ],
+      [
+       19.87,
+       -1.74
+      ]
+     ],
+     "floorMaterial": "wood_floor_oak",
+     "ceilingMaterial": false
+    }
+   ],
+   "furniture": [
+    {
+     "type": "table",
+     "position": [
+      18,
+      1.89
+     ],
+     "rotation": 96,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      17.93,
+      2.49
+     ],
+     "rotation": 6,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      18.05,
+      1.29
+     ],
+     "rotation": 186,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      17.21,
+      5.59
+     ],
+     "rotation": 108,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      17.02,
+      6.16
+     ],
+     "rotation": 18,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      17.39,
+      5.02
+     ],
+     "rotation": 198,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      15.68,
+      9.05
+     ],
+     "rotation": 120,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      15.37,
+      9.56
+     ],
+     "rotation": 30,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      15.97,
+      8.53
+     ],
+     "rotation": 210,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      13.45,
+      12.11
+     ],
+     "rotation": 132,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      13.04,
+      12.55
+     ],
+     "rotation": 42,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      13.85,
+      11.66
+     ],
+     "rotation": 222,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      10.64,
+      14.64
+     ],
+     "rotation": 144,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      10.15,
+      14.99
+     ],
+     "rotation": 54,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      11.12,
+      14.28
+     ],
+     "rotation": 234,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      7.36,
+      16.54
+     ],
+     "rotation": 156,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      6.81,
+      16.77
+     ],
+     "rotation": 66,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      7.91,
+      16.28
+     ],
+     "rotation": 246,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      3.76,
+      17.7
+     ],
+     "rotation": 168,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      3.17,
+      17.82
+     ],
+     "rotation": 78,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      4.35,
+      17.57
+     ],
+     "rotation": 258,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      0,
+      18.1
+     ],
+     "rotation": 180,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -0.6,
+      18.09
+     ],
+     "rotation": 90,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      0.6,
+      18.09
+     ],
+     "rotation": 270,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -3.76,
+      17.7
+     ],
+     "rotation": 192,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -4.35,
+      17.57
+     ],
+     "rotation": 102,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -3.17,
+      17.82
+     ],
+     "rotation": 282,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -7.36,
+      16.54
+     ],
+     "rotation": 204,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -7.91,
+      16.28
+     ],
+     "rotation": 114,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -6.81,
+      16.77
+     ],
+     "rotation": 294,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -10.64,
+      14.64
+     ],
+     "rotation": 216,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -11.12,
+      14.28
+     ],
+     "rotation": 126,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -10.15,
+      14.99
+     ],
+     "rotation": 306,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -13.45,
+      12.11
+     ],
+     "rotation": 228,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -13.85,
+      11.66
+     ],
+     "rotation": 138,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -13.04,
+      12.55
+     ],
+     "rotation": 318,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -15.68,
+      9.05
+     ],
+     "rotation": 240,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -15.97,
+      8.53
+     ],
+     "rotation": 150,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -15.37,
+      9.56
+     ],
+     "rotation": 330,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -17.21,
+      5.59
+     ],
+     "rotation": 252,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -17.39,
+      5.02
+     ],
+     "rotation": 162,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -17.02,
+      6.16
+     ],
+     "rotation": 342,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -18,
+      1.89
+     ],
+     "rotation": 264,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -18.05,
+      1.29
+     ],
+     "rotation": 174,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -17.93,
+      2.49
+     ],
+     "rotation": 354,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -18,
+      -1.89
+     ],
+     "rotation": 276,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -17.93,
+      -2.49
+     ],
+     "rotation": 186,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -18.05,
+      -1.29
+     ],
+     "rotation": 366,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -17.21,
+      -5.59
+     ],
+     "rotation": 288,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -17.02,
+      -6.16
+     ],
+     "rotation": 198,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -17.39,
+      -5.02
+     ],
+     "rotation": 378,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -15.68,
+      -9.05
+     ],
+     "rotation": 300,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -15.37,
+      -9.56
+     ],
+     "rotation": 210,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -15.97,
+      -8.53
+     ],
+     "rotation": 390,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -13.45,
+      -12.11
+     ],
+     "rotation": 312,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -13.04,
+      -12.55
+     ],
+     "rotation": 222,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -13.85,
+      -11.66
+     ],
+     "rotation": 402,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -10.64,
+      -14.64
+     ],
+     "rotation": 324,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -10.15,
+      -14.99
+     ],
+     "rotation": 234,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -11.12,
+      -14.28
+     ],
+     "rotation": 414,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -7.36,
+      -16.54
+     ],
+     "rotation": 336,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -6.81,
+      -16.77
+     ],
+     "rotation": 246,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -7.91,
+      -16.28
+     ],
+     "rotation": 426,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -3.76,
+      -17.7
+     ],
+     "rotation": 348,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -3.17,
+      -17.82
+     ],
+     "rotation": 258,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -4.35,
+      -17.57
+     ],
+     "rotation": 438,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      3.76,
+      -17.7
+     ],
+     "rotation": 372,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      4.35,
+      -17.57
+     ],
+     "rotation": 282,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      3.17,
+      -17.82
+     ],
+     "rotation": 462,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      7.36,
+      -16.54
+     ],
+     "rotation": 384,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      7.91,
+      -16.28
+     ],
+     "rotation": 294,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      6.81,
+      -16.77
+     ],
+     "rotation": 474,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      10.64,
+      -14.64
+     ],
+     "rotation": 396,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      11.12,
+      -14.28
+     ],
+     "rotation": 306,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      10.15,
+      -14.99
+     ],
+     "rotation": 486,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      13.45,
+      -12.11
+     ],
+     "rotation": 408,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      13.85,
+      -11.66
+     ],
+     "rotation": 318,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      13.04,
+      -12.55
+     ],
+     "rotation": 498,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      15.68,
+      -9.05
+     ],
+     "rotation": 420,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      15.97,
+      -8.53
+     ],
+     "rotation": 330,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      15.37,
+      -9.56
+     ],
+     "rotation": 510,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      17.21,
+      -5.59
+     ],
+     "rotation": 432,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      17.39,
+      -5.02
+     ],
+     "rotation": 342,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      17.02,
+      -6.16
+     ],
+     "rotation": 522,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      18,
+      -1.89
+     ],
+     "rotation": 444,
+     "width": 1.1,
+     "depth": 0.8,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      18.05,
+      -1.29
+     ],
+     "rotation": 354,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      17.93,
+      -2.49
+     ],
+     "rotation": 534,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      13.2,
+      2.33
+     ],
+     "rotation": 100,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      14.03,
+      2.47
+     ],
+     "rotation": 280,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      12.36,
+      2.18
+     ],
+     "rotation": 100,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      11.6,
+      6.7
+     ],
+     "rotation": 120,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      12.34,
+      7.12
+     ],
+     "rotation": 300,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      10.87,
+      6.28
+     ],
+     "rotation": 120,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      8.61,
+      10.26
+     ],
+     "rotation": 140,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      9.16,
+      10.92
+     ],
+     "rotation": 320,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      8.07,
+      9.61
+     ],
+     "rotation": 140,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      4.58,
+      12.59
+     ],
+     "rotation": 160,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      4.87,
+      13.39
+     ],
+     "rotation": 340,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      4.29,
+      11.79
+     ],
+     "rotation": 160,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      0,
+      13.4
+     ],
+     "rotation": 180,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      0,
+      14.25
+     ],
+     "rotation": 360,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      0,
+      12.55
+     ],
+     "rotation": 180,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -4.58,
+      12.59
+     ],
+     "rotation": 200,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -4.87,
+      13.39
+     ],
+     "rotation": 380,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -4.29,
+      11.79
+     ],
+     "rotation": 200,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -8.61,
+      10.26
+     ],
+     "rotation": 220,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -9.16,
+      10.92
+     ],
+     "rotation": 400,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -8.07,
+      9.61
+     ],
+     "rotation": 220,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -11.6,
+      6.7
+     ],
+     "rotation": 240,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -12.34,
+      7.12
+     ],
+     "rotation": 420,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -10.87,
+      6.28
+     ],
+     "rotation": 240,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -13.2,
+      2.33
+     ],
+     "rotation": 260,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -14.03,
+      2.47
+     ],
+     "rotation": 440,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -12.36,
+      2.18
+     ],
+     "rotation": 260,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -13.2,
+      -2.33
+     ],
+     "rotation": 280,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -14.03,
+      -2.47
+     ],
+     "rotation": 460,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -12.36,
+      -2.18
+     ],
+     "rotation": 280,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -11.6,
+      -6.7
+     ],
+     "rotation": 300,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -12.34,
+      -7.13
+     ],
+     "rotation": 480,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -10.87,
+      -6.28
+     ],
+     "rotation": 300,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -8.61,
+      -10.26
+     ],
+     "rotation": 320,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -9.16,
+      -10.92
+     ],
+     "rotation": 500,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -8.07,
+      -9.61
+     ],
+     "rotation": 320,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      -4.58,
+      -12.59
+     ],
+     "rotation": 340,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -4.87,
+      -13.39
+     ],
+     "rotation": 520,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      -4.29,
+      -11.79
+     ],
+     "rotation": 340,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      4.58,
+      -12.59
+     ],
+     "rotation": 380,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      4.87,
+      -13.39
+     ],
+     "rotation": 560,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      4.29,
+      -11.79
+     ],
+     "rotation": 380,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      8.61,
+      -10.26
+     ],
+     "rotation": 400,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      9.16,
+      -10.92
+     ],
+     "rotation": 580,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      8.07,
+      -9.61
+     ],
+     "rotation": 400,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      11.6,
+      -6.7
+     ],
+     "rotation": 420,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      12.34,
+      -7.13
+     ],
+     "rotation": 600,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      10.87,
+      -6.28
+     ],
+     "rotation": 420,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "table",
+     "position": [
+      13.2,
+      -2.33
+     ],
+     "rotation": 440,
+     "width": 1.2,
+     "depth": 1,
+     "materials": {
+      "top": "linen_white",
+      "legs": "metal_black"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      14.03,
+      -2.47
+     ],
+     "rotation": 620,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "chair",
+     "position": [
+      12.36,
+      -2.18
+     ],
+     "rotation": 440,
+     "materials": {
+      "seat": "fabric_beige"
+     }
+    },
+    {
+     "type": "kitchen_island",
+     "position": [
+      6.58,
+      3.8
+     ],
+     "rotation": 120,
+     "width": 2.6,
+     "materials": {
+      "counter": "marble_white",
+      "cabinet": "wood_dark"
+     }
+    },
+    {
+     "type": "kitchen_island",
+     "position": [
+      0,
+      7.6
+     ],
+     "rotation": 180,
+     "width": 2.6,
+     "materials": {
+      "counter": "marble_white",
+      "cabinet": "wood_dark"
+     }
+    },
+    {
+     "type": "kitchen_island",
+     "position": [
+      -6.58,
+      3.8
+     ],
+     "rotation": 240,
+     "width": 2.6,
+     "materials": {
+      "counter": "marble_white",
+      "cabinet": "wood_dark"
+     }
+    },
+    {
+     "type": "kitchen_island",
+     "position": [
+      -6.58,
+      -3.8
+     ],
+     "rotation": 300,
+     "width": 2.6,
+     "materials": {
+      "counter": "marble_white",
+      "cabinet": "wood_dark"
+     }
+    },
+    {
+     "type": "kitchen_island",
+     "position": [
+      6.58,
+      -3.8
+     ],
+     "rotation": 420,
+     "width": 2.6,
+     "materials": {
+      "counter": "marble_white",
+      "cabinet": "wood_dark"
+     }
+    },
+    {
+     "id": "lift_door_horizon",
+     "type": "box",
+     "position": [
+      0,
+      -4.5
+     ],
+     "width": 1.4,
+     "depth": 0.1,
+     "height": 2.3,
+     "materials": {
+      "main": "metal_steel"
+     }
+    }
+   ]
+  },
+  {
+   "id": "observation_lower",
+   "name": "Observation sphere — lower floor",
+   "elevation": 118.2,
+   "height": 3.5,
+   "autoSlab": false,
+   "slabs": [
+    {
+     "id": "obs_lower_floor",
+     "polygon": [
+      [
+       9.2,
+       0
+      ],
+      [
+       9.12,
+       1.2
+      ],
+      [
+       8.89,
+       2.38
+      ],
+      [
+       8.5,
+       3.52
+      ],
+      [
+       7.97,
+       4.6
+      ],
+      [
+       7.3,
+       5.6
+      ],
+      [
+       6.51,
+       6.51
+      ],
+      [
+       5.6,
+       7.3
+      ],
+      [
+       4.6,
+       7.97
+      ],
+      [
+       3.52,
+       8.5
+      ],
+      [
+       2.38,
+       8.89
+      ],
+      [
+       1.2,
+       9.12
+      ],
+      [
+       0,
+       9.2
+      ],
+      [
+       -1.2,
+       9.12
+      ],
+      [
+       -2.38,
+       8.89
+      ],
+      [
+       -3.52,
+       8.5
+      ],
+      [
+       -4.6,
+       7.97
+      ],
+      [
+       -5.6,
+       7.3
+      ],
+      [
+       -6.51,
+       6.51
+      ],
+      [
+       -7.3,
+       5.6
+      ],
+      [
+       -7.97,
+       4.6
+      ],
+      [
+       -8.5,
+       3.52
+      ],
+      [
+       -8.89,
+       2.38
+      ],
+      [
+       -9.12,
+       1.2
+      ],
+      [
+       -9.2,
+       0
+      ],
+      [
+       -9.12,
+       -1.2
+      ],
+      [
+       -8.89,
+       -2.38
+      ],
+      [
+       -8.5,
+       -3.52
+      ],
+      [
+       -7.97,
+       -4.6
+      ],
+      [
+       -7.3,
+       -5.6
+      ],
+      [
+       -6.51,
+       -6.51
+      ],
+      [
+       -5.6,
+       -7.3
+      ],
+      [
+       -4.6,
+       -7.97
+      ],
+      [
+       -3.52,
+       -8.5
+      ],
+      [
+       -2.38,
+       -8.89
+      ],
+      [
+       -1.2,
+       -9.12
+      ],
+      [
+       0,
+       -9.2
+      ],
+      [
+       1.2,
+       -9.12
+      ],
+      [
+       2.38,
+       -8.89
+      ],
+      [
+       3.52,
+       -8.5
+      ],
+      [
+       4.6,
+       -7.97
+      ],
+      [
+       5.6,
+       -7.3
+      ],
+      [
+       6.51,
+       -6.51
+      ],
+      [
+       7.3,
+       -5.6
+      ],
+      [
+       7.97,
+       -4.6
+      ],
+      [
+       8.5,
+       -3.52
+      ],
+      [
+       8.89,
+       -2.38
+      ],
+      [
+       9.12,
+       -1.2
+      ]
+     ],
+     "thickness": 0.25,
+     "material": "concrete"
+    }
+   ],
+   "rooms": [
+    {
+     "id": "obs_lower_room",
+     "name": "Viewing gallery & gift kiosk",
+     "polygon": [
+      [
+       9.2,
+       0
+      ],
+      [
+       9.12,
+       1.2
+      ],
+      [
+       8.89,
+       2.38
+      ],
+      [
+       8.5,
+       3.52
+      ],
+      [
+       7.97,
+       4.6
+      ],
+      [
+       7.3,
+       5.6
+      ],
+      [
+       6.51,
+       6.51
+      ],
+      [
+       5.6,
+       7.3
+      ],
+      [
+       4.6,
+       7.97
+      ],
+      [
+       3.52,
+       8.5
+      ],
+      [
+       2.38,
+       8.89
+      ],
+      [
+       1.2,
+       9.12
+      ],
+      [
+       0,
+       9.2
+      ],
+      [
+       -1.2,
+       9.12
+      ],
+      [
+       -2.38,
+       8.89
+      ],
+      [
+       -3.52,
+       8.5
+      ],
+      [
+       -4.6,
+       7.97
+      ],
+      [
+       -5.6,
+       7.3
+      ],
+      [
+       -6.51,
+       6.51
+      ],
+      [
+       -7.3,
+       5.6
+      ],
+      [
+       -7.97,
+       4.6
+      ],
+      [
+       -8.5,
+       3.52
+      ],
+      [
+       -8.89,
+       2.38
+      ],
+      [
+       -9.12,
+       1.2
+      ],
+      [
+       -9.2,
+       0
+      ],
+      [
+       -9.12,
+       -1.2
+      ],
+      [
+       -8.89,
+       -2.38
+      ],
+      [
+       -8.5,
+       -3.52
+      ],
+      [
+       -7.97,
+       -4.6
+      ],
+      [
+       -7.3,
+       -5.6
+      ],
+      [
+       -6.51,
+       -6.51
+      ],
+      [
+       -5.6,
+       -7.3
+      ],
+      [
+       -4.6,
+       -7.97
+      ],
+      [
+       -3.52,
+       -8.5
+      ],
+      [
+       -2.38,
+       -8.89
+      ],
+      [
+       -1.2,
+       -9.12
+      ],
+      [
+       0,
+       -9.2
+      ],
+      [
+       1.2,
+       -9.12
+      ],
+      [
+       2.38,
+       -8.89
+      ],
+      [
+       3.52,
+       -8.5
+      ],
+      [
+       4.6,
+       -7.97
+      ],
+      [
+       5.6,
+       -7.3
+      ],
+      [
+       6.51,
+       -6.51
+      ],
+      [
+       7.3,
+       -5.6
+      ],
+      [
+       7.97,
+       -4.6
+      ],
+      [
+       8.5,
+       -3.52
+      ],
+      [
+       8.89,
+       -2.38
+      ],
+      [
+       9.12,
+       -1.2
+      ]
+     ],
+     "floorMaterial": "wood_floor_walnut",
+     "ceilingMaterial": false
+    }
+   ],
+   "furniture": [
+    {
+     "id": "obs_bench0",
+     "type": "bench",
+     "position": [
+      6.3,
+      0
+     ],
+     "rotation": 90,
+     "width": 1.8
+    },
+    {
+     "id": "obs_bench1",
+     "type": "bench",
+     "position": [
+      3.15,
+      5.46
+     ],
+     "rotation": 150,
+     "width": 1.8
+    },
+    {
+     "id": "obs_bench2",
+     "type": "bench",
+     "position": [
+      -3.15,
+      5.46
+     ],
+     "rotation": 210,
+     "width": 1.8
+    },
+    {
+     "id": "obs_bench3",
+     "type": "bench",
+     "position": [
+      -6.3,
+      0
+     ],
+     "rotation": 270,
+     "width": 1.8
+    },
+    {
+     "id": "gift_kiosk",
+     "type": "kitchen_counter",
+     "position": [
+      0,
+      4.6
+     ],
+     "rotation": 180,
+     "width": 2.2,
+     "materials": {
+      "counter": "wood_walnut"
+     }
+    },
+    {
+     "id": "lift_door_obs_lower",
+     "type": "box",
+     "position": [
+      0,
+      -3.42
+     ],
+     "width": 1.2,
+     "depth": 0.1,
+     "height": 2.3,
+     "materials": {
+      "main": "metal_steel"
+     }
+    }
+   ]
+  },
+  {
+   "id": "observation_upper",
+   "name": "Observation sphere — rotating floor",
+   "elevation": 121.7,
+   "height": 3.6,
+   "autoSlab": false,
+   "slabs": [
+    {
+     "id": "rotating_deck",
+     "polygon": [
+      [
+       9.6,
+       0
+      ],
+      [
+       9.52,
+       1.25
+      ],
+      [
+       9.27,
+       2.48
+      ],
+      [
+       8.87,
+       3.67
+      ],
+      [
+       8.31,
+       4.8
+      ],
+      [
+       7.62,
+       5.84
+      ],
+      [
+       6.79,
+       6.79
+      ],
+      [
+       5.84,
+       7.62
+      ],
+      [
+       4.8,
+       8.31
+      ],
+      [
+       3.67,
+       8.87
+      ],
+      [
+       2.48,
+       9.27
+      ],
+      [
+       1.25,
+       9.52
+      ],
+      [
+       0,
+       9.6
+      ],
+      [
+       -1.25,
+       9.52
+      ],
+      [
+       -2.48,
+       9.27
+      ],
+      [
+       -3.67,
+       8.87
+      ],
+      [
+       -4.8,
+       8.31
+      ],
+      [
+       -5.84,
+       7.62
+      ],
+      [
+       -6.79,
+       6.79
+      ],
+      [
+       -7.62,
+       5.84
+      ],
+      [
+       -8.31,
+       4.8
+      ],
+      [
+       -8.87,
+       3.67
+      ],
+      [
+       -9.27,
+       2.48
+      ],
+      [
+       -9.52,
+       1.25
+      ],
+      [
+       -9.6,
+       0
+      ],
+      [
+       -9.52,
+       -1.25
+      ],
+      [
+       -9.27,
+       -2.48
+      ],
+      [
+       -8.87,
+       -3.67
+      ],
+      [
+       -8.31,
+       -4.8
+      ],
+      [
+       -7.62,
+       -5.84
+      ],
+      [
+       -6.79,
+       -6.79
+      ],
+      [
+       -5.84,
+       -7.62
+      ],
+      [
+       -4.8,
+       -8.31
+      ],
+      [
+       -3.67,
+       -8.87
+      ],
+      [
+       -2.48,
+       -9.27
+      ],
+      [
+       -1.25,
+       -9.52
+      ],
+      [
+       0,
+       -9.6
+      ],
+      [
+       1.25,
+       -9.52
+      ],
+      [
+       2.48,
+       -9.27
+      ],
+      [
+       3.67,
+       -8.87
+      ],
+      [
+       4.8,
+       -8.31
+      ],
+      [
+       5.84,
+       -7.62
+      ],
+      [
+       6.79,
+       -6.79
+      ],
+      [
+       7.62,
+       -5.84
+      ],
+      [
+       8.31,
+       -4.8
+      ],
+      [
+       8.87,
+       -3.67
+      ],
+      [
+       9.27,
+       -2.48
+      ],
+      [
+       9.52,
+       -1.25
+      ]
+     ],
+     "thickness": 0.3,
+     "material": "concrete"
+    }
+   ],
+   "rooms": [
+    {
+     "id": "rotating_deck_room",
+     "name": "Rotating observation deck (turns every 30 min)",
+     "polygon": [
+      [
+       9.6,
+       0
+      ],
+      [
+       9.52,
+       1.25
+      ],
+      [
+       9.27,
+       2.48
+      ],
+      [
+       8.87,
+       3.67
+      ],
+      [
+       8.31,
+       4.8
+      ],
+      [
+       7.62,
+       5.84
+      ],
+      [
+       6.79,
+       6.79
+      ],
+      [
+       5.84,
+       7.62
+      ],
+      [
+       4.8,
+       8.31
+      ],
+      [
+       3.67,
+       8.87
+      ],
+      [
+       2.48,
+       9.27
+      ],
+      [
+       1.25,
+       9.52
+      ],
+      [
+       0,
+       9.6
+      ],
+      [
+       -1.25,
+       9.52
+      ],
+      [
+       -2.48,
+       9.27
+      ],
+      [
+       -3.67,
+       8.87
+      ],
+      [
+       -4.8,
+       8.31
+      ],
+      [
+       -5.84,
+       7.62
+      ],
+      [
+       -6.79,
+       6.79
+      ],
+      [
+       -7.62,
+       5.84
+      ],
+      [
+       -8.31,
+       4.8
+      ],
+      [
+       -8.87,
+       3.67
+      ],
+      [
+       -9.27,
+       2.48
+      ],
+      [
+       -9.52,
+       1.25
+      ],
+      [
+       -9.6,
+       0
+      ],
+      [
+       -9.52,
+       -1.25
+      ],
+      [
+       -9.27,
+       -2.48
+      ],
+      [
+       -8.87,
+       -3.67
+      ],
+      [
+       -8.31,
+       -4.8
+      ],
+      [
+       -7.62,
+       -5.84
+      ],
+      [
+       -6.79,
+       -6.79
+      ],
+      [
+       -5.84,
+       -7.62
+      ],
+      [
+       -4.8,
+       -8.31
+      ],
+      [
+       -3.67,
+       -8.87
+      ],
+      [
+       -2.48,
+       -9.27
+      ],
+      [
+       -1.25,
+       -9.52
+      ],
+      [
+       0,
+       -9.6
+      ],
+      [
+       1.25,
+       -9.52
+      ],
+      [
+       2.48,
+       -9.27
+      ],
+      [
+       3.67,
+       -8.87
+      ],
+      [
+       4.8,
+       -8.31
+      ],
+      [
+       5.84,
+       -7.62
+      ],
+      [
+       6.79,
+       -6.79
+      ],
+      [
+       7.62,
+       -5.84
+      ],
+      [
+       8.31,
+       -4.8
+      ],
+      [
+       8.87,
+       -3.67
+      ],
+      [
+       9.27,
+       -2.48
+      ],
+      [
+       9.52,
+       -1.25
+      ]
+     ],
+     "floorMaterial": "wood_floor_oak",
+     "ceilingMaterial": false
+    }
+   ],
+   "railings": [
+    {
+     "points": [
+      [
+       9.1,
+       0
+      ],
+      [
+       8.99,
+       1.42
+      ],
+      [
+       8.65,
+       2.81
+      ],
+      [
+       8.11,
+       4.13
+      ],
+      [
+       7.36,
+       5.35
+      ],
+      [
+       6.43,
+       6.43
+      ],
+      [
+       5.35,
+       7.36
+      ],
+      [
+       4.13,
+       8.11
+      ],
+      [
+       2.81,
+       8.65
+      ],
+      [
+       1.42,
+       8.99
+      ],
+      [
+       0,
+       9.1
+      ],
+      [
+       -1.42,
+       8.99
+      ],
+      [
+       -2.81,
+       8.65
+      ],
+      [
+       -4.13,
+       8.11
+      ],
+      [
+       -5.35,
+       7.36
+      ],
+      [
+       -6.43,
+       6.43
+      ],
+      [
+       -7.36,
+       5.35
+      ],
+      [
+       -8.11,
+       4.13
+      ],
+      [
+       -8.65,
+       2.81
+      ],
+      [
+       -8.99,
+       1.42
+      ],
+      [
+       -9.1,
+       0
+      ],
+      [
+       -8.99,
+       -1.42
+      ],
+      [
+       -8.65,
+       -2.81
+      ],
+      [
+       -8.11,
+       -4.13
+      ],
+      [
+       -7.36,
+       -5.35
+      ],
+      [
+       -6.43,
+       -6.43
+      ],
+      [
+       -5.35,
+       -7.36
+      ],
+      [
+       -4.13,
+       -8.11
+      ],
+      [
+       -2.81,
+       -8.65
+      ],
+      [
+       -1.42,
+       -8.99
+      ],
+      [
+       0,
+       -9.1
+      ],
+      [
+       1.42,
+       -8.99
+      ],
+      [
+       2.81,
+       -8.65
+      ],
+      [
+       4.13,
+       -8.11
+      ],
+      [
+       5.35,
+       -7.36
+      ],
+      [
+       6.43,
+       -6.43
+      ],
+      [
+       7.36,
+       -5.35
+      ],
+      [
+       8.11,
+       -4.13
+      ],
+      [
+       8.65,
+       -2.81
+      ],
+      [
+       8.99,
+       -1.42
+      ]
+     ],
+     "closed": true,
+     "style": "glass",
+     "height": 1.05,
+     "material": "metal_steel"
+    }
+   ],
+   "furniture": [
+    {
+     "id": "deck_bench0",
+     "type": "bench",
+     "position": [
+      5.72,
+      3.3
+     ],
+     "rotation": 120,
+     "width": 1.6
+    },
+    {
+     "id": "deck_bench1",
+     "type": "bench",
+     "position": [
+      -5.72,
+      3.3
+     ],
+     "rotation": 240,
+     "width": 1.6
+    },
+    {
+     "id": "deck_bench2",
+     "type": "bench",
+     "position": [
+      -5.72,
+      -3.3
+     ],
+     "rotation": 300,
+     "width": 1.6
+    },
+    {
+     "id": "deck_bench3",
+     "type": "bench",
+     "position": [
+      5.72,
+      -3.3
+     ],
+     "rotation": 420,
+     "width": 1.6
+    },
+    {
+     "id": "food_stand",
+     "type": "kitchen_counter",
+     "position": [
+      0,
+      4.3
+     ],
+     "rotation": 180,
+     "width": 2,
+     "materials": {
+      "counter": "marble_white"
+     }
+    },
+    {
+     "id": "deck_stool0",
+     "type": "bar_stool",
+     "position": [
+      -0.6,
+      5.25
+     ],
+     "rotation": 360
+    },
+    {
+     "id": "deck_stool1",
+     "type": "bar_stool",
+     "position": [
+      0.6,
+      5.25
+     ],
+     "rotation": 360
+    },
+    {
+     "id": "lift_door_obs_upper",
+     "type": "box",
+     "position": [
+      0,
+      -3.37
+     ],
+     "width": 1.2,
+     "depth": 0.1,
+     "height": 2.3,
+     "materials": {
+      "main": "metal_steel"
+     }
+    }
+   ]
+  }
+ ],
+ "elevators": [
+  {
+   "id": "main_lift",
+   "stops": [
+    {
+     "level": "plaza",
+     "at": [
+      0,
+      -10.4
+     ]
+    },
+    {
+     "level": "cafe",
+     "at": [
+      0,
+      -5.8
+     ]
+    },
+    {
+     "level": "horizon",
+     "at": [
+      0,
+      -5.7
+     ]
+    },
+    {
+     "level": "observation_lower",
+     "at": [
+      0,
+      -4.5
+     ]
+    },
+    {
+     "level": "observation_upper",
+     "at": [
+      0,
+      -4.5
+     ]
+    }
+   ]
+  }
+ ]
+}

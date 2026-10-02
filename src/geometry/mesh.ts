@@ -264,6 +264,81 @@ export class MeshBuilder {
     }
   }
 
+  /**
+   * Surface of revolution around the vertical axis through `center` (x, y, base z).
+   * `profile` is [radius, height] from bottom to top; faces point away from the axis
+   * (or toward it when `inward`). Each profile segment gets the material returned by
+   * `materialAt(i)` (null = leave open). Normals are smoothed across gentle bends.
+   * UVs: u = angle * uvRadius (meters around), v = distance along the profile.
+   */
+  lathe(
+    profile: Vec2[],
+    materialAt: (segment: number) => string | null,
+    center: Vec3,
+    segments = 48,
+    opts: { inward?: boolean; uvRadius?: number } = {},
+  ) {
+    const n = profile.length;
+    if (n < 2) return;
+    const uvR = opts.uvRadius ?? Math.max(...profile.map((p) => p[0]));
+    const flip = opts.inward ? -1 : 1;
+    // per-segment outward normal in (r, z): (dz, -dr) for a bottom-to-top profile
+    const segN: Vec2[] = [];
+    const arc: number[] = [0];
+    for (let i = 0; i < n - 1; i++) {
+      const dr = profile[i + 1][0] - profile[i][0], dz = profile[i + 1][1] - profile[i][1];
+      const l = Math.hypot(dr, dz) || 1;
+      segN.push([dz / l, -dr / l]);
+      arc.push(arc[i] + l);
+    }
+    // smooth a vertex normal with its neighbour segment when the bend is gentle (< ~35°)
+    const vNormal = (i: number, seg: number): Vec2 => {
+      const other = i === seg ? seg - 1 : seg + 1;
+      const a = segN[seg];
+      if (other < 0 || other >= segN.length) return a;
+      const b = segN[other];
+      if (a[0] * b[0] + a[1] * b[1] < 0.82) return a;
+      const s: Vec2 = [a[0] + b[0], a[1] + b[1]];
+      const l = Math.hypot(s[0], s[1]) || 1;
+      return [s[0] / l, s[1] / l];
+    };
+    for (let seg = 0; seg < n - 1; seg++) {
+      const mat = materialAt(seg);
+      if (!mat) continue;
+      const [r0, z0] = profile[seg], [r1, z1] = profile[seg + 1];
+      if (r0 < 1e-6 && r1 < 1e-6) continue;
+      const g = this.group(mat);
+      const n0 = vNormal(seg, seg), n1 = vNormal(seg + 1, seg);
+      const ring = (r: number, z: number, nn: Vec2, v: number) => {
+        const idx: number[] = [];
+        for (let k = 0; k <= segments; k++) {
+          const a = (k / segments) * Math.PI * 2;
+          const c = Math.cos(a), s = Math.sin(a);
+          idx.push(
+            this.vertex(
+              g,
+              [center[0] + c * r, center[1] + s * r, center[2] + z],
+              [c * nn[0] * flip, s * nn[0] * flip, nn[1] * flip],
+              [a * uvR, -v],
+            ),
+          );
+        }
+        return idx;
+      };
+      const lo = ring(r0, z0, n0, arc[seg]), hi = ring(r1, z1, n1, arc[seg + 1]);
+      for (let k = 0; k < segments; k++) {
+        const a = lo[k], b = lo[k + 1], c = hi[k + 1], d = hi[k];
+        if (flip > 0) {
+          this.tri(g, a, b, c);
+          this.tri(g, a, c, d);
+        } else {
+          this.tri(g, a, c, b);
+          this.tri(g, a, d, c);
+        }
+      }
+    }
+  }
+
   /** Merge another builder's output (already in world space) into this one. */
   append(other: MeshBuilder) {
     for (const src of other.meshes()) {

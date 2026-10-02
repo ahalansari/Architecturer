@@ -166,6 +166,12 @@ def("flagstone", "paving", "Irregular flagstone paving", { roughness: 0.85, scal
 def("siding_white", "siding", "White horizontal lap siding / clapboard", { roughness: 0.6, scale: 1.0 });
 def("siding_blue", "siding", "Blue horizontal lap siding", { roughness: 0.6, scale: 1.0, color: "#7f9cbd" });
 def("siding_gray", "siding", "Gray horizontal lap siding", { roughness: 0.6, scale: 1.0, color: "#9a9c9e" });
+def("enamel_discs", "disks", "Enamelled steel discs in blues/greens/grays on a dark backing (Kuwait Towers spheres)", {
+  roughness: 0.35, metalness: 0.3, scale: 2.4, normalStrength: 1.2,
+});
+def("enamel_discs_silver", "disks", "Silver/white enamelled steel discs", {
+  roughness: 0.3, metalness: 0.5, scale: 2.4, params: { palette: "#c9d1d6,#b3bec5,#dfe5e8,#a3afb7" },
+});
 def("siding_red", "siding", "Barn-red horizontal siding", { roughness: 0.65, scale: 1.0, color: "#9c3b30" });
 def("siding_yellow", "siding", "Pale yellow horizontal siding", { roughness: 0.6, scale: 1.0, color: "#ecd9a0" });
 
@@ -207,6 +213,7 @@ const PATTERN_DEFAULT: Record<TexturePattern, string> = {
   gravel: "gravel",
   paving: "paving_stone",
   siding: "siding_white",
+  disks: "enamel_discs",
 };
 
 function clone(m: MaterialDef, name: string): MaterialDef {

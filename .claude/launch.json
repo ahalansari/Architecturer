@@ -4,8 +4,28 @@
     {
       "name": "viewer",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["tsx", "src/cli/main.ts", "serve", "examples/house.json", "--port", "5177"],
+      "runtimeArgs": [
+        "tsx",
+        "src/cli/main.ts",
+        "serve",
+        "examples/house.json",
+        "--port",
+        "5177"
+      ],
       "port": 5177
+    },
+    {
+      "name": "viewer-kuwait",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "tsx",
+        "src/cli/main.ts",
+        "serve",
+        "examples/kuwait_towers.json",
+        "--port",
+        "5178"
+      ],
+      "port": 5178
     }
   ]
 }

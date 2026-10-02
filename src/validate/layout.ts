@@ -306,7 +306,8 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
         const c = v2.add(o.seg.a, v2.scale(d, o.u));
         return [-1, 1].some((side) => pointInPolygon(v2.add(c, v2.scale(N, side * (o.seg.thickness / 2 + 0.3))), r.polygon as Vec2[]));
       });
-      const hasStair = info.stairs.some((st) => roomAt(li, st.approach) === ri) || levels.some((L) => L.stairs.some((st) => st.target === li && roomAt(li, st.arrival) === ri));
+      const hasLift = project.elevators.some((e) => e.stops.some((st) => st.level === lv.id && pointInPolygon(st.at as Vec2, r.polygon as Vec2[])));
+      const hasStair = hasLift || info.stairs.some((st) => roomAt(li, st.approach) === ri) || levels.some((L) => L.stairs.some((st) => st.target === li && roomAt(li, st.arrival) === ri));
       if (!touching && !hasStair) warn(`room '${r.name}' has no door or opening into it`);
     });
     for (let a = 0; a < lv.rooms.length; a++)
@@ -357,6 +358,21 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       }
     }
   });
+
+  // --- elevators link their stops ---
+  for (const e of project.elevators) {
+    const nodes = e.stops.flatMap((st) => {
+      const li = project.levels.findIndex((l) => l.id === st.level);
+      if (li < 0) {
+        out.push(`elevator '${e.id}': unknown level '${st.level}' (levels: ${project.levels.map((l) => l.id).join(", ")})`);
+        return [];
+      }
+      const n = nodeAt(li, st.at as Vec2);
+      if (n.startsWith("void:")) out.push(`elevator '${e.id}': stop on level '${st.level}' at ${pt(st.at as Vec2)} is not on any floor`);
+      return [n];
+    });
+    for (let i = 1; i < nodes.length; i++) link(nodes[0], nodes[i]);
+  }
 
   // --- reachability from the outside ---
   const roomsWithKeys = [...roomName.keys()];
