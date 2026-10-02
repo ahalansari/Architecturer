@@ -69,3 +69,24 @@ test("game export: merged static mesh, colliders, unity axes", async () => {
   const collider = doc.getRoot().listNodes().find((n) => n.getName() === "Ground floor-colonly")!;
   assert.equal(collider.getMesh()!.listPrimitives()[0].getMaterial(), null);
 });
+
+test("ktx2 export: KHR_texture_basisu required, mipmapped KTX2 images with correct color spaces", async () => {
+  const { exportGLB } = await import("../src/export/gltf.js");
+  const { NodeIO } = await import("@gltf-transform/core");
+  const { KHRTextureBasisu } = await import("@gltf-transform/extensions");
+  const { read } = await import("ktx-parse");
+  const { STARTER_PROJECT } = await import("../src/templates.js");
+  const glb = await exportGLB(compile(STARTER_PROJECT), { textureSize: 64, textureFormat: "ktx2" });
+  const doc = await new NodeIO().registerExtensions([KHRTextureBasisu]).readBinary(glb);
+  const ext = doc.getRoot().listExtensionsUsed().find((e) => e.extensionName === "KHR_texture_basisu");
+  assert.ok(ext?.isRequired());
+  const textures = doc.getRoot().listTextures();
+  assert.ok(textures.length > 5);
+  for (const t of textures) {
+    assert.equal(t.getMimeType(), "image/ktx2");
+    const k = read(t.getImage()!);
+    assert.equal(k.levels.length, 7, `${t.getName()} has a full mip chain`); // 64px -> 1px
+    const srgb = k.dataFormatDescriptor[0].transferFunction === 2;
+    assert.equal(srgb, t.getName().endsWith("_basecolor"), `${t.getName()} color space`);
+  }
+});

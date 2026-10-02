@@ -18,6 +18,7 @@ const MIME: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".json": "application/json",
   ".glb": "model/gltf-binary",
+  ".wasm": "application/wasm",
 };
 
 function sendFile(res: ServerResponse, base: string, rel: string) {
@@ -33,10 +34,10 @@ function sendFile(res: ServerResponse, base: string, rel: string) {
 /** Serve the 3D viewer for a plan file; browsers reload automatically when the file changes. */
 export async function serve(planPath: string, opts: { port: number; textureSize?: number }) {
   const file = resolve(planPath);
-  let cache: { mtime: number; compiled: Compiled; glb?: Uint8Array } | undefined;
+  let cache: { mtime: number; compiled: Compiled; glb: Map<string, Uint8Array> } | undefined;
   const current = async () => {
     const m = (await stat(file)).mtimeMs;
-    if (!cache || cache.mtime !== m) cache = { mtime: m, compiled: await loadAndCompile(file) };
+    if (!cache || cache.mtime !== m) cache = { mtime: m, compiled: await loadAndCompile(file), glb: new Map() };
     return cache;
   };
   const clients = new Set<ServerResponse>();
@@ -85,9 +86,11 @@ export async function serve(planPath: string, opts: { port: number; textureSize?
           res.writeHead(422).end(c.errors.join("\n"));
           return;
         }
-        cur.glb ??= await exportGLB(c, { textureSize: opts.textureSize ?? 512 });
+        const format = url.searchParams.get("format") === "ktx2" ? "ktx2" : "jpeg";
+        let glb = cur.glb.get(format);
+        if (!glb) cur.glb.set(format, (glb = await exportGLB(c, { textureSize: opts.textureSize ?? 512, textureFormat: format })));
         res.writeHead(200, { "content-type": MIME[".glb"], "cache-control": "no-store" });
-        res.end(cur.glb);
+        res.end(glb);
         return;
       }
       if (url.pathname === "/plan.svg") {

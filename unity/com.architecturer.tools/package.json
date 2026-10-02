@@ -2,10 +2,13 @@
   "name": "com.architecturer.tools",
   "version": "0.1.0",
   "displayName": "Architecturer Tools",
-  "description": "Sets up colliders and static flags on models exported by Architecturer (arch build --unity). Requires glTFast (com.unity.cloud.gltfast) to import .glb files.",
+  "description": "Sets up colliders and static flags on models exported by Architecturer (arch build --unity). Installs glTFast (imports .glb) and KTX for Unity (decodes --texture-format ktx2).",
   "unity": "2022.3",
   "dependencies": {
-    "com.unity.cloud.gltfast": "6.20.0"
+    "com.unity.cloud.gltfast": "6.20.0",
+    "com.unity.cloud.ktx": "3.7.0"
   },
-  "author": { "name": "Architecturer" }
+  "author": {
+    "name": "Architecturer"
+  }
 }

@@ -42,7 +42,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch validate plan.json [--strict]` | Errors, layout warnings, stats (`--strict` fails on warnings) |
 | `arch plan plan.json --level ground -o plan.png` | 2D floor plan (`.svg` or `.png`) |
 | `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
-| `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png]` | Export; `.gltf` writes separate image files |
+| `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png\|ktx2]` | Export; `.gltf` writes separate image files |
 | `arch serve plan.json` | Live viewer that reloads whenever the file is saved |
 | `arch schema` / `materials` / `furniture` | Reference |
 
@@ -95,6 +95,16 @@ arch build plan.json -o MyUnityProject/Assets/Models/house.glb --unity   # or --
 - **Collision nodes**: `<Level>-colonly` is static. Walls, floors and roofs keep their own geometry, stairs become smooth ramps, and railings become thin walls. `<item>-convcolonly` is a box on each movable item.
 - **Godot** turns these suffixes into physics bodies on import.
 - **Unity** needs the bundled package in [`unity/com.architecturer.tools`](unity/com.architecturer.tools/README.md). It is tested with Unity 6 + glTFast 6.20: colliders are set up when you drop the model into a scene, and `--unity` orients the model so plan `(x, y)` = Unity `(x, z)`.
+
+### Texture formats
+
+| `--texture-format` | House example | Notes |
+|---|---|---|
+| `jpeg` (default) | 13.4 MB | JPEG color/ORM, PNG normal maps; works everywhere |
+| `png` | 21.0 MB | lossless |
+| `ktx2` | **5.4 MB** | Basis Universal (`KHR_texture_basisu`, required) with mipmaps; stays compressed in GPU memory (BC7/ASTC/ETC2 after transcoding). Unity: installed by the Architecturer package (KTX for Unity). Add `--ktx2-quality high` for sharper UASTC normal maps (larger, slower) |
+
+KTX2 encoding is cached in `~/.cache/architecturer/ktx2` (override with `ARCHITECTURER_CACHE`). A cold build of the house takes ~16 s; later builds take ~3 s. Preview a KTX2 build in the viewer with `http://localhost:5177/?format=ktx2`.
 
 Without these flags:
 

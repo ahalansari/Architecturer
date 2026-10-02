@@ -118,7 +118,8 @@ const COMMANDS: Record<string, Command> = {
     flags: [
       OUT,
       { name: "texture-size", arg: "px", desc: "texture resolution (default 512; 0 = untextured)" },
-      { name: "texture-format", arg: "jpeg|png", desc: "jpeg = small files (normal maps stay PNG), png = lossless (default jpeg)" },
+      { name: "texture-format", arg: "jpeg|png|ktx2", desc: "jpeg = small files (normal maps stay PNG), png = lossless, ktx2 = GPU-compressed Basis Universal with mipmaps (default jpeg)" },
+      { name: "ktx2-quality", arg: "fast|high", desc: "ktx2 only: high = UASTC normal maps (sharper, larger, slow to encode)" },
       { name: "merge", desc: "one static mesh per level (sub-mesh per material); furniture/doors stay separate" },
       { name: "collision", desc: "add collider nodes (*-colonly static mesh, *-convcolonly boxes on movable items)" },
       { name: "unity", desc: "--merge --collision, oriented so plan (x, y) == Unity world (x, z)" },
@@ -130,11 +131,12 @@ const COMMANDS: Record<string, Command> = {
       if (!c.root) return 1;
       const out = (f.o as string) ?? `${base(file)}.glb`;
       const textureSize = f["texture-size"] !== undefined ? num(f["texture-size"], "texture-size") : 512;
-      if (f["texture-format"] !== undefined && !["jpeg", "png"].includes(f["texture-format"] as string))
-        throw new Error("--texture-format must be jpeg or png");
-      const textureFormat = f["texture-format"] === "png" ? ("png" as const) : ("jpeg" as const);
+      const textureFormat = (f["texture-format"] ?? "jpeg") as "jpeg" | "png" | "ktx2";
+      if (!["jpeg", "png", "ktx2"].includes(textureFormat)) throw new Error("--texture-format must be jpeg, png or ktx2");
+      const ktx2Quality = (f["ktx2-quality"] ?? "fast") as "fast" | "high";
+      if (!["fast", "high"].includes(ktx2Quality)) throw new Error("--ktx2-quality must be fast or high");
       const engine = f.unity ? "unity" : f.godot ? "godot" : undefined;
-      const opts = { textureSize, textureFormat, merge: !!(f.merge || engine), collision: !!(f.collision || engine), unityAxes: engine === "unity" };
+      const opts = { textureSize, textureFormat, ktx2Quality, merge: !!(f.merge || engine), collision: !!(f.collision || engine), unityAxes: engine === "unity" };
       if (extname(out) === ".gltf") {
         await mkdir(dirname(out), { recursive: true });
         await exportGLTF(c, out, opts);

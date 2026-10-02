@@ -5,7 +5,8 @@ Sets up models exported with `arch build plan.json -o Assets/Models/house.glb --
 
 ## Install
 1. Package Manager › **+** › *Add package from disk…* › pick this folder's `package.json`.
-   This also installs **glTFast** (`com.unity.cloud.gltfast`), which imports `.glb` files.
+   This also installs **glTFast** (`com.unity.cloud.gltfast`), which imports `.glb` files, and **KTX for Unity**
+   (`com.unity.cloud.ktx`), which decodes `--texture-format ktx2` exports into GPU-compressed textures.
 2. Export your plan into the project's `Assets/` folder.
 
 ## Use

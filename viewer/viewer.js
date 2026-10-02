@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view");
@@ -31,6 +32,9 @@ sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
+
+const ktx2 = new KTX2Loader().setTranscoderPath("/three/examples/jsm/libs/basis/").detectSupport(renderer);
+const gltfLoader = new GLTFLoader().setKTX2Loader(ktx2);
 
 let model = null;
 let levels = [];
@@ -133,7 +137,9 @@ async function loadModel(keepCamera) {
     setStatus("plan has errors");
     return;
   }
-  const gltf = await new GLTFLoader().loadAsync(`/model.glb?t=${Date.now()}`);
+  // ?format=ktx2 previews the GPU-compressed export (KHR_texture_basisu)
+  const format = new URLSearchParams(location.search).get("format") ?? "";
+  const gltf = await gltfLoader.loadAsync(`/model.glb?format=${encodeURIComponent(format)}&t=${Date.now()}`);
   if (model) {
     scene.remove(model);
     model.traverse((o) => {

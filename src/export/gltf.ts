@@ -1,12 +1,14 @@
 import { Document, NodeIO, type Material, type Node as GNode, type Texture } from "@gltf-transform/core";
 import { dedup, tangents, unweld, weld } from "@gltf-transform/functions";
 import { createHash } from "node:crypto";
+import { KHRTextureBasisu } from "@gltf-transform/extensions";
 import { encode as encodeJPEG } from "jpeg-js";
 import { generateTangents } from "mikktspace";
 import { PNG } from "pngjs";
 import type { SceneNode } from "../geometry/scene.js";
 import { COLLIDER } from "../elements/stairs.js";
 import { prepareForGame, type GameOptions } from "./game.js";
+import { encodeKTX2, type Ktx2Quality, type TextureRole } from "./ktx2.js";
 import type { MaterialDef, TextureSet } from "../materials/types.js";
 import { texturesFor, type Compiled } from "../pipeline.js";
 
@@ -19,11 +21,17 @@ export interface ExportOptions extends GameOptions {
   /** Texture resolution in pixels (power of two recommended). 0 disables textures. */
   textureSize?: number;
   /**
-   * Image encoding for opaque base color and ORM maps (default "jpeg", much smaller).
-   * Normal maps and base colors with alpha are always PNG.
+   * Image encoding. "jpeg" (default): opaque base color and ORM as JPEG, normal maps and alpha as PNG.
+   * "png": everything lossless. "ktx2": every texture as KTX2/Basis Universal with mipmaps
+   * (KHR_texture_basisu, required) — stays compressed in GPU memory; needs KTX support in the engine.
    */
-  textureFormat?: "png" | "jpeg";
+  textureFormat?: "png" | "jpeg" | "ktx2";
+  /** KTX2 only: "high" encodes normal maps as UASTC (sharper, larger, much slower). Default "fast". */
+  ktx2Quality?: Ktx2Quality;
 }
+
+/** Textures waiting for KTX2 encoding (done asynchronously in finalDocument). */
+const ktx2Jobs = new WeakMap<Document, { tex: Texture; rgba: Uint8Array; size: number; role: TextureRole }[]>();
 
 const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 
@@ -46,8 +54,11 @@ function jpeg(size: number, rgba: Uint8Array): Uint8Array {
 export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document {
   if (!c.root || !c.project) throw new Error("nothing to export: " + c.errors.join("; "));
   const size = opts.textureSize ?? 512;
-  const lossy = (opts.textureFormat ?? "jpeg") === "jpeg";
+  const format = opts.textureFormat ?? "jpeg";
+  const lossy = format === "jpeg";
   const doc = new Document();
+  const jobs: { tex: Texture; rgba: Uint8Array; size: number; role: TextureRole }[] = [];
+  if (format === "ktx2") ktx2Jobs.set(doc, jobs);
   doc.getRoot().getAsset().generator = "Architecturer";
   const buffer = doc.createBuffer();
   const scene = doc.createScene(c.project.name);
@@ -57,13 +68,17 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
   const textures = new Map<TextureSet, { base: Texture; normal: Texture; orm: Texture }>();
   // identical images (e.g. normal maps shared by roughness variants) are stored once
   const images = new Map<string, Texture>();
-  const image = (name: string, size: number, rgba: Uint8Array, alpha: boolean, allowJpeg: boolean): Texture => {
-    const asJpeg = allowJpeg && lossy && !alpha;
+  const image = (name: string, size: number, rgba: Uint8Array, alpha: boolean, role: TextureRole): Texture => {
+    const asJpeg = role !== "normal" && lossy && !alpha;
     const key = createHash("sha1").update(rgba).digest("hex") + (alpha ? "a" : "") + (asJpeg ? "j" : "");
     let t = images.get(key);
     if (!t) {
       t = doc.createTexture(name);
-      if (asJpeg) t.setMimeType("image/jpeg").setImage(jpeg(size, rgba));
+      if (format === "ktx2") {
+        // placeholder until finalDocument encodes it
+        t.setMimeType("image/png").setImage(png(4, new Uint8Array(64), alpha));
+        jobs.push({ tex: t, rgba, size, role });
+      } else if (asJpeg) t.setMimeType("image/jpeg").setImage(jpeg(size, rgba));
       else t.setMimeType("image/png").setImage(png(size, rgba, alpha));
       images.set(key, t);
     }
@@ -82,9 +97,9 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
         const alpha = def.opacity < 1;
         // JPEG artifacts would show up as bumps in normal maps, so those stay lossless
         t = {
-          base: image(`${name}_basecolor`, tex.size, tex.baseColor, alpha, true),
-          normal: image(`${name}_normal`, tex.size, tex.normal, false, false),
-          orm: image(`${name}_orm`, tex.size, tex.orm, false, true),
+          base: image(`${name}_basecolor`, tex.size, tex.baseColor, alpha, "color"),
+          normal: image(`${name}_normal`, tex.size, tex.normal, false, "normal"),
+          orm: image(`${name}_orm`, tex.size, tex.orm, false, "data"),
         };
         textures.set(tex, t);
       }
@@ -178,6 +193,12 @@ function stripUndefined(o: Record<string, unknown>) {
 /** Document plus MikkTSpace tangents for normal-mapped primitives (what Unity/Unreal/Godot expect). */
 async function finalDocument(c: Compiled, opts: ExportOptions): Promise<Document> {
   const doc = toGltfDocument(c, opts);
+  // encode KTX2 first: the placeholders are identical, and dedup() below would merge them
+  const jobs = ktx2Jobs.get(doc);
+  if (jobs?.length) {
+    doc.createExtension(KHRTextureBasisu).setRequired(true);
+    for (const j of jobs) j.tex.setMimeType("image/ktx2").setImage(await encodeKTX2(j.rgba, j.size, j.role, opts.ktx2Quality));
+  }
   if ((opts.textureSize ?? 512) > 0) {
     await doc.transform(unweld(), tangents({ generateTangents, overwrite: false }), weld(), dedup());
     fixZeroTangents(doc);
@@ -185,13 +206,17 @@ async function finalDocument(c: Compiled, opts: ExportOptions): Promise<Document
   return doc;
 }
 
+/** Writers must know every extension the document may use, or they silently drop it. */
+const io = () => new NodeIO().registerExtensions([KHRTextureBasisu]);
+
 export async function exportGLB(c: Compiled, opts: ExportOptions = {}): Promise<Uint8Array> {
-  return new NodeIO().writeBinary(await finalDocument(c, opts));
+  return io().writeBinary(await finalDocument(c, opts));
 }
 
-/** Write .gltf + .bin + separate PNG/JPEG textures (easier to swap textures by hand). */
+/** Write .gltf + .bin + separate image files (easier to swap textures by hand). */
 export async function exportGLTF(c: Compiled, path: string, opts: ExportOptions = {}) {
   const doc = await finalDocument(c, opts);
-  for (const t of doc.getRoot().listTextures()) t.setURI(`${t.getName()}.${t.getMimeType() === "image/jpeg" ? "jpg" : "png"}`);
-  await new NodeIO().write(path, doc);
+  const ext = { "image/jpeg": "jpg", "image/ktx2": "ktx2" } as Record<string, string>;
+  for (const t of doc.getRoot().listTextures()) t.setURI(`${t.getName()}.${ext[t.getMimeType()] ?? "png"}`);
+  await io().write(path, doc);
 }

@@ -290,7 +290,10 @@ server.registerTool(
       path: PathArg,
       output: z.string().describe("Output file path ending in .glb or .gltf"),
       textureSize: z.number().int().min(0).max(4096).default(1024).describe("Texture resolution; 0 = untextured"),
-      textureFormat: z.enum(["jpeg", "png"]).default("jpeg").describe("jpeg = much smaller files (normal maps and transparent textures stay PNG); png = lossless"),
+      textureFormat: z
+        .enum(["jpeg", "png", "ktx2"])
+        .default("jpeg")
+        .describe("jpeg = much smaller files (normal maps and transparent textures stay PNG); png = lossless; ktx2 = GPU-compressed Basis Universal with mipmaps (KHR_texture_basisu; Unity needs the KTX package, which the Architecturer Unity package installs)"),
       engine: z
         .enum(["generic", "unity", "godot"])
         .default("generic")
