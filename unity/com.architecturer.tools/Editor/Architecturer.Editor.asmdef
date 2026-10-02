@@ -1,0 +1,7 @@
+{
+  "name": "Architecturer.Editor",
+  "rootNamespace": "Architecturer.Editor",
+  "references": ["Architecturer.Runtime"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

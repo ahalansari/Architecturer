@@ -1,0 +1,45 @@
+{
+  "name": "architecturer",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "arch": "tsx src/cli/main.ts",
+    "mcp": "tsx src/mcp/server.ts",
+    "test": "tsx --test test/*.test.ts",
+    "prepare": "tsc -p ."
+  },
+  "license": "MIT",
+  "description": "AI-first 3D architecture modeler: JSON building plans -> textured game-ready GLB",
+  "dependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "earcut": "^3.2.4",
+    "jpeg-js": "^0.4.4",
+    "mikktspace": "^1.1.1",
+    "pngjs": "^7.0.0",
+    "three": "^0.186.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/earcut": "^3.0.0",
+    "@types/node": "^26.6.4",
+    "@types/pngjs": "^6.0.5",
+    "@types/three": "^0.186.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "type": "module",
+  "bin": {
+    "arch": "./bin/arch.js",
+    "architecturer-mcp": "./bin/mcp.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "viewer",
+    "README.md"
+  ]
+}

@@ -1,0 +1,120 @@
+# Architecturer
+
+AI-first 3D architecture modeler. An AI model (or you) writes a **JSON building plan** with walls, doors, windows, rooms, stairs, roofs and furniture. Architecturer turns it into a **textured, game-ready glTF/GLB model**.
+
+- **Declarative plan format** with field-level descriptions and readable validation errors (`levels[0].openings[3]: point [2,3] is 1.40 m from the nearest wall…`).
+- **Layout validator** that catches the mistakes AI authors actually make, and says how to fix them:
+  - furniture inside walls, door swings, doorways or in front of windows; furniture facing a wall; overlapping furniture
+  - rooms with no door, or unreachable from the entrance
+  - stairs through walls, arriving into walls or onto nothing, or with an open side and no railing
+  - doors that open onto a drop
+  - Example: `furniture 'toilet_19' at [4.45, 9.6] overlaps wall 'ext' by 0.1 m — move it 0.1 m south (to [4.45, 9.5])`
+- **Geometry kernel**:
+  - Walls are mitered at corners; T-junctions and crossings are joined automatically.
+  - Doors and windows are cut into walls, with frames, sills and glass. Door leaves are separate nodes that pivot at the hinge.
+  - Floors are auto-generated slabs, and stairs cut their own stairwells.
+  - Stairs: straight, L, U and spiral.
+  - Roofs: gable, hip, shed and flat with parapet.
+  - Rooms get floor finishes and ceilings.
+  - Terraces, balconies and patios are a single element: a slab, with railings or a parapet added automatically on the edges that aren't against the building.
+  - 46 parametric furniture types.
+- **Procedural PBR textures**, 100 tileable materials: base color, normal and occlusion/roughness/metal maps, with MikkTSpace tangents. Exported files pass the Khronos glTF validator with no errors or warnings.
+- **AI feedback loop**: headless PNG renders (3D views, cutaways, 2D plans with a coordinate grid and element ids). An agent can look at its own result and fix it.
+- **Interfaces**: an MCP server (for Claude and other MCP clients), a CLI, and a live-reloading three.js viewer.
+
+## Quick start
+
+```bash
+npm install          # also builds dist/
+npx tsx src/cli/main.ts serve examples/house.json     # open http://localhost:5177
+```
+
+```bash
+npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-size 1024
+```
+
+## CLI
+
+| Command | What it does |
+|---|---|
+| `arch guide` | Authoring guide for AI agents: conventions, plus the material and furniture lists |
+| `arch init plan.json` | Starter plan |
+| `arch validate plan.json [--strict]` | Errors, layout warnings, stats (`--strict` fails on warnings) |
+| `arch plan plan.json --level ground -o plan.png` | 2D floor plan (`.svg` or `.png`) |
+| `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
+| `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png]` | Export; `.gltf` writes separate image files |
+| `arch serve plan.json` | Live viewer that reloads whenever the file is saved |
+| `arch schema` / `materials` / `furniture` | Reference |
+
+Every command has `--help`, and unknown options are errors. During development, `arch` is `npx tsx src/cli/main.ts`. After `npm run build` it is `node bin/arch.js`.
+
+## MCP server (for AI agents)
+
+`.mcp.json` registers the server for Claude Code in this folder. For other clients:
+
+```json
+{ "mcpServers": { "architecturer": { "command": "node", "args": ["/abs/path/to/Architecturer/dist/mcp/server.js"] } } }
+```
+
+| Tool | Purpose |
+|---|---|
+| `get_guide`, `get_schema`, `list_materials`, `list_furniture` | Learn the format |
+| `create_project`, `read_project`, `write_project`, `add_level` | Whole-plan operations |
+| `add_elements`, `update_element`, `remove_elements` | Incremental edits by id. Every edit returns validation results. |
+| `validate` | Errors and warnings |
+| `render_plan`, `render_view` | Return PNG images so the model can see its work |
+| `export_model` | `.glb` / `.gltf` for game engines |
+
+## Plan format in 30 seconds
+
+Units are meters. Plan x points east and y points north. Angles are measured counter-clockwise from east. See `examples/house.json`, or run `arch guide`.
+
+```json
+{
+  "name": "Cabin",
+  "defaults": { "exteriorWallThickness": 0.25, "exteriorMaterial": "siding_white" },
+  "levels": [{
+    "id": "ground", "height": 2.8,
+    "walls": [{ "id": "ext", "points": [[0,0],[6,0],[6,4],[0,4]], "closed": true }],
+    "openings": [{ "type": "door", "at": [1.5, 0] }, { "type": "window", "at": [4, 0], "width": 1.4 }],
+    "rooms": [{ "name": "Main room", "polygon": [[0,0],[6,0],[6,4],[0,4]], "floorMaterial": "wood_floor_oak" }],
+    "furniture": [{ "type": "bed", "position": [4.6, 2.9], "facing": "west", "width": 1.4 }],
+    "roofs": [{ "type": "gable", "polygon": [[0,0],[6,0],[6,4],[0,4]], "pitch": 30 }]
+  }]
+}
+```
+
+## Using the models in a game engine
+
+```bash
+arch build plan.json -o MyUnityProject/Assets/Models/house.glb --unity   # or --godot
+```
+
+`--unity` / `--godot` turn on:
+- **Merged meshes**: one static mesh per level, with a sub-mesh per material. Furniture and door leaves stay separate so they can move.
+- **Collision nodes**: `<Level>-colonly` is static. Walls, floors and roofs keep their own geometry, stairs become smooth ramps, and railings become thin walls. `<item>-convcolonly` is a box on each movable item.
+- **Godot** turns these suffixes into physics bodies on import.
+- **Unity** needs the bundled package in [`unity/com.architecturer.tools`](unity/com.architecturer.tools/README.md). It is tested with Unity 6 + glTFast 6.20: colliders are set up when you drop the model into a scene, and `--unity` orients the model so plan `(x, y)` = Unity `(x, z)`.
+
+Without these flags:
+
+- glTF 2.0 is Y-up and in meters. Plan (x, y, z) maps to glTF (x, z, −y).
+- The node hierarchy is `Building › Level › walls | openings | slabs | rooms | stairs | furniture | structure | roofs`. Each node's `extras` carries `kind`, `id`, room names and areas, door motion data, and similar metadata.
+- Furniture and door leaves have their pivot at their placement point or hinge, so they can be moved or animated.
+- Materials are standard metallic-roughness PBR with base color, normal and ORM textures. Glass uses alpha blending.
+- Unity: use glTFast. Unreal: Interchange glTF import. Godot: import directly. Blender: File › Import › glTF.
+
+## Layout
+
+```
+src/schema      plan schema (zod) and JSON Schema
+src/elements    walls, openings, stairs, roofs, slabs, furniture
+src/geometry    math and MeshBuilder (primitives, world-scaled UVs)
+src/materials   material library and procedural texture generator
+src/export      glTF/GLB writer
+src/render      software rasterizer (3D) and SVG floor plans
+src/cli, src/mcp, src/server   interfaces
+viewer/         three.js viewer
+```
+
+`npm test` runs the build and MCP end-to-end tests.

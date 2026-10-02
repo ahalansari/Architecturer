@@ -1,0 +1,6 @@
+{
+  "name": "Architecturer.Runtime",
+  "rootNamespace": "Architecturer",
+  "references": [],
+  "autoReferenced": true
+}

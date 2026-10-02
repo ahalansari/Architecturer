@@ -1,0 +1,1175 @@
+{
+  "name": "Family House",
+  "description": "Two-storey brick house, 12 x 10 m, U-shaped stair, gable roof",
+  "defaults": {
+    "wallThickness": 0.12,
+    "exteriorWallThickness": 0.3,
+    "wallMaterial": "plaster_white",
+    "exteriorMaterial": "brick_red"
+  },
+  "levels": [
+    {
+      "id": "ground",
+      "name": "Ground floor",
+      "height": 3,
+      "walls": [
+        {
+          "id": "ext",
+          "points": [
+            [
+              0,
+              0
+            ],
+            [
+              12,
+              0
+            ],
+            [
+              12,
+              10
+            ],
+            [
+              0,
+              10
+            ]
+          ],
+          "closed": true
+        },
+        {
+          "id": "w_mid",
+          "points": [
+            [
+              0,
+              5
+            ],
+            [
+              12,
+              5
+            ]
+          ]
+        },
+        {
+          "id": "w_living_dining",
+          "points": [
+            [
+              7,
+              0
+            ],
+            [
+              7,
+              5
+            ]
+          ]
+        },
+        {
+          "id": "w_hall_bath",
+          "points": [
+            [
+              4,
+              5
+            ],
+            [
+              4,
+              10
+            ]
+          ]
+        },
+        {
+          "id": "w_bath_kitchen",
+          "points": [
+            [
+              6.5,
+              5
+            ],
+            [
+              6.5,
+              10
+            ]
+          ]
+        }
+      ],
+      "openings": [
+        {
+          "id": "front_door",
+          "type": "door",
+          "at": [
+            0,
+            8.2
+          ],
+          "width": 1.0,
+          "style": "single",
+          "panelMaterial": "wood_walnut"
+        },
+        {
+          "id": "patio_door",
+          "type": "door",
+          "at": [
+            9.5,
+            0
+          ],
+          "width": 2.4,
+          "style": "sliding"
+        },
+        {
+          "id": "back_door",
+          "type": "door",
+          "at": [
+            11.2,
+            10
+          ],
+          "hinge": "right"
+        },
+        {
+          "id": "arch_living_dining",
+          "type": "opening",
+          "at": [
+            7,
+            2.5
+          ],
+          "width": 2.0,
+          "height": 2.3
+        },
+        {
+          "id": "door_hall",
+          "type": "door",
+          "at": [
+            1.0,
+            5
+          ]
+        },
+        {
+          "id": "door_bath",
+          "type": "door",
+          "at": [
+            5.2,
+            5
+          ],
+          "width": 0.8
+        },
+        {
+          "id": "arch_kitchen",
+          "type": "opening",
+          "at": [
+            9.5,
+            5
+          ],
+          "width": 1.8,
+          "height": 2.3
+        },
+        {
+          "id": "win_living_1",
+          "type": "window",
+          "at": [
+            2.5,
+            0
+          ],
+          "width": 2.4,
+          "height": 1.6,
+          "sill": 0.5
+        },
+        {
+          "id": "win_living_2",
+          "type": "window",
+          "at": [
+            5.5,
+            0
+          ],
+          "width": 1.2
+        },
+        {
+          "id": "win_living_w",
+          "type": "window",
+          "at": [
+            0,
+            2.5
+          ],
+          "width": 1.6,
+          "style": "grid"
+        },
+        {
+          "id": "win_dining_e",
+          "type": "window",
+          "at": [
+            12,
+            2.5
+          ],
+          "width": 1.6
+        },
+        {
+          "id": "win_kitchen_e",
+          "type": "window",
+          "at": [
+            12,
+            7.5
+          ],
+          "width": 1.2
+        },
+        {
+          "id": "win_kitchen_n",
+          "type": "window",
+          "at": [
+            9.25,
+            10
+          ],
+          "width": 1.6,
+          "height": 1.0,
+          "sill": 1.1
+        },
+        {
+          "id": "win_bath",
+          "type": "window",
+          "at": [
+            5.25,
+            10
+          ],
+          "width": 0.6,
+          "height": 0.6,
+          "sill": 1.6,
+          "style": "fixed",
+          "glassMaterial": "glass_frosted"
+        }
+      ],
+      "rooms": [
+        {
+          "name": "Living room",
+          "polygon": [
+            [
+              0,
+              0
+            ],
+            [
+              7,
+              0
+            ],
+            [
+              7,
+              5
+            ],
+            [
+              0,
+              5
+            ]
+          ],
+          "floorMaterial": "wood_floor_oak"
+        },
+        {
+          "name": "Dining",
+          "polygon": [
+            [
+              7,
+              0
+            ],
+            [
+              12,
+              0
+            ],
+            [
+              12,
+              5
+            ],
+            [
+              7,
+              5
+            ]
+          ],
+          "floorMaterial": "wood_floor_oak"
+        },
+        {
+          "name": "Hall",
+          "polygon": [
+            [
+              0,
+              5
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              4,
+              10
+            ],
+            [
+              0,
+              10
+            ]
+          ],
+          "floorMaterial": "tiles_gray"
+        },
+        {
+          "name": "Bathroom",
+          "polygon": [
+            [
+              4,
+              5
+            ],
+            [
+              6.5,
+              5
+            ],
+            [
+              6.5,
+              10
+            ],
+            [
+              4,
+              10
+            ]
+          ],
+          "floorMaterial": "tiles_white"
+        },
+        {
+          "name": "Kitchen",
+          "polygon": [
+            [
+              6.5,
+              5
+            ],
+            [
+              12,
+              5
+            ],
+            [
+              12,
+              10
+            ],
+            [
+              6.5,
+              10
+            ]
+          ],
+          "floorMaterial": "tiles_white"
+        }
+      ],
+      "stairs": [
+        {
+          "id": "main_stair",
+          "type": "U",
+          "start": [
+            3.4,
+            6.35
+          ],
+          "direction": "north",
+          "width": 1.0,
+          "tread": 0.26,
+          "split": 9,
+          "turn": "left",
+          "railing": "both"
+        }
+      ],
+      "furniture": [
+        {
+          "type": "rug",
+          "position": [
+            3.2,
+            2.6
+          ],
+          "width": 3.0,
+          "depth": 2.0
+        },
+        {
+          "type": "sofa",
+          "position": [
+            3.2,
+            1.3
+          ],
+          "facing": "north",
+          "width": 2.2
+        },
+        {
+          "type": "coffee_table",
+          "position": [
+            3.2,
+            2.7
+          ]
+        },
+        {
+          "type": "tv_stand",
+          "position": [
+            3.2,
+            4.7
+          ],
+          "facing": "south",
+          "width": 1.8
+        },
+        {
+          "type": "tv",
+          "position": [
+            3.2,
+            4.75
+          ],
+          "elevation": 0.5,
+          "facing": "south"
+        },
+        {
+          "type": "armchair",
+          "position": [
+            5.6,
+            2.7
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "floor_lamp",
+          "position": [
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "type": "plant",
+          "position": [
+            6.5,
+            0.5
+          ]
+        },
+        {
+          "type": "table",
+          "position": [
+            9.5,
+            3.0
+          ],
+          "width": 1.8,
+          "depth": 0.9
+        },
+        {
+          "type": "chair",
+          "position": [
+            9.0,
+            2.3
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "chair",
+          "position": [
+            10.0,
+            2.3
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "chair",
+          "position": [
+            9.0,
+            3.7
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "chair",
+          "position": [
+            10.0,
+            3.7
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "kitchen_counter",
+          "position": [
+            8.75,
+            9.55
+          ],
+          "width": 3.5,
+          "facing": "south"
+        },
+        {
+          "type": "fridge",
+          "position": [
+            6.95,
+            6.0
+          ],
+          "facing": "east"
+        },
+        {
+          "type": "stove",
+          "position": [
+            11.55,
+            7.5
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "kitchen_island",
+          "position": [
+            9.2,
+            7.6
+          ],
+          "width": 2.0,
+          "facing": "south"
+        },
+        {
+          "type": "bar_stool",
+          "position": [
+            8.7,
+            6.85
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "bar_stool",
+          "position": [
+            9.7,
+            6.85
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "toilet",
+          "position": [
+            4.45,
+            9.48
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "bathroom_sink",
+          "position": [
+            5.6,
+            9.58
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "shower",
+          "position": [
+            6.0,
+            8.0
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "plant",
+          "position": [
+            0.4,
+            9.5
+          ]
+        },
+        {
+          "type": "bench",
+          "position": [
+            0.35,
+            6.6
+          ],
+          "facing": "east"
+        }
+      ],
+      "terraces": [
+        {
+          "id": "patio",
+          "name": "Patio",
+          "polygon": [
+            [
+              7.3,
+              -3.2
+            ],
+            [
+              12.3,
+              -3.2
+            ],
+            [
+              12.3,
+              -0.15
+            ],
+            [
+              7.3,
+              -0.15
+            ]
+          ],
+          "material": "paving_stone",
+          "thickness": 0.15
+        }
+      ]
+    },
+    {
+      "id": "upper",
+      "name": "Upper floor",
+      "height": 3,
+      "walls": [
+        {
+          "id": "ext2",
+          "points": [
+            [
+              0,
+              0
+            ],
+            [
+              12,
+              0
+            ],
+            [
+              12,
+              10
+            ],
+            [
+              0,
+              10
+            ]
+          ],
+          "closed": true
+        },
+        {
+          "id": "w2_mid",
+          "points": [
+            [
+              0,
+              5
+            ],
+            [
+              12,
+              5
+            ]
+          ]
+        },
+        {
+          "id": "w2_bedrooms",
+          "points": [
+            [
+              6.5,
+              0
+            ],
+            [
+              6.5,
+              5
+            ]
+          ]
+        },
+        {
+          "id": "w2_corridor",
+          "points": [
+            [
+              4,
+              6.3
+            ],
+            [
+              12,
+              6.3
+            ]
+          ]
+        },
+        {
+          "id": "w2_stair",
+          "points": [
+            [
+              4,
+              6.3
+            ],
+            [
+              4,
+              10
+            ]
+          ]
+        },
+        {
+          "id": "w2_bath_study",
+          "points": [
+            [
+              7,
+              6.3
+            ],
+            [
+              7,
+              10
+            ]
+          ]
+        }
+      ],
+      "openings": [
+        {
+          "id": "door_master",
+          "type": "door",
+          "at": [
+            5.5,
+            5
+          ],
+          "swing": "out"
+        },
+        {
+          "id": "door_bed2",
+          "type": "door",
+          "at": [
+            7.5,
+            5
+          ],
+          "swing": "out",
+          "hinge": "right"
+        },
+        {
+          "id": "door_bath2",
+          "type": "door",
+          "at": [
+            5.5,
+            6.3
+          ],
+          "width": 0.8,
+          "swing": "out"
+        },
+        {
+          "id": "door_study",
+          "type": "door",
+          "at": [
+            8.0,
+            6.3
+          ],
+          "swing": "out"
+        },
+        {
+          "id": "win_master_1",
+          "type": "window",
+          "at": [
+            2.0,
+            0
+          ],
+          "width": 1.6
+        },
+        {
+          "id": "win_master_2",
+          "type": "window",
+          "at": [
+            4.8,
+            0
+          ],
+          "width": 1.2
+        },
+        {
+          "id": "win_master_w",
+          "type": "window",
+          "at": [
+            0,
+            2.5
+          ],
+          "width": 1.2
+        },
+        {
+          "id": "win_bed2",
+          "type": "window",
+          "at": [
+            9.25,
+            0
+          ],
+          "width": 1.6
+        },
+        {
+          "id": "win_bed2_e",
+          "type": "window",
+          "at": [
+            12,
+            2.5
+          ],
+          "width": 1.2
+        },
+        {
+          "id": "win_study_e",
+          "type": "window",
+          "at": [
+            12,
+            8.2
+          ],
+          "width": 1.2
+        },
+        {
+          "id": "win_study_n",
+          "type": "window",
+          "at": [
+            9.5,
+            10
+          ],
+          "width": 1.6
+        },
+        {
+          "id": "win_bath2",
+          "type": "window",
+          "at": [
+            5.5,
+            10
+          ],
+          "width": 0.8,
+          "height": 0.8,
+          "sill": 1.4,
+          "glassMaterial": "glass_frosted"
+        },
+        {
+          "id": "win_stair",
+          "type": "window",
+          "at": [
+            2.85,
+            10
+          ],
+          "width": 1.2,
+          "sill": 1.0,
+          "style": "grid"
+        },
+        {
+          "id": "balcony_door",
+          "type": "door",
+          "at": [
+            3.5,
+            0
+          ],
+          "style": "glass",
+          "swing": "in"
+        }
+      ],
+      "rooms": [
+        {
+          "name": "Master bedroom",
+          "polygon": [
+            [
+              0,
+              0
+            ],
+            [
+              6.5,
+              0
+            ],
+            [
+              6.5,
+              5
+            ],
+            [
+              0,
+              5
+            ]
+          ],
+          "floorMaterial": "wood_floor_light"
+        },
+        {
+          "name": "Bedroom 2",
+          "polygon": [
+            [
+              6.5,
+              0
+            ],
+            [
+              12,
+              0
+            ],
+            [
+              12,
+              5
+            ],
+            [
+              6.5,
+              5
+            ]
+          ],
+          "floorMaterial": "carpet_beige"
+        },
+        {
+          "name": "Corridor",
+          "polygon": [
+            [
+              0,
+              5
+            ],
+            [
+              12,
+              5
+            ],
+            [
+              12,
+              6.3
+            ],
+            [
+              4,
+              6.3
+            ],
+            [
+              4,
+              10
+            ],
+            [
+              0,
+              10
+            ]
+          ],
+          "floorMaterial": "wood_floor_oak"
+        },
+        {
+          "name": "Bathroom",
+          "polygon": [
+            [
+              4,
+              6.3
+            ],
+            [
+              7,
+              6.3
+            ],
+            [
+              7,
+              10
+            ],
+            [
+              4,
+              10
+            ]
+          ],
+          "floorMaterial": "tiles_blue"
+        },
+        {
+          "name": "Study",
+          "polygon": [
+            [
+              7,
+              6.3
+            ],
+            [
+              12,
+              6.3
+            ],
+            [
+              12,
+              10
+            ],
+            [
+              7,
+              10
+            ]
+          ],
+          "floorMaterial": "wood_floor_walnut"
+        }
+      ],
+      "railings": [
+        {
+          "points": [
+            [
+              2.85,
+              6.61
+            ],
+            [
+              3.94,
+              6.61
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              1.8,
+              6.61
+            ],
+            [
+              1.8,
+              9.43
+            ],
+            [
+              3.94,
+              9.43
+            ]
+          ]
+        }
+      ],
+      "furniture": [
+        {
+          "type": "bed",
+          "position": [
+            3.2,
+            3.85
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "nightstand",
+          "position": [
+            1.95,
+            4.65
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "nightstand",
+          "position": [
+            4.45,
+            4.65
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "wardrobe",
+          "position": [
+            0.45,
+            1.0
+          ],
+          "facing": "east",
+          "width": 1.4
+        },
+        {
+          "type": "rug",
+          "position": [
+            3.2,
+            3.2
+          ],
+          "width": 2.6,
+          "depth": 1.8,
+          "materials": {
+            "main": "carpet_gray"
+          }
+        },
+        {
+          "type": "dresser",
+          "position": [
+            5.9,
+            2.4
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "bed",
+          "position": [
+            10.9,
+            3.9
+          ],
+          "width": 1.2,
+          "facing": "south",
+          "materials": {
+            "duvet": "fabric_blue"
+          }
+        },
+        {
+          "type": "desk",
+          "position": [
+            8.0,
+            0.5
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "chair",
+          "position": [
+            8.0,
+            1.15
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "bookshelf",
+          "position": [
+            6.75,
+            2.6
+          ],
+          "facing": "east"
+        },
+        {
+          "type": "bathtub",
+          "position": [
+            5.0,
+            9.45
+          ],
+          "facing": "south"
+        },
+        {
+          "type": "toilet",
+          "position": [
+            6.55,
+            7.4
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "bathroom_sink",
+          "position": [
+            6.65,
+            8.6
+          ],
+          "facing": "west"
+        },
+        {
+          "type": "desk",
+          "position": [
+            9.5,
+            9.48
+          ],
+          "width": 1.6,
+          "facing": "south"
+        },
+        {
+          "type": "office_chair",
+          "position": [
+            9.5,
+            8.9
+          ],
+          "facing": "north"
+        },
+        {
+          "type": "bookshelf",
+          "position": [
+            11.67,
+            6.95
+          ],
+          "facing": "west",
+          "options": {
+            "books": true
+          }
+        },
+        {
+          "type": "armchair",
+          "position": [
+            7.8,
+            7.4
+          ],
+          "facing": "east"
+        },
+        {
+          "type": "plant",
+          "position": [
+            11.5,
+            0.5
+          ]
+        }
+      ],
+      "roofs": [
+        {
+          "type": "gable",
+          "polygon": [
+            [
+              0,
+              0
+            ],
+            [
+              12,
+              0
+            ],
+            [
+              12,
+              10
+            ],
+            [
+              0,
+              10
+            ]
+          ],
+          "pitch": 35,
+          "overhang": 0.5,
+          "material": "roof_tiles_red"
+        }
+      ],
+      "terraces": [
+        {
+          "id": "balcony",
+          "name": "Balcony",
+          "polygon": [
+            [
+              1.0,
+              -1.5
+            ],
+            [
+              5.5,
+              -1.5
+            ],
+            [
+              5.5,
+              0
+            ],
+            [
+              1.0,
+              0
+            ]
+          ],
+          "material": "wood_floor_gray",
+          "railingStyle": "glass"
+        }
+      ]
+    }
+  ]
+}

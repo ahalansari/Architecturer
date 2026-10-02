@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecturer Viewer</title>
+    <link rel="stylesheet" href="/viewer/viewer.css" />
+    <script type="importmap">
+      { "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <aside id="panel">
+      <header>
+        <h1 id="title">Architecturer</h1>
+        <div id="stats" class="muted"></div>
+      </header>
+      <section>
+        <h2>Levels</h2>
+        <div id="levels"></div>
+        <label class="row">Cut above
+          <select id="cut"><option value="">— none —</option></select>
+        </label>
+      </section>
+      <section>
+        <h2>Show</h2>
+        <label class="row"><input type="checkbox" data-kind="roof" checked /> Roofs</label>
+        <label class="row"><input type="checkbox" data-kind="furniture" checked /> Furniture</label>
+        <label class="row"><input type="checkbox" data-kind="site" checked /> Ground</label>
+        <label class="row"><input type="checkbox" id="wire" /> Wireframe</label>
+        <label class="row"><input type="checkbox" id="shadows" checked /> Shadows</label>
+      </section>
+      <section>
+        <h2>View</h2>
+        <div class="buttons">
+          <button data-view="iso">3D</button>
+          <button data-view="top">Top</button>
+          <button data-view="south">South</button>
+          <button data-view="east">East</button>
+          <button id="planBtn">2D plan</button>
+        </div>
+        <a id="download" href="/model.glb" download="model.glb" class="button">Download GLB</a>
+      </section>
+      <section id="picked" hidden>
+        <h2>Selected</h2>
+        <pre id="pickedInfo"></pre>
+      </section>
+      <section id="issues" hidden>
+        <h2>Problems</h2>
+        <ul id="issueList"></ul>
+      </section>
+    </aside>
+    <div id="plan" hidden><img id="planImg" alt="floor plan" /><button id="planClose">Close</button></div>
+    <div id="status"></div>
+    <script type="module" src="/viewer/viewer.js"></script>
+  </body>
+</html>
