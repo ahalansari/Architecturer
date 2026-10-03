@@ -145,6 +145,17 @@ Call get_schema for every field; this guide covers conventions and good practice
   a new build (structure: concrete, rebar, formwork, blockwork). Products without a price are allowances: research
   their prices and set them with import_product {id, price, currency}.
 
+## Air conditioning (project.hvac)
+- Designed automatically: cooling loads per room at Kuwait conditions (48 °C / 24 °C) from the walls' construction,
+  glass by orientation, the roof, people, the lighting design, appliances and fresh air; then the units. Default system
+  "packaged": rooftop packaged units, ducted, one per floor (small floors share one unit through one riser); also
+  "ducted_split", "split" (wall units per room) or "none". Bathrooms (extract), garages and outdoor rooms are not cooled.
+- hvac_design: units (TR, L/s, kW, breaker), room loads, coordination issues; render_plan sheet "hvac": ducts to scale,
+  diffusers, return grilles, the riser, thermostat, roof units. Cost: section J of cost_estimate. Contract: package hvac.
+- Ducts run in false ceilings: give conditioned rooms a ceilingHeight about 0.3–0.4 m below the slab soffit, or the
+  design reports where ducts would be exposed. Steer it with hvac {zones:[{rooms:[...], shaft:[x,y]}], omitRooms,
+  maxUnitTR, glazing:{u, shgc}, outdoorTemp}.
+
 ## Works contracts
 - generate_contract (arch contract): bilingual contract (English, then Arabic, Arabic prevails) per trade package as
   .docx + print-ready .html: main, structure (هيكل أسود), blockwork, plaster, waterproofing, tiling, painting, ceilings,

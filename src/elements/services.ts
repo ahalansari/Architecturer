@@ -141,7 +141,7 @@ export interface PipeRun {
 
 export interface Circuit {
   id: string;
-  kind: "lighting" | "power" | "kitchen" | "cooker" | "appliance" | "detectors";
+  kind: "lighting" | "power" | "kitchen" | "cooker" | "appliance" | "detectors" | "hvac";
   rating: number;
   label: string;
   rooms: string[];
@@ -187,8 +187,8 @@ export interface ServicesContext {
 // Room kinds
 // ---------------------------------------------------------------------------
 
-type RoomKind = "bath" | "kitchen" | "bedroom" | "living" | "study" | "hall" | "closet" | "laundry" | "garage" | "outdoor" | "other";
-const KIND_RE: [RoomKind, RegExp][] = [
+export type RoomKind = "bath" | "kitchen" | "bedroom" | "living" | "study" | "hall" | "closet" | "laundry" | "garage" | "outdoor" | "other";
+export const KIND_RE: [RoomKind, RegExp][] = [
   ["outdoor", /terrace|balcony|\bdeck\b|patio|veranda|porch|garden|courtyard|\byard\b|roof/i],
   ["bath", /bath|\bwc\b|toilet|shower|en-?suite|powder|lavatory|washroom|restroom/i],
   ["laundry", /laundry|utility/i],

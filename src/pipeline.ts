@@ -5,6 +5,8 @@ import { generateTextures } from "./materials/textures.js";
 import type { MaterialDef, TextureSet } from "./materials/types.js";
 import { parseProject, type Project } from "./schema/schema.js";
 import { checkLayout } from "./validate/layout.js";
+import { designHvac, hvacNode, type HvacDesign } from "./elements/hvac.js";
+import { constructionSystem } from "./elements/construction.js";
 import { applyStyles } from "./elements/styles.js";
 import { applyProducts } from "./elements/products.js";
 import { creditsFor, prepareAssets } from "./assets/prepare.js";
@@ -24,6 +26,8 @@ export interface Compiled {
   credits: AssetSource[];
   /** Informational messages (not problems): models simplified for real-time use, vendor sizes corrected... */
   notes?: string[];
+  /** Air conditioning: cooling loads, units, ducted layout and coordination issues. */
+  hvac?: HvacDesign;
 }
 
 const MISSING: MaterialDef = {
@@ -60,6 +64,16 @@ export function compile(input: unknown): Compiled {
     warnings.push(`layout checks failed: ${(e as Error).message}`);
   }
 
+  // air conditioning: loads, units, ducted layout, and the equipment in 3D
+  let hvac: HvacDesign | undefined;
+  try {
+    hvac = designHvac(project as never, levels, project.construction?.exteriorWall ?? constructionSystem(project.construction).exteriorWall);
+    const node = hvacNode(hvac, levels, (l) => project.levels[l].rooms.length);
+    if (node) root.children.push(node);
+  } catch (e) {
+    warnings.push(`air conditioning design failed: ${(e as Error).message}`);
+  }
+
   const materials = new Map<string, MaterialDef>();
   const unknown = new Set<string>();
   let triangles = 0, meshes = 0, nodes = 0;
@@ -91,6 +105,7 @@ export function compile(input: unknown): Compiled {
     project,
     root,
     levels,
+    hvac,
     materials,
     errors,
     warnings,

@@ -423,6 +423,18 @@ const COMMANDS: Record<string, Command> = {
       for (const t of totals) console.log(`${t.vendor}: ${t.items} item(s), ${t.total} ${t.currency}`);
     },
   },
+  hvac: {
+    usage: "arch hvac <plan.json> [--brief]",
+    desc: "Air conditioning: cooling loads per room, units (packaged rooftop by default), coordination issues; the drawing is `arch plan --sheet hvac`",
+    file: true,
+    flags: [{ name: "brief", desc: "units and issues only, no room table" }],
+    async run(file, f) {
+      const c = await compiled(file);
+      const { hvacReport } = await import("../elements/hvac-report.js");
+      if (!c.hvac) throw new Error("no HVAC design (see the warnings)");
+      console.log(hvacReport(c.hvac, c.levels.map((l) => l.name), !f.brief));
+    },
+  },
   contract: {
     usage: "arch contract <plan.json> --package <id> [--labour|--supply] [-o base] [--contractor name] [--start YYYY-MM-DD] [--days n]",
     desc: "Bilingual works contract (English, then Arabic) for a trade package, as .docx and print-ready .html: main, structure, blockwork, plaster, waterproofing, tiling, painting, ceilings, doors_windows, electrical, plumbing, joinery, external",

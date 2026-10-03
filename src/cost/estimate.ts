@@ -95,7 +95,8 @@ export const DEFAULT_RATES: Record<string, number> = {
   // joinery (parametric runs without products)
   "joinery:kitchen_base": 150, "joinery:kitchen_upper": 105, "joinery:kitchen_tall": 280, "joinery:worktop": 85, "joinery:wardrobe": 240,
   "joinery:vanity": 220, "joinery:media": 200, "joinery:shelving": 140, "joinery:desk": 120, "joinery:bench": 120,
-  "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "appliance:dishwasher": 180, "appliance:extractor": 90, "appliance:oven": 160, "appliance:hob": 110, "appliance:fridge": 260, "appliance:microwave": 60,
+  "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "hvac:packaged_tr": 320, "hvac:ducted_split_tr": 300, "hvac:split_tr": 220, "hvac:duct_m2": 9, "hvac:diffuser": 15, "hvac:return_grille": 12, "hvac:thermostat": 25, "hvac:power_supply": 120, "hvac:commissioning": 60,
+  "appliance:dishwasher": 180, "appliance:extractor": 90, "appliance:oven": 160, "appliance:hob": 110, "appliance:fridge": 260, "appliance:microwave": 60,
   // electrical
   "point:switch": 12, "point:switch_2way": 16, "point:dimmer": 22, "point:double_socket": 14, "point:socket": 12, "point:usb_socket": 18,
   "point:data": 20, "point:tv": 18, "point:shaver": 28, "point:cooker": 30, "point:spur": 18, "point:fan": 35, "point:ac": 280, "point:db": 220,
@@ -612,6 +613,46 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
     for (const [st, m] of railings) add(I, { description: `Balustrade: ${st}`, qty: m, unit: "m", rate: rate(`railing:${st}`), basis: "measured", key: `railing:${st}` });
   }
 
+  // ---- J. air conditioning, from the HVAC design ----
+  const hv = c.hvac;
+  if (hv && hv.system !== "none" && hv.units.length) {
+    const J = sec("J", "Air conditioning (HVAC)");
+    const KIND = { packaged: "Rooftop packaged unit", ducted_split: "Ducted split unit with roof condenser", split: "Wall split unit with roof condenser" } as const;
+    const key = { packaged: "hvac:packaged_tr", ducted_split: "hvac:ducted_split_tr", split: "hvac:split_tr" } as const;
+    const bySize = new Map<string, { kind: keyof typeof KIND; size: number; n: number }>();
+    for (const u of hv.units) {
+      const k = `${u.kind}:${u.size}`;
+      const e = bySize.get(k) ?? { kind: u.kind, size: u.size, n: 0 };
+      e.n++;
+      bySize.set(k, e);
+    }
+    for (const e of bySize.values())
+      add(J, {
+        description: `${KIND[e.kind]} ${e.size} TR${e.n > 1 ? ` (${e.n} no)` : ""}${e.kind === "packaged" ? ", on steel base with anti-vibration mounts, connections and start-up" : ", refrigerant piping and condensate drain"}`,
+        qty: e.size * e.n,
+        unit: "TR",
+        rate: rate(key[e.kind]),
+        basis: "measured",
+        key: key[e.kind],
+      });
+    const ducts = hv.levels.flatMap((l) => l.ducts);
+    const sheet = ducts.reduce((a, d) => a + polyLen(d.pts) * 2 * (d.w + d.h), 0);
+    add(J, { description: "Ductwork: galvanised sheet steel, insulated, incl. hangers, risers and fittings (by surface area)", qty: sheet, unit: "m²", rate: rate("hvac:duct_m2"), basis: "measured", key: "hvac:duct_m2" });
+    const terms = hv.levels.flatMap((l) => l.terminals);
+    add(J, { description: "Supply air diffusers 600×600 with plenum boxes and flexible connections", qty: terms.filter((t) => t.kind === "supply").length, unit: "no", rate: rate("hvac:diffuser"), basis: "count", key: "hvac:diffuser" });
+    add(J, { description: "Return air grilles with plenum boxes", qty: terms.filter((t) => t.kind === "return").length, unit: "no", rate: rate("hvac:return_grille"), basis: "count", key: "hvac:return_grille" });
+    add(J, { description: "Wall thermostats incl. control wiring", qty: hv.levels.reduce((a, l) => a + l.thermostats.length, 0), unit: "no", rate: rate("hvac:thermostat"), basis: "count", key: "hvac:thermostat" });
+    add(J, { description: "Power supply to each unit: cable from the DB, isolator", qty: hv.units.length, unit: "no", rate: rate("hvac:power_supply"), basis: "count", key: "hvac:power_supply" });
+    add(J, { description: "Testing, air balancing and commissioning", qty: hv.units.length, unit: "unit", rate: rate("hvac:commissioning"), basis: "count", key: "hvac:commissioning" });
+    const perTR = hv.totals.tr ? J.lines.reduce((x, l) => x + l.amount, 0) / hv.totals.tr : 0;
+    const bench = marketRate("benchmark:hvac_per_tr_installed");
+    notes.push(
+      `Air conditioning: ${hv.totals.tr} TR for ${hv.totals.area} m² conditioned (${hv.totals.m2PerTR} m²/TR), sized from room cooling loads at Kuwait design conditions; section J works out at ${round(perTR, 0)} ${cur}/TR` +
+        (bench?.value ? ` (Kuwaiti all-in villa AC contracts quote ${bench.low ?? bench.value}–${bench.high ?? bench.value} ${cur}/TR)` : "") +
+        `${hv.issues.length ? `; ${hv.issues.length} coordination issue(s) in the HVAC design` : ""}.`,
+    );
+  }
+
   // ---- totals ----
   const out = [...sections.values()].filter((s) => s.lines.length).sort((a, b) => a.code.localeCompare(b.code));
   // where every line's rate came from
@@ -663,7 +704,7 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
     "Market rates are single quoted prices or mid-points of published ranges, not tenders — several are GCC (UAE/KSA) prices converted to KWD where no Kuwait price was published; check 'low' confidence lines with a local quote.",
     "Preliminaries, overhead & profit and contingency default to published GCC percentages for contractor-led work; for a small owner-managed fit-out set project.costs.preliminaries / overheadProfit lower.",
     "Vendor prices are as read from the product pages; delivery, assembly by the vendor and promotions are not included.",
-    "Excludes: HVAC (except listed AC units), permits, base-building works outside the scope, loose kitchenware and soft goods not modelled.",
+    `Excludes: ${hv && hv.system !== "none" && hv.units.length ? "" : "HVAC (except listed AC units), "}permits and authority fees, base-building works outside the scope, loose kitchenware and soft goods not modelled.`,
   );
   if (unpriced.size)
     notes.unshift(

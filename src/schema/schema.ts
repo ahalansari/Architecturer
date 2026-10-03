@@ -14,6 +14,7 @@ import { FinishesSchema } from "../elements/finishes.js";
 import { LightSchema } from "../elements/lighting.js";
 import { ElectricalSchema, PlumbingSchema, ServicesSchema } from "../elements/services.js";
 import { ProductSchema } from "../elements/products.js";
+import { HvacSchema } from "../elements/hvac.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 import { applyConstructionDefaults, ConstructionSchema, WALL_ASSEMBLY_IDS } from "../elements/construction.js";
@@ -410,6 +411,7 @@ export const ProjectSchema = z
       .prefault({})
       .describe("Cost estimate settings (arch estimate / MCP cost_estimate)"),
     products: z.array(ProductSchema).default([]).describe("Vendor / library items (import_product) placed with furniture.product; shopping_list totals them"),
+    hvac: HvacSchema,
     contract: z
       .object({
         owner: PartySchema.optional().describe("First party (the owner); generate_contract fills it in every contract"),

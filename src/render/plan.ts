@@ -7,6 +7,7 @@ import { caseworkPlan, resolveLevelCasework } from "../elements/casework.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
+import { AC, ductSVG, roofUnitSVG, shaftSVG, splitSVG, terminalSVG, thermostatSVG } from "./plan-hvac.js";
 import { EL, elecSymbol, fixtureSymbol, PL, pipeSVG, plumbPointSymbol, switchWiring } from "./plan-services.js";
 import { FIXTURE_LABEL } from "../elements/services.js";
 import { ceilingLevels, dimension, fcpRoom, fmtH, levelKey, levelTag, rcpRoom, traySection } from "./plan-ceilings.js";
@@ -36,7 +37,7 @@ export interface PlanOptions {
   sheet?: PlanSheet;
 }
 
-export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing"] as const;
+export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing", "hvac"] as const;
 export type PlanSheet = (typeof PLAN_SHEETS)[number];
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -243,6 +244,9 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   /** Ceiling sheets look up: no furniture, stairs or door swings. */
   const ceilingSheet = sheet === "rcp" || sheet === "false_ceiling";
   const svc = info.services;
+  const hv = c.hvac;
+  const hvL = hv?.levels[li];
+  const hvRooms = new Map((hv?.rooms ?? []).filter((r) => r.level === li).map((r) => [r.room, r]));
   const wetRooms = new Set(svc.fixtures.map((f) => f.room));
   const fixtures: PlanFixture[] = c.root ? levelFixtures(c, lv) : [];
   const tones = new Map<string, Tone>();
@@ -325,7 +329,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       `</defs>`,
   );
   out.push(`<rect width="100%" height="100%" fill="#ffffff"/>`);
-  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan", electrical: " — electrical layout", plumbing: " — plumbing layout" }[sheet];
+  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan", electrical: " — electrical layout", plumbing: " — plumbing layout", hvac: " — air conditioning layout" }[sheet];
   out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)}${sheetTitle} (z=${info.elevation.toFixed(2)} m)</text>`);
 
   // grid with coordinates every meter (labels every `step` meters)
@@ -370,6 +374,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       : sheet === "lighting" ? luxFill(lux[i].lux)
       : sheet === "electrical" ? "#f8f7f3"
       : sheet === "plumbing" ? (wetRooms.has(i) ? "#e8f2fa" : "#f8f7f3")
+      : sheet === "hvac" ? (hvRooms.get(i)?.conditioned ? "#eef5fb" : "#f6f5f2")
       : ROOM_COLORS[i % ROOM_COLORS.length];
     out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="${fill}" stroke="none"/>`);
   });
@@ -704,7 +709,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   // false ceiling: the cut-outs, faded; ceiling sheets skip free-standing lamps)
   const bigFixtures = sheet === "lighting" || sheet === "electrical" || ceilingSheet;
   const fr = bigFixtures ? Math.max(5, Math.min(10, S * 0.13)) : Math.max(3, Math.min(6, S * 0.08));
-  const fixtureSyms = sheet === "plumbing" ? [] : fixtures.filter((f) => sheet === "lighting" || !f.lamp);
+  const fixtureSyms = sheet === "plumbing" || sheet === "hvac" ? [] : fixtures.filter((f) => sheet === "lighting" || !f.lamp);
   const fixtureSoft: Box[] = fixtureSyms.map((f) => {
     const [x, y] = px(f.at);
     return { x0: x - fr, y0: y - fr, x1: x + fr, y1: y + fr };
@@ -763,6 +768,40 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
   }
 
+  if (sheet === "hvac" && hv && hvL) {
+    // returns under supplies, then the riser, terminals, thermostats, splits and roof units
+    for (const d of [...hvL.ducts].sort((a, b) => (a.kind === "return" ? 0 : 1) - (b.kind === "return" ? 0 : 1))) out.push(ductSVG(d, px, S));
+    const tr = Math.max(5, Math.min(10, 0.3 * S));
+    for (const sh of hvL.shafts) {
+      out.push(shaftSVG(sh.at, sh.size, px, S));
+      const [x, y] = px(sh.at);
+      svcSoft.push({ x0: x - tr * 1.5, y0: y - tr * 1.5, x1: x + tr * 1.5, y1: y + tr * 1.5 });
+      if (labels) L.push({ lines: [{ text: `${sh.unit} riser`, size: Math.max(8, fs - 3), color: AC.shaft, bold: true }], prio: 2, optional: true, cands: [{ x, y: y - tr * 2.4, cost: 0 }, { x, y: y + tr * 2.4, cost: 2 }, { x: x + tr * 4, y, cost: 4 }, { x: x - tr * 4, y, cost: 4 }] });
+    }
+    for (const t of hvL.terminals) {
+      out.push(terminalSVG(t, px, tr * 0.8));
+      const [x, y] = px(t.at);
+      svcSoft.push({ x0: x - tr, y0: y - tr, x1: x + tr, y1: y + tr });
+      if (labels && t.kind === "supply")
+        L.push({ lines: [{ text: `${t.airflow}`, size: Math.max(7, fs - 5), color: AC.supply }], prio: 5, optional: true, cands: [{ x, y: y + tr * 1.9, cost: 0 }, { x, y: y - tr * 1.9, cost: 1 }, { x: x + tr * 2.4, y, cost: 3 }] });
+    }
+    for (const t of hvL.thermostats) out.push(thermostatSVG(t.at, px, tr * 0.75));
+    for (const sp of hvL.splits) {
+      out.push(splitSVG(sp.at, sp.dir, px, S));
+      if (labels) {
+        const [x, y] = px(sp.at);
+        L.push({ lines: [{ text: `${sp.unit} ${sp.tr} TR`, size: Math.max(8, fs - 4), color: AC.unit, bold: true }], prio: 2, optional: true, cands: [{ x, y: y - tr * 2, cost: 0 }, { x, y: y + tr * 2, cost: 1 }] });
+      }
+    }
+    for (const u of hv.units.filter((u) => u.onRoof && u.onLevel === li)) {
+      out.push(roofUnitSVG(u, px));
+      if (labels && u.footprint) {
+        const [x, y] = px(polygonCentroid(u.footprint));
+        L.push({ lines: [{ text: `${u.id} ${u.size} TR`, size: Math.max(8, fs - 3), color: AC.unit, bold: true }, { text: "on the roof above", size: Math.max(7, fs - 5), color: AC.unit }], prio: 1.5, plate: "#ffffffd0", cands: [{ x, y, cost: 0 }, { x, y: y - fs * 2, cost: 2 }] });
+      }
+    }
+  }
+
   if ((sheet === "lighting" || sheet === "rcp") && labels) {
     const seen = new Set<string>();
     for (const f of fixtures) {
@@ -801,6 +840,12 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       const parts = [plural(n(["double_socket", "socket", "usb_socket"]), "socket"), plural(n(["switch", "switch_2way", "dimmer"]), "switch")].filter(Boolean);
       const circ = [...new Set(pts.map((e) => e.circuit).filter(Boolean))].join(" ");
       return ci < 0 ? [] : [...(parts.length ? [{ text: parts.join(" · "), size: small, color: EL.power }] : []), ...(circ ? [{ text: circ, size: small, color: "#777" }] : [])];
+    }
+    if (sheet === "hvac") {
+      const rl = ci >= 0 ? hvRooms.get(ci) : undefined;
+      if (!rl) return [];
+      if (!rl.conditioned) return [{ text: rl.reason?.split(":")[0] ?? "not conditioned", size: small, color: "#999" }];
+      return [{ text: `${rl.tr} TR · ${(rl.total / 1000).toFixed(1)} kW`, size: small, color: AC.supply, bold: true }, { text: `${rl.supply} L/s · ${rl.zone ?? ""}`, size: small, color: "#666" }];
     }
     if (sheet === "plumbing") {
       const fx = svc.fixtures.filter((f) => f.room === ci && ci >= 0);
@@ -869,7 +914,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         { text: `${polygonArea(pg).toFixed(1)} m²`, size: fs - 2, color: "#555" },
         ...roomExtra(r),
       ],
-      plate: sheet === "finishes" || ceilingSheet || sheet === "electrical" || sheet === "plumbing" ? "#fffffff0" : undefined,
+      plate: sheet === "finishes" || ceilingSheet || sheet === "electrical" || sheet === "plumbing" || sheet === "hvac" ? "#fffffff0" : undefined,
       prio: 0,
       cands,
       within: pgPx,
@@ -1013,7 +1058,10 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       lg.push(`<text x="${x0}" y="${y}" font-size="9" fill="#777">other heights noted beside the symbol (m)</text>`);
       y += 22;
       head("Circuits");
-      for (const cc of svc.circuits) {
+      // air-conditioning supplies come from the board on the floor that has it
+      const hasDb = (l: LevelInfo) => l.services.electrical.some((e) => e.type === "db");
+      const acCircuits = hasDb(info) || (li === 0 && !c.levels.some(hasDb)) ? hv?.circuits ?? [] : [];
+      for (const cc of [...svc.circuits, ...acCircuits]) {
         lg.push(`<text x="${x0}" y="${y}" font-size="10.5" font-weight="bold" fill="#222">${esc(cc.id)}</text><text x="${x0 + 28}" y="${y}" font-size="10.5" fill="#222">${cc.rating} A · ${esc(cc.label)} · ${cc.points} pt${cc.points > 1 ? "s" : ""}</text>`);
         lg.push(`<text x="${x0 + 28}" y="${y + 11}" font-size="9" fill="#777">${esc(cc.rooms.join(", ").slice(0, 44))}</text>`);
         y += 26;
@@ -1049,6 +1097,49 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         y += 15;
       }
       y += 8;
+    } else if (sheet === "hvac") {
+      const sys = { packaged: "Rooftop packaged units, ducted", ducted_split: "Ducted splits + roof condensers", split: "Wall splits + roof condensers", none: "No air conditioning" }[hv?.system ?? "none"];
+      head("Air conditioning");
+      lg.push(`<text x="${x0}" y="${y}" font-size="10.5" fill="#222">${esc(sys)}</text>`);
+      y += 16;
+      if (hv && hv.units.length) {
+        lg.push(`<text x="${x0}" y="${y}" font-size="10.5" fill="#222">${hv.totals.tr} TR for ${hv.totals.area} m² (${hv.totals.m2PerTR} m²/TR, ${hv.totals.wPerM2} W/m²)</text>`);
+        y += 22;
+      }
+      head("Symbols");
+      const T0 = (p: Vec2) => p;
+      row(ductSVG({ kind: "supply", unit: "", pts: [[x0 + 2, y], [x0 + 26, y]], airflow: 0, w: 0.25, h: 0.2 }, T0, 32), "supply duct (to scale)");
+      row(ductSVG({ kind: "return", unit: "", pts: [[x0 + 2, y], [x0 + 26, y]], airflow: 0, w: 0.25, h: 0.2 }, T0, 32), "return duct");
+      row(terminalSVG({ kind: "supply", at: [x0 + 14, y] }, T0, 6), "supply diffuser 600×600", "figure: air, L/s");
+      row(terminalSVG({ kind: "return", at: [x0 + 14, y] }, T0, 6), "return grille");
+      if (hvL?.shafts.length) row(shaftSVG([x0 + 14, y], 0.5, T0, 20), "duct riser to the roof unit");
+      if (hv?.levels.some((l) => l.thermostats.length)) row(thermostatSVG([x0 + 14, y], T0, 6), "thermostat (1.5 m)");
+      if (hv?.units.some((u) => u.onRoof)) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="#f3ecfa" stroke="${AC.unit}" stroke-width="1.4" stroke-dasharray="5 3"/>`, "packaged unit on the roof");
+      if (hvL?.splits.length) row(splitSVG([x0 + 14, y + 4], [0, -1], T0, 24), "wall split indoor unit");
+      y += 4;
+      head("Units");
+      for (const u of hv?.units ?? []) {
+        lg.push(`<text x="${x0}" y="${y}" font-size="10.5" font-weight="bold" fill="${AC.unit}">${esc(u.id)}</text><text x="${x0 + 46}" y="${y}" font-size="10.5" fill="#222">${u.size} TR · load ${u.load} TR · ${u.airflow} L/s</text>`);
+        lg.push(`<text x="${x0 + 46}" y="${y + 11}" font-size="9" fill="#777">${u.freshAir ? `fresh air ${u.freshAir} L/s · ` : ""}${u.kw} kW · ${u.phase}-ph ${u.breaker} A</text>`);
+        y += 26;
+        if (y > H - 40) break;
+      }
+      const loads = [...hvRooms.values()].filter((r) => r.conditioned);
+      if (loads.length) {
+        y += 4;
+        head("Room loads (this floor)");
+        lg.push(`<text x="${x0}" y="${y}" font-size="9.5" fill="#777">room</text><text x="${x0 + 130}" y="${y}" font-size="9.5" fill="#777">kW</text><text x="${x0 + 165}" y="${y}" font-size="9.5" fill="#777">TR</text><text x="${x0 + 200}" y="${y}" font-size="9.5" fill="#777">L/s</text>`);
+        y += 14;
+        for (const r of loads) {
+          lg.push(`<text x="${x0}" y="${y}" font-size="10" fill="#222">${esc(r.name.slice(0, 22))}</text><text x="${x0 + 130}" y="${y}" font-size="10" fill="#222">${(r.total / 1000).toFixed(1)}</text><text x="${x0 + 165}" y="${y}" font-size="10" fill="#222">${r.tr}</text><text x="${x0 + 200}" y="${y}" font-size="10" fill="#222">${r.supply}</text>`);
+          y += 14;
+        }
+      }
+      if (hv?.issues.length) {
+        y += 8;
+        lg.push(`<text x="${x0}" y="${y}" font-size="10" font-weight="bold" fill="#b33">${hv.issues.length} coordination issue${hv.issues.length > 1 ? "s" : ""}: see hvac_design</text>`);
+        y += 16;
+      }
     } else if (sheet === "lighting") {
       fixtureLegend(fixtures);
       head("Estimated average illuminance");

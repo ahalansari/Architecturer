@@ -419,11 +419,12 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         "sheet 'false_ceiling': false ceiling setting-out (every ceiling level colour-coded and tagged above FFL, drop edges, coves, soffit widths, void depth, typical tray section). " +
         "sheet 'electrical': switches (switch legs to the lights), sockets, data / TV, appliance spurs, cooker unit, fans, detectors, DB and the circuit schedule. " +
         "sheet 'plumbing': sanitary fixtures with cold / hot supplies and waste / soil drains to stacks, floor drains, water heaters, main stop valve and the fixture schedule. " +
+        "sheet 'hvac': air conditioning: supply / return ducts to scale, diffusers with airflows, return grilles, the riser, thermostats, roof units, unit schedule and room loads (see hvac_design). " +
         "Both layouts are generated from the design (level.services.auto); add points with level.electrical / level.plumbing, drop auto points with services.omit (ids like sk.master.3 = sk3 on the sheet).",
       inputSchema: {
         path: PathArg,
         level: LevelArg.optional().describe("Default: first level"),
-        sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling | electrical | plumbing"),
+        sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling | electrical | plumbing | hvac"),
       },
       annotations: READ,
     },
@@ -769,19 +770,38 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
     })
     .describe("Anything left out is printed as a blank line to fill in by hand");
   tool(
+    "hvac_design",
+    {
+      title: "Air conditioning design",
+      description:
+        "Cooling loads per room and the air-conditioning design: rooftop packaged units by default (ducted, one per floor or shared by small floors through one riser; split when a floor needs more than maxUnitTR), or ducted splits / wall splits. " +
+        "Loads use Kuwait design conditions (48 °C / 24 °C), the walls' construction, glazing by orientation, the roof, people, the lighting design, appliances and fresh air. Returns units (TR, airflow, kW, breaker), room loads, coordination issues (duct depth vs ceiling void, exposed ducts, roof space) and assumptions. " +
+        "Settings in project.hvac; the layout drawing is render_plan sheet 'hvac'; the cost is section J of cost_estimate; the contract is generate_contract package 'hvac'.",
+      inputSchema: { path: PathArg, rooms: z.boolean().default(true).describe("Include the per-room load table") },
+      annotations: READ,
+    },
+    guard(async ({ path, rooms }, extra) => {
+      const file = ws.plan(path);
+      const r = await job(file, await load(file), { op: "hvac", detail: rooms }, extra, "Calculating loads");
+      if (!r.ok) return fail(r.summary);
+      return ok(text(r.text!));
+    }),
+  );
+
+  tool(
     "generate_contract",
     {
       title: "Generate a works contract",
       description:
         "Bilingual works contract (English, then Arabic; the Arabic text prevails) for one trade package of the plan, as Word (.docx) and print-ready HTML (save as PDF). " +
-        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, joinery (kitchens, wardrobes), external (terraces, balustrades). " +
+        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, hvac (air conditioning), joinery (kitchens, wardrobes), external (terraces, balustrades). " +
         "mode 'labour' = labour only (مصنعية فقط: the owner supplies materials, listed in the contract); 'supply' = supply and installation. The schedule of quantities is measured from the model (full-scope cost estimate); labour-only rates come from researched Kuwait labour rates, otherwise they are estimated as a share of the supply & install rate and marked * (pass rates {'labour:<key>': rate} with the contractor's prices). " +
         "Includes scope steps, specification, materials split, payment stages tied to the work (per slab for structural work), programme, delay penalty, retention, defects period (and decennial liability for structural work), variations, safety, termination and Kuwaiti law. Owner and site address default to project.contract. " +
         (remote ? "Returns download links." : "Writes the files next to the plan (contracts/) unless `output` is given."),
       inputSchema: {
         path: PathArg,
         package: z.enum(PACKAGE_IDS),
-        mode: z.enum(["labour", "supply"]).optional().describe("Default: supply for main, doors_windows and joinery (always supply & install); labour for the other trades"),
+        mode: z.enum(["labour", "supply"]).optional().describe("Default: supply for main, doors_windows, hvac and joinery (always supply & install); labour for the other trades"),
         contractor: Party.optional(),
         owner: Party.optional().describe("Default: project.contract.owner"),
         location: z

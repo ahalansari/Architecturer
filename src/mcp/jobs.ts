@@ -33,7 +33,8 @@ export type JobRequest =
   | (Base & { op: "glb"; opts: ExportOptions })
   | (Base & { op: "bill"; format: "html" | "csv"; scope?: CostScope })
   // works contract (Word and/or HTML) for a trade package
-  | (Base & { op: "contract"; options: ContractOptions; out: { docx?: string; html?: string } });
+  | (Base & { op: "contract"; options: ContractOptions; out: { docx?: string; html?: string } })
+  | (Base & { op: "hvac"; detail: boolean });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -134,6 +135,11 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
       const fmt = await import("../cost/format.js");
       const bill = estimate(c, { scope: req.scope });
       return { ok: true, summary: sum, text: req.format === "csv" ? fmt.billCsv(bill) : fmt.billHtml(bill) };
+    }
+    case "hvac": {
+      const { hvacReport } = await import("../elements/hvac-report.js");
+      if (!c.hvac) return { ok: false, summary: sum };
+      return { ok: true, summary: sum, text: hvacReport(c.hvac, c.levels.map((l) => l.name), req.detail) };
     }
     case "contract": {
       const { buildContract, contractDocument } = await import("../contracts/contract.js");
