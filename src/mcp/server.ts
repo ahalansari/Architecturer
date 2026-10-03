@@ -264,11 +264,14 @@ server.registerTool(
       "2D floor plan image of one level: meter grid with coordinates, walls (with ids), doors with swings, windows, rooms with areas, stairs, furniture footprints (front edge drawn thick). " +
       "sheet 'lighting': fixture symbols with ids, rooms tinted by estimated lux, fixture legend with lumens. sheet 'finishes': floors in their material pattern, wall finish / accent bands, per-room finish schedule. " +
       "sheet 'rcp': reflected ceiling plan (ceiling heights + materials, soffits, coffers, beams, LED coves, cornices, ceiling openings, fixtures). " +
-      "sheet 'false_ceiling': false ceiling setting-out (every ceiling level colour-coded and tagged above FFL, drop edges, coves, soffit widths, void depth, typical tray section).",
+      "sheet 'false_ceiling': false ceiling setting-out (every ceiling level colour-coded and tagged above FFL, drop edges, coves, soffit widths, void depth, typical tray section). " +
+      "sheet 'electrical': switches (switch legs to the lights), sockets, data / TV, appliance spurs, cooker unit, fans, detectors, DB and the circuit schedule. " +
+      "sheet 'plumbing': sanitary fixtures with cold / hot supplies and waste / soil drains to stacks, floor drains, water heaters, main stop valve and the fixture schedule. " +
+      "Both layouts are generated from the design (level.services.auto); add points with level.electrical / level.plumbing, drop auto points with services.omit (ids like sk.master.3 = sk3 on the sheet).",
     inputSchema: {
       path: PathArg,
       level: LevelArg.optional().describe("Default: first level"),
-      sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling"),
+      sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling | electrical | plumbing"),
     },
   },
   guard(async ({ path, level, sheet }) => {

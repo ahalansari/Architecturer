@@ -7,6 +7,8 @@ import { caseworkPlan, resolveLevelCasework } from "../elements/casework.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
+import { EL, elecSymbol, fixtureSymbol, PL, pipeSVG, plumbPointSymbol, switchWiring } from "./plan-services.js";
+import { FIXTURE_LABEL } from "../elements/services.js";
 import { ceilingLevels, dimension, fcpRoom, fmtH, levelKey, levelTag, rcpRoom, traySection } from "./plan-ceilings.js";
 import { floorPattern, levelFixtures, LUX_BANDS, luxFill, lightSymbol, materialLabel, materialTone, roomFinishBands, roomLux, type PlanFixture, type Tone } from "./plan-sheets.js";
 
@@ -23,11 +25,15 @@ export interface PlanOptions {
    *   openings and light fixtures, no furniture.
    * false_ceiling: suspended-ceiling setting-out: ceiling levels colour-coded and tagged above the finished floor,
    *   drop edges, LED coves, soffit dimensions, void depth, typical section.
+   * electrical: switches (with switch legs to the lights), sockets, data / TV, appliance points, detectors, the DB,
+   *   circuit schedule.
+   * plumbing: sanitary fixtures with cold / hot supplies and waste / soil drains, stacks, floor drains, water
+   *   heaters, main stop valve, fixture schedule.
    */
   sheet?: PlanSheet;
 }
 
-export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling"] as const;
+export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing"] as const;
 export type PlanSheet = (typeof PLAN_SHEETS)[number];
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -233,6 +239,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const sheet = opts.sheet ?? "plan";
   /** Ceiling sheets look up: no furniture, stairs or door swings. */
   const ceilingSheet = sheet === "rcp" || sheet === "false_ceiling";
+  const svc = info.services;
+  const wetRooms = new Set(svc.fixtures.map((f) => f.room));
   const fixtures: PlanFixture[] = c.root ? levelFixtures(c, lv) : [];
   const tones = new Map<string, Tone>();
   const D = project.defaults;
@@ -312,7 +320,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       `</defs>`,
   );
   out.push(`<rect width="100%" height="100%" fill="#ffffff"/>`);
-  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan" }[sheet];
+  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan", electrical: " — electrical layout", plumbing: " — plumbing layout" }[sheet];
   out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)}${sheetTitle} (z=${info.elevation.toFixed(2)} m)</text>`);
 
   // grid with coordinates every meter (labels every `step` meters)
@@ -353,7 +361,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       return;
     }
     const fill =
-      sheet === "finishes" ? floorFill.get(r.floorMaterial ?? D.floorMaterial) : sheet === "lighting" ? luxFill(lux[i].lux) : ROOM_COLORS[i % ROOM_COLORS.length];
+      sheet === "finishes" ? floorFill.get(r.floorMaterial ?? D.floorMaterial)
+      : sheet === "lighting" ? luxFill(lux[i].lux)
+      : sheet === "electrical" ? "#f8f7f3"
+      : sheet === "plumbing" ? (wetRooms.has(i) ? "#e8f2fa" : "#f8f7f3")
+      : ROOM_COLORS[i % ROOM_COLORS.length];
     out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="${fill}" stroke="none"/>`);
   });
   for (const r of lv.roofs)
@@ -418,7 +430,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 
   // furniture footprints: flat things (rugs, mats) first, then by height so tall items stay on top
   // (faded on the lighting / finishes sheets: context only)
-  if (sheet !== "plan") out.push(`<g opacity="${sheet === "finishes" ? 0.4 : 0.35}">`);
+  if (sheet !== "plan") out.push(`<g opacity="${sheet === "finishes" ? 0.4 : sheet === "plumbing" ? 0.75 : 0.35}">`);
   const furn = lv.furniture.map((f, i) => {
     const t = FURNITURE[f.type];
     const h = f.height ?? t?.defaults.height ?? 1;
@@ -427,7 +439,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   });
   furn.sort((a, b) => (a.flat === b.flat ? a.top - b.top || a.i - b.i : a.flat ? -1 : 1));
   const furnSoft: Box[] = [];
-  for (const { f, t, flat } of ceilingSheet ? [] : furn) {
+  const sanitary = new Set(["toilet", "bathroom_sink", "bathtub", "freestanding_bathtub", "shower", "sink_counter", "dishwasher", "washing_machine"]);
+  for (const { f, t, flat } of ceilingSheet ? [] : sheet === "plumbing" ? furn.filter((x) => sanitary.has(x.f.type)) : furn) {
     const w = f.width ?? t?.defaults.width ?? 1, dpt = f.depth ?? t?.defaults.depth ?? 1;
     const rot = deg2rad(f.rotation ?? (f.facing ? { south: 0, east: 90, north: 180, west: 270 }[f.facing] : 0));
     const c0 = f.position as Vec2;
@@ -679,9 +692,9 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 
   // light fixtures and lamps (lighting sheet / RCP: full size with ids; plan: small, no labels;
   // false ceiling: the cut-outs, faded; ceiling sheets skip free-standing lamps)
-  const bigFixtures = sheet === "lighting" || ceilingSheet;
+  const bigFixtures = sheet === "lighting" || sheet === "electrical" || ceilingSheet;
   const fr = bigFixtures ? Math.max(5, Math.min(10, S * 0.13)) : Math.max(3, Math.min(6, S * 0.08));
-  const fixtureSyms = fixtures.filter((f) => sheet === "lighting" || !f.lamp);
+  const fixtureSyms = sheet === "plumbing" ? [] : fixtures.filter((f) => sheet === "lighting" || !f.lamp);
   const fixtureSoft: Box[] = fixtureSyms.map((f) => {
     const [x, y] = px(f.at);
     return { x0: x - fr, y0: y - fr, x1: x + fr, y1: y + fr };
@@ -692,6 +705,54 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     for (const f of [...fixtureSyms].sort((a, b) => Number(!!b.points) - Number(!!a.points))) out.push(lightSymbol(f, px, fr, S));
     out.push(`</g>`);
   }
+  // electrical: switch legs, then the points; plumbing: drains under supplies, then fixtures and points
+  const er = Math.max(4.5, Math.min(8, S * 0.11));
+  const svcSoft: Box[] = [];
+  if (sheet === "electrical") {
+    out.push(switchWiring(svc.electrical.filter((e) => e.controls.length), svc.groups, px));
+    for (const e of svc.electrical) {
+      out.push(elecSymbol(e, px, er));
+      const [x, y] = px(e.at);
+      svcSoft.push({ x0: x - er * 1.6, y0: y - er * 1.6, x1: x + er * 1.6, y1: y + er * 1.6 });
+      // non-standard mounting heights
+      const std = { switch: 1.2, switch_2way: 1.2, dimmer: 1.2, double_socket: 0.3, socket: 0.3, usb_socket: 0.3, data: 0.3, tv: 0.3, spur: 0.3 } as Record<string, number>;
+      if (e.n && std[e.type] !== undefined && Math.abs(e.height - std[e.type]) > 0.05) {
+        const q = px(v2.add(e.at, v2.scale(e.n, (er * 2.4) / S)));
+        out.push(`<text x="${q[0].toFixed(1)}" y="${(q[1] + 3).toFixed(1)}" font-size="${Math.max(7, fs - 5)}" fill="#777" text-anchor="middle">${e.height.toFixed(2)}</text>`);
+      }
+    }
+    if (labels)
+      for (const e of svc.electrical) {
+        if (!e.auto && !e.id) continue;
+        const short = e.auto ? e.id.replace(/^([a-z]+)\.[^.]+\.(\d+)$/, "$1$2") : e.id;
+        const q = px(e.n ? v2.add(e.at, v2.scale(e.n, (er * 2.2) / S)) : e.at);
+        const size = Math.max(7, fs - 5);
+        L.push({ lines: [{ text: short, size, color: "#8a8a8a" }], prio: 5, optional: true, cands: [{ x: q[0], y: q[1] + (e.n ? 0 : er + size), cost: 0 }, { x: q[0] + er * 2, y: q[1], cost: 4 }, { x: q[0] - er * 2, y: q[1], cost: 4 }] });
+      }
+  }
+  if (sheet === "plumbing") {
+    const order = { soil: 0, waste: 1, cold: 2, hot: 3 };
+    for (const p of [...svc.pipes].sort((a, b) => order[a.kind] - order[b.kind])) out.push(pipeSVG(p, px));
+    for (const f of svc.fixtures) out.push(fixtureSymbol(f, px, er));
+    for (const p of svc.points) out.push(plumbPointSymbol(p, px, er));
+    const size = Math.max(7, fs - 4);
+    for (const f of svc.fixtures) {
+      if (f.kind === "tap") continue;
+      const [x, y] = px(f.at);
+      svcSoft.push({ x0: x - er, y0: y - er, x1: x + er, y1: y + er });
+      if (!labels) continue;
+      const text = `${FIXTURE_LABEL[f.kind]}${f.drain ? ` Ø${f.drain}` : ""}`;
+      const c = f.poly ? px(polygonCentroid(f.poly)) : [x, y + er * 2];
+      L.push({ lines: [{ text, size, color: f.kind === "wc" ? PL.soil : "#5a4632" }], prio: 2.5, optional: true, cands: [{ x: c[0], y: c[1], cost: 0 }, { x: c[0], y: c[1] + size * 1.3, cost: 5 }, { x: c[0], y: c[1] - size * 1.3, cost: 5 }, { x: x, y: y + er * 2, cost: 10 }] });
+    }
+    for (const p of svc.points) {
+      const [x, y] = px(p.at);
+      svcSoft.push({ x0: x - er, y0: y - er, x1: x + er, y1: y + er });
+      const text = p.type === "stack" ? `${p.label ?? "stack"} Ø${p.size ?? 100}` : p.type === "inlet" ? (p.label ?? "MSV") : p.type === "water_heater" ? "" : (p.label ?? p.type);
+      if (text) L.push({ lines: [{ text, size, color: p.type === "inlet" ? PL.cold : PL.soil, bold: true }], prio: 2, optional: true, cands: [{ x, y: y - er * 2, cost: 0 }, { x, y: y + er * 2, cost: 2 }, { x: x + er * 3.5, y, cost: 4 }, { x: x - er * 3.5, y, cost: 4 }] });
+    }
+  }
+
   if ((sheet === "lighting" || sheet === "rcp") && labels) {
     const seen = new Set<string>();
     for (const f of fixtures) {
@@ -723,6 +784,21 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
     const ci = lv.rooms.indexOf(r as (typeof lv.rooms)[number]);
     const cl = ci >= 0 ? info.ceilings[ci] : undefined;
+    if (sheet === "electrical") {
+      const pts = svc.electrical.filter((e) => e.room === ci && ci >= 0);
+      const n = (types: string[]) => pts.filter((e) => types.includes(e.type)).length;
+      const plural = (k: number, w: string) => (k ? `${k} ${w}${k > 1 ? (w.endsWith("h") ? "es" : "s") : ""}` : "");
+      const parts = [plural(n(["double_socket", "socket", "usb_socket"]), "socket"), plural(n(["switch", "switch_2way", "dimmer"]), "switch")].filter(Boolean);
+      const circ = [...new Set(pts.map((e) => e.circuit).filter(Boolean))].join(" ");
+      return ci < 0 ? [] : [...(parts.length ? [{ text: parts.join(" · "), size: small, color: EL.power }] : []), ...(circ ? [{ text: circ, size: small, color: "#777" }] : [])];
+    }
+    if (sheet === "plumbing") {
+      const fx = svc.fixtures.filter((f) => f.room === ci && ci >= 0);
+      if (!fx.length) return [];
+      const counts = new Map<string, number>();
+      for (const f of fx) counts.set(FIXTURE_LABEL[f.kind], (counts.get(FIXTURE_LABEL[f.kind]) ?? 0) + 1);
+      return [{ text: [...counts].map(([k, v]) => (v > 1 ? `${v}× ${k}` : k)).join(" · "), size: small, color: PL.cold }];
+    }
     if (ceilingSheet && !cl) return [{ text: "open to the sky", size: small, color: "#777" }];
     if (sheet === "rcp" && cl) {
       if (cl.type === "none") return [{ text: "no ceiling (exposed soffit)", size: small, color: "#777" }];
@@ -783,11 +859,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         { text: `${polygonArea(pg).toFixed(1)} m²`, size: fs - 2, color: "#555" },
         ...roomExtra(r),
       ],
-      plate: sheet === "finishes" || ceilingSheet ? "#fffffff0" : undefined,
+      plate: sheet === "finishes" || ceilingSheet || sheet === "electrical" || sheet === "plumbing" ? "#fffffff0" : undefined,
       prio: 0,
       cands,
       within: pgPx,
-      soft: [...furnSoft, ...stairSoft, ...(bigFixtures ? fixtureSoft : [])],
+      soft: [...furnSoft, ...stairSoft, ...(bigFixtures ? fixtureSoft : []), ...svcSoft],
       softWeight: 0.08,
     });
   });
@@ -904,6 +980,65 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         lg.push(ts.svg);
         y += ts.height + 8;
       }
+    } else if (sheet === "electrical") {
+      head("Electrical points");
+      const T0 = (p: Vec2) => p;
+      const types = new Map<string, { n: number; sample: (typeof svc.electrical)[number] }>();
+      for (const e of svc.electrical) {
+        const e2 = types.get(e.type) ?? { n: 0, sample: e };
+        e2.n++;
+        types.set(e.type, e2);
+      }
+      const NAMES: Record<string, string> = {
+        light_point: "lighting point (no fixture designed)", switch: "switch (ticks = gangs)", switch_2way: "2-way switch", dimmer: "dimmer", double_socket: "double socket", socket: "socket", usb_socket: "USB socket", data: "data point", tv: "TV point",
+        shaver: "shaver socket", cooker: "cooker control unit", spur: "fused spur / appliance", fan: "extract fan", ac: "AC unit", db: "distribution board", smoke: "smoke detector", heat: "heat detector", doorbell: "doorbell",
+      };
+      const HEIGHT: Record<string, string> = { switch: "1.20", switch_2way: "1.20", dimmer: "1.20", double_socket: "0.30", socket: "0.30", data: "0.30", tv: "0.30", shaver: "1.50", db: "1.60", doorbell: "1.40", fan: "ceiling", smoke: "ceiling", heat: "ceiling", light_point: "ceiling" };
+      for (const [t, e] of types) {
+        const wall = !!e.sample.n;
+        const sym = elecSymbol({ ...e.sample, at: [x0 + 14, wall ? y + 6 : y], n: wall ? [0, -1] : undefined, gangs: t.startsWith("switch") ? 1 : e.sample.gangs, label: t === "spur" ? "" : e.sample.label }, T0, 6.5);
+        row(sym, `${NAMES[t] ?? t} × ${e.n}`, HEIGHT[t] ? `${HEIGHT[t] === "ceiling" ? "on the ceiling" : `centre ${HEIGHT[t]} m`}` : undefined);
+      }
+      row(`<path d="M ${x0 + 2} ${y + 4} Q ${x0 + 14} ${y - 8} ${x0 + 26} ${y + 4}" fill="none" stroke="#6b6b6b" stroke-width="0.9" stroke-dasharray="4 3"/>`, "switch leg to the lights");
+      lg.push(`<text x="${x0}" y="${y}" font-size="9" fill="#777">other heights noted beside the symbol (m)</text>`);
+      y += 22;
+      head("Circuits");
+      for (const cc of svc.circuits) {
+        lg.push(`<text x="${x0}" y="${y}" font-size="10.5" font-weight="bold" fill="#222">${esc(cc.id)}</text><text x="${x0 + 28}" y="${y}" font-size="10.5" fill="#222">${cc.rating} A · ${esc(cc.label)} · ${cc.points} pt${cc.points > 1 ? "s" : ""}</text>`);
+        lg.push(`<text x="${x0 + 28}" y="${y + 11}" font-size="9" fill="#777">${esc(cc.rooms.join(", ").slice(0, 44))}</text>`);
+        y += 26;
+      }
+    } else if (sheet === "plumbing") {
+      head("Pipes");
+      const line = (kind: "soil" | "waste" | "cold" | "hot", t: string, sub: string) =>
+        row(pipeSVG({ kind, pts: [[x0 + 2, y], [x0 + 26, y]], size: kind === "cold" ? 15 : 50 }, (p) => p), t, sub);
+      line("cold", "cold water supply", "15 mm branches, 22 mm main");
+      line("hot", "hot water supply", "15 mm from the water heater");
+      line("waste", "waste drain", "40–50 mm, fall 1:40 to the stack");
+      line("soil", "soil drain (WC)", "100 mm, fall 1:40");
+      y += 4;
+      head("Points");
+      const T0 = (p: Vec2) => p;
+      if (svc.points.some((p) => p.type === "stack")) row(plumbPointSymbol({ id: "", type: "stack", at: [x0 + 14, y], room: -1, auto: true }, T0, 6.5), "soil / waste stack (SVP)");
+      if (svc.fixtures.some((f) => f.kind === "floor_drain")) row(fixtureSymbol({ id: "", kind: "floor_drain", at: [x0 + 14, y], room: -1, cold: false, hot: false, drain: 50, auto: true }, T0, 6.5), "floor drain Ø50");
+      if (svc.points.some((p) => p.type === "water_heater")) row(plumbPointSymbol({ id: "", type: "water_heater", at: [x0 + 14, y], room: -1, auto: true }, T0, 6.5), "water heater");
+      if (svc.points.some((p) => p.type === "inlet")) row(plumbPointSymbol({ id: "", type: "inlet", at: [x0 + 14, y], room: -1, auto: true }, T0, 6.5), "main stop valve");
+      row(fixtureSymbol({ id: "", kind: "basin", at: [x0 + 14, y], room: -1, cold: true, hot: true, drain: 40, auto: true }, T0, 6.5), "fixture connection", "drain · cold (blue) · hot (red)");
+      y += 4;
+      head("Fixture schedule");
+      const sched = new Map<string, { n: number; cold: boolean; hot: boolean; drain: number }>();
+      for (const f of svc.fixtures) {
+        const e = sched.get(f.kind) ?? { n: 0, cold: f.cold, hot: f.hot, drain: f.drain };
+        e.n++;
+        sched.set(f.kind, e);
+      }
+      lg.push(`<text x="${x0}" y="${y}" font-size="9.5" fill="#777">fixture</text><text x="${x0 + 110}" y="${y}" font-size="9.5" fill="#777">no.</text><text x="${x0 + 135}" y="${y}" font-size="9.5" fill="#777">supply</text><text x="${x0 + 185}" y="${y}" font-size="9.5" fill="#777">drain</text>`);
+      y += 14;
+      for (const [k, e] of sched) {
+        lg.push(`<text x="${x0}" y="${y}" font-size="10.5" fill="#222">${esc(FIXTURE_LABEL[k as keyof typeof FIXTURE_LABEL])}</text><text x="${x0 + 110}" y="${y}" font-size="10.5" fill="#222">${e.n}</text><text x="${x0 + 135}" y="${y}" font-size="10.5" fill="#222">${[e.cold ? "CW" : "", e.hot ? "HW" : ""].filter(Boolean).join("+") || "—"}</text><text x="${x0 + 185}" y="${y}" font-size="10.5" fill="#222">${e.drain ? `Ø${e.drain}` : "—"}</text>`);
+        y += 15;
+      }
+      y += 8;
     } else if (sheet === "lighting") {
       fixtureLegend(fixtures);
       head("Estimated average illuminance");

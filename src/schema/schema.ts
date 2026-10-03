@@ -12,6 +12,7 @@ import { Direction, Id, Mat, Point, Polygon, Vec3 } from "./common.js";
 import { StyleSchema } from "../elements/styles.js";
 import { FinishesSchema } from "../elements/finishes.js";
 import { LightSchema } from "../elements/lighting.js";
+import { ElectricalSchema, PlumbingSchema, ServicesSchema } from "../elements/services.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 
@@ -319,6 +320,9 @@ export const LevelSchema = z
     roofs: z.array(RoofSchema).default([]),
     casework: z.array(CaseworkSchema).default([]).describe("Built-in cabinetry runs: kitchens (with islands), wardrobes, vanities, media walls, shelving, desks, benches"),
     lights: z.array(LightSchema).default([]).describe("Light fixtures (pendants, downlight grids, sconces, LED strips...) with real light sources"),
+    electrical: z.array(ElectricalSchema).default([]).describe("Extra electrical points (switches, sockets, data, appliance points, AC, detectors) on top of the automatic layout"),
+    plumbing: z.array(PlumbingSchema).default([]).describe("Stacks, floor drains, water heaters, the main stop valve, taps (replace / add to the automatic plumbing layout)"),
+    services: ServicesSchema,
   })
   .describe("One storey of the building");
 
@@ -388,7 +392,7 @@ export type Band = z.output<typeof BandSchema>;
 export type Elevator = z.output<typeof ElevatorSchema>;
 
 /** Element collections on a level, in a fixed order (used by editing tools). */
-export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework"] as const;
+export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework", "electrical", "plumbing"] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 export function directionToDegrees(d: number | "north" | "south" | "east" | "west"): number {

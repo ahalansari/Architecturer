@@ -7,6 +7,8 @@ import { buildTerrace } from "./elements/terraces.js";
 import { buildShape, shapeFootprint } from "./elements/shapes.js";
 import { addLampLight, buildLights, checkUnlitRooms } from "./elements/lighting.js";
 import { buildRoomFinishes, prepareFinishes, type CeilingLayout } from "./elements/finishes.js";
+import { buildServices, type ServicesLayout } from "./elements/services.js";
+import type { ResolvedRun } from "./elements/casework/layout.js";
 import { buildCasework, levelCaseCtx } from "./elements/casework.js";
 import { buildWallSegment, expandWalls, resolveJoins, splitJunctions, type WallSegment } from "./elements/walls.js";
 import { deg2rad, ensureCCW, offsetPolygon, polygonArea, type Vec2 } from "./geometry/math.js";
@@ -25,6 +27,8 @@ export interface LevelInfo {
   stairs: (StairResult & { id: string; target: number })[];
   /** Room ceilings as built (one per room, same order as level.rooms). */
   ceilings: CeilingLayout[];
+  /** Electrical and plumbing layout (automatic + explicit). */
+  services: ServicesLayout;
 }
 
 export interface BuildOutput {
@@ -261,8 +265,10 @@ export function buildProject(project: Project): BuildOutput {
     // ---- casework (kitchens, wardrobes, vanities, built-ins): stands on the floor finish like furniture ----
     const caseNode = node("casework", "group");
     const caseCtx = levelCaseCtx(project, lv, segs, placed, z, ceilingH);
+    const runs: ResolvedRun[] = [];
     lv.casework.forEach((cw, i) => {
       const b = buildCasework(cw, i, { ...caseCtx, floorZ: z + FLOOR_FINISH });
+      runs.push(b.resolved);
       b.resolved.errors.forEach((m) => err(m));
       b.resolved.warnings.forEach((m) => warn(m));
       if (b.node) caseNode.children.push(b.node);
@@ -270,6 +276,21 @@ export function buildProject(project: Project): BuildOutput {
 
     // ---- lights (fixtures with punctual lights) ----
     const lightsNode = buildLights(lv, { project, levelIndex: li, z, ceilingH, segments: segs, warn, err });
+
+    // ---- electrical + plumbing layout (switch / socket plates, detectors in 3D) ----
+    const services = buildServices(lv, {
+      levelZ: z,
+      floorZ: z + FLOOR_FINISH,
+      segments: segs,
+      openings: placed,
+      runs: runs.filter((r) => r.legs.length),
+      ceilings,
+      fixtures: lightsNode.children
+        .filter((n) => n.kind === "light_fixture")
+        .map((n) => ({ id: String(n.extras?.id ?? n.name), type: String(n.extras?.fixture), at: [n.translation![0], n.translation![1]] as Vec2, lumens: Number(n.extras?.lumens ?? 0) })),
+      terraces: lv.terraces.map((t) => t.polygon as Vec2[]),
+      warn,
+    });
 
     // ---- columns, railings ----
     const miscMb = new MeshBuilder(), miscCol = new MeshBuilder();
@@ -322,11 +343,11 @@ export function buildProject(project: Project): BuildOutput {
     for (const h of holes) if (!usedHoles.has(h)) warn("a stairwell arriving at this level is not inside any slab");
 
     levelNode.children.push(
-      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, shapesNode, stairsNode, furnNode, caseNode, lightsNode, structNode, roofsNode].filter(
+      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, shapesNode, stairsNode, furnNode, caseNode, lightsNode, ...(services.node ? [services.node] : []), structNode, roofsNode].filter(
         (n) => n.meshes.length || n.children.length,
       ),
     );
-    infos.push({ id: lv.id, name: lv.name ?? lv.id, elevation: z, height: lv.height, segments: segs, openings: placed, stairOutlines, stairs: stairInfos, ceilings });
+    infos.push({ id: lv.id, name: lv.name ?? lv.id, elevation: z, height: lv.height, segments: segs, openings: placed, stairOutlines, stairs: stairInfos, ceilings, services: services.layout });
   });
 
   // ---- site ----

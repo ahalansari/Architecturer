@@ -1,7 +1,7 @@
 // 2D plan sheets (plan / lighting / finishes) in a pan-and-zoom overlay, refreshed live on reload.
 
 const $ = (id) => document.getElementById(id);
-const SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling"];
+const SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing"];
 const STORE = "architecturer.planSheet";
 
 export class PlanViewer {

@@ -61,12 +61,12 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   plan: {
-    usage: "arch plan <plan.json> [--level id] [--sheet plan|lighting|finishes|rcp|false_ceiling] [-o plan.png|plan.svg]",
-    desc: "2D floor plan: meter grid with coordinates, wall/opening/furniture ids, door swings, rooms with areas; lighting, finishes, reflected ceiling and false ceiling sheets",
+    usage: "arch plan <plan.json> [--level id] [--sheet plan|lighting|finishes|rcp|false_ceiling|electrical|plumbing] [-o plan.png|plan.svg]",
+    desc: "2D floor plan: meter grid with coordinates, wall/opening/furniture ids, door swings, rooms with areas; lighting, finishes, reflected ceiling, false ceiling, electrical and plumbing sheets",
     file: true,
     flags: [
       { name: "level", arg: "id", desc: "level to draw (default: first)" },
-      { name: "sheet", arg: "kind", desc: "plan (default) | lighting (fixture layout, lux per room, legend) | finishes (floor materials and patterns, wall finish bands, finish schedule) | rcp (reflected ceiling plan: ceiling heights, materials, soffits, beams, coves, fixtures) | false_ceiling (ceiling levels above FFL, drops, coves, soffit dimensions, void, typical section)" },
+      { name: "sheet", arg: "kind", desc: "plan (default) | lighting (fixture layout, lux per room, legend) | finishes (floor materials and patterns, wall finish bands, finish schedule) | rcp (reflected ceiling plan: ceiling heights, materials, soffits, beams, coves, fixtures) | false_ceiling (ceiling levels above FFL, drops, coves, soffit dimensions, void, typical section) | electrical (switches with switch legs, sockets, data/TV, appliance points, detectors, DB, circuit schedule) | plumbing (fixtures, cold/hot supplies, waste/soil drains, stacks, floor drains, heaters, fixture schedule)" },
       OUT,
     ],
     async run(file, f) {

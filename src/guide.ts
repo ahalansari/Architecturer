@@ -146,6 +146,12 @@ Call get_schema for every field; this guide covers conventions and good practice
    300+ over kitchen worktops), sheet="finishes" (floor patterns, wall finish and accent bands, finish schedule),
    sheet="rcp" (reflected ceiling plan: heights, materials, soffits, beams, coves, fixtures) and sheet="false_ceiling"
    (ceiling levels above FFL; lower service rooms with room.ceilingHeight, e.g. bathrooms 2.4-2.5 for a services void).
+   sheet="electrical" and sheet="plumbing" show the services layout generated from the design: switches at the
+   latch side of doors (one rocker per light group, 2-way at further doors and double-bed bedsides), sockets for the
+   furniture and round the walls, worktop sockets, appliance spurs, cooker unit, fans, detectors, DB, circuits;
+   fixtures with cold / hot supplies and drains to stacks, floor drains, water heaters. Refine with level.electrical
+   (extra points, AC units, switches with "controls"), level.plumbing (your own stacks / heaters / inlet replace the
+   automatic ones) and level.services.omit (auto ids such as sk.master.3, shown as sk3 on the sheet).
 4. render_view: iso plus a cutaway per level (level=<id>); close-ups with focus=[x, y] (+ radius, zoom).
 5. export_model to .glb (engine "unity"/"godot" adds merged meshes + colliders; textureFormat "ktx2" for the
    smallest, GPU-compressed textures). Y-up, meters; furniture and door
