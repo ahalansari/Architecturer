@@ -21,7 +21,7 @@ import { rateLimit } from "express-rate-limit";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import type { Server } from "node:http";
 import { isIP } from "node:net";
-import { basename, extname } from "node:path";
+import { basename, extname, join } from "node:path";
 import { cacheRoot } from "../assets/cache.js";
 import { setSandbox, confine } from "../sandbox.js";
 import { createPlanViewer, type PlanViewer } from "../server/server.js";
@@ -283,18 +283,19 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
       ),
     );
   });
-  app.get("/view/:key{/*rest}", async (req, res, next) => {
-    const rest = ([] as string[]).concat((req.params as Record<string, string | string[] | undefined>).rest ?? []).join("/");
+  const viewRoute = async (req: Request, res: Response, next: NextFunction, sub?: string) => {
+    const key = String(req.params.key);
+    const rest = sub ?? ([] as string[]).concat((req.params as Record<string, string | string[] | undefined>).rest ?? []).join("/");
     // the page loads everything relative to /view/<key>/
-    if (!rest && !req.path.endsWith("/")) return void res.redirect(301, `/view/${encodeURIComponent(req.params.key)}/`);
+    if (!rest && !req.path.endsWith("/")) return void res.redirect(301, `/view/${encodeURIComponent(key)}/`);
     if (!(await human(req, res))) return;
     let file: string;
     try {
-      file = ws.plan(viewName(req.params.key));
+      file = ws.plan(viewName(key));
     } catch {
       return void res.status(404).send("not found");
     }
-    if (!existsSync(file)) return void res.status(404).type("html").send(messagePage("No such project", `There is no project '${viewName(req.params.key)}'.`));
+    if (!existsSync(file)) return void res.status(404).type("html").send(messagePage("No such project", `There is no project '${viewName(key)}'.`));
     let v = viewers.get(file);
     if (!v) {
       if (viewers.size >= 20) {
@@ -304,12 +305,19 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
           viewers.delete(idle[0]);
         }
       }
-      v = { viewer: createPlanViewer(file, { engine: pool, textureSize: cfg.textureSize, showPath: ws.nameOf(file) }), used: Date.now() };
+      v = { viewer: createPlanViewer(file, { engine: pool, textureSize: cfg.textureSize, showPath: ws.nameOf(file), contractsDir: join(cfg.workdir, "exports", "contracts") }), used: Date.now() };
       viewers.set(file, v);
     }
     v.used = Date.now();
     const query = new URL(req.originalUrl, "http://x").searchParams;
     v.viewer.handle(req, res, rest, query).catch(next);
+  };
+  app.get("/view/:key{/*rest}", (req, res, next) => void viewRoute(req, res, next));
+  // generating a contract from the viewer (JSON body, read by the viewer itself)
+  app.post("/view/:key/contracts", (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && new URL(origin).host !== req.headers.host) return void res.status(403).send("cross-site request");
+    void viewRoute(req, res, next, "contracts");
   });
 
   // ---- admin ----

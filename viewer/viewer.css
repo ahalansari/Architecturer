@@ -35,6 +35,18 @@ button:hover, .button:hover { border-color: var(--accent); }
 .button { display: inline-block; margin-top: 8px; }
 pre { white-space: pre-wrap; font-size: 11px; margin: 0; }
 #issueList { padding-left: 16px; margin: 0; font-size: 12px; }
+#contracts select, #contracts input { width: 100%; box-sizing: border-box; margin: 2px 0 6px; padding: 4px 6px; font: inherit; background: transparent; color: inherit; border: 1px solid var(--border); border-radius: 6px; }
+#contracts select option { color: #111; }
+#ctMode { margin-bottom: 6px; }
+#ctMode button { flex: 1; font-size: 12px; padding: 3px 4px; }
+#ctMode button:disabled { opacity: 0.35; cursor: not-allowed; }
+#ctGenerate { width: 100%; }
+#ctStatus { margin-top: 6px; overflow-wrap: anywhere; }
+#ctStatus.error { color: var(--error); font-size: 12px; }
+#ctList { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12px; }
+#ctList li { padding: 5px 0; border-top: 1px solid var(--border); }
+.ctLinks { display: flex; gap: 10px; align-items: baseline; margin-top: 2px; }
+.ctLinks a { color: var(--accent); }
 #issueList .error { color: var(--error); }
 #issueList .warn { color: var(--warn); }
 #plan { position: fixed; inset: 0; z-index: 20; background: rgba(20, 22, 26, 0.86); display: flex; flex-direction: column; }

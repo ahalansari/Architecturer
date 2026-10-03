@@ -1,7 +1,7 @@
 import { createReadStream, existsSync, watch, type FSWatcher } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJson } from "../io.js";
 import { inlineEngine, type Engine } from "../mcp/engine.js";
@@ -50,9 +50,12 @@ export interface PlanViewer {
  * file. Builds run on `engine` (worker threads on the remote server) and are cached until the file changes;
  * browsers reload over server-sent events whenever the file is saved.
  */
-export function createPlanViewer(planPath: string, opts: { textureSize?: number; engine?: Engine; showPath?: string } = {}): PlanViewer {
+export function createPlanViewer(planPath: string, opts: { textureSize?: number; engine?: Engine; showPath?: string; contractsDir?: string } = {}): PlanViewer {
   const file = resolve(planPath);
   const engine = opts.engine ?? inlineEngine;
+  // contracts go where generate_contract puts them: contracts/<plan>-<package>-<mode>.docx|html
+  const contractsDir = opts.contractsDir ?? join(dirname(file), "contracts");
+  const planBase = basename(file, extname(file));
   // one cache per file version; concurrent requests share the in-flight build
   let cache: { mtime: number; project: Promise<unknown>; results: Map<string, Promise<JobResult>> } | undefined;
   const run = async (key: string, req: Omit<JobRequest, "project" | "baseDir"> & Record<string, unknown>): Promise<JobResult> => {
@@ -132,6 +135,62 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
         res.end(r.text);
         return;
       }
+      if (path === "contracts" && req.method === "POST") {
+        // JSON only: a cross-site form cannot send it, so this is not a CSRF target
+        if (!/^application\/json/.test(req.headers["content-type"] ?? "")) return void res.writeHead(415, { "content-type": "text/plain" }).end("send JSON");
+        let body: { package?: string; mode?: string; contractor?: string };
+        try {
+          body = JSON.parse(await readBody(req, 16 * 1024));
+        } catch {
+          return void res.writeHead(400, { "content-type": "text/plain" }).end("bad JSON");
+        }
+        const { packageById } = await import("../contracts/packages.js");
+        let pkg;
+        try {
+          pkg = packageById(String(body.package ?? ""));
+        } catch (e) {
+          return void res.writeHead(400, { "content-type": "text/plain" }).end((e as Error).message);
+        }
+        const mode = body.mode === "labour" || body.mode === "supply" ? body.mode : pkg.modes[0];
+        if (!pkg.modes.includes(mode)) return void res.writeHead(400, { "content-type": "text/plain" }).end(`${pkg.id} is ${pkg.modes.join(" or ")} only`);
+        const name = `${planBase}-${pkg.id}-${mode}`;
+        const contractor = String(body.contractor ?? "").trim().slice(0, 120);
+        const r = await engine.run({
+          op: "contract",
+          project: await readJson(file),
+          baseDir: dirname(file),
+          options: { package: pkg.id, mode, ...(contractor ? { contractor: { company: contractor } } : {}) },
+          out: { docx: join(contractsDir, `${name}.docx`), html: join(contractsDir, `${name}.html`) },
+        } as JobRequest);
+        res.writeHead(r.ok ? 200 : 422, { "content-type": MIME[".json"], "cache-control": "no-store" });
+        res.end(JSON.stringify({ ok: r.ok, text: r.ok ? r.text : r.summary, name }));
+        return;
+      }
+      if (path === "contracts") {
+        const { PACKAGES } = await import("../contracts/packages.js");
+        const files: { name: string; package: string; mode: string; ext: string; modified: string }[] = [];
+        const re = new RegExp(`^${planBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-([a-z_]+)-(labour|supply)\\.(docx|html)$`);
+        for (const f of existsSync(contractsDir) ? await readdir(contractsDir) : []) {
+          const m = re.exec(f);
+          if (m) files.push({ name: f, package: m[1], mode: m[2], ext: m[3], modified: (await stat(join(contractsDir, f))).mtime.toISOString() });
+        }
+        res.writeHead(200, { "content-type": MIME[".json"], "cache-control": "no-store" });
+        res.end(JSON.stringify({ packages: PACKAGES.map((p) => ({ id: p.id, en: p.title.en, ar: p.title.ar, modes: p.modes })), files }));
+        return;
+      }
+      if (path.startsWith("contracts/")) {
+        const name = path.slice(10);
+        if (!/^[A-Za-z0-9._ -]+\.(docx|html)$/.test(name) || !name.startsWith(`${planBase}-`) || !existsSync(join(contractsDir, name))) return void res.writeHead(404).end("not found");
+        const html = name.endsWith(".html");
+        res.writeHead(200, {
+          "content-type": html ? MIME[".html"] : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "cache-control": "no-store",
+          "content-disposition": `${html ? "inline" : "attachment"}; filename="${name.replace(/"/g, "")}"`,
+          ...(html ? { "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:" } : {}),
+        });
+        createReadStream(join(contractsDir, name)).pipe(res);
+        return;
+      }
       if (path === "plan.svg") {
         const sheet = query.get("sheet") || "plan";
         if (!(PLAN_SHEETS as readonly string[]).includes(sheet)) return void res.writeHead(400).end(`sheet must be one of ${PLAN_SHEETS.join(", ")}`);
@@ -145,6 +204,22 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
       res.writeHead(404).end("not found");
     },
   };
+}
+
+function readBody(req: IncomingMessage, limit: number): Promise<string> {
+  return new Promise((ok, fail) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > limit) {
+        fail(new Error("too large"));
+        req.destroy();
+      } else chunks.push(c);
+    });
+    req.on("end", () => ok(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", fail);
+  });
 }
 
 /** Serve the 3D viewer for a plan file; browsers reload automatically when the file changes. */

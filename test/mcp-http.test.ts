@@ -2,7 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -264,6 +264,27 @@ test("personal token on the core tool set; viewer needs a login", async () => {
   assert.ok(info.levels.length > 0);
   r = await fetch(`${base}/view/house/`, { headers: { cookie } });
   assert.match(await r.text(), /src="viewer\/viewer\.js"/);
+
+  // contracts from the viewer panel: list, generate (JSON, same site only), download
+  r = await fetch(`${base}/view/house/contracts`, { headers: { cookie } });
+  const listing = (await r.json()) as { packages: { id: string }[]; files: unknown[] };
+  assert.ok(listing.packages.some((p) => p.id === "plaster") && listing.files.length === 0);
+  r = await fetch(`${base}/view/house/contracts`, { method: "POST", headers: { cookie, "content-type": "application/json", origin: "https://evil.example" }, body: JSON.stringify({ package: "plaster" }) });
+  assert.equal(r.status, 403);
+  r = await fetch(`${base}/view/house/contracts`, { method: "POST", headers: { cookie }, body: new URLSearchParams({ package: "plaster" }) });
+  assert.equal(r.status, 415, "form posts are refused");
+  r = await fetch(`${base}/view/house/contracts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ package: "plaster" }), redirect: "manual" });
+  assert.equal(r.status, 302, "needs a login");
+  r = await fetch(`${base}/view/house/contracts`, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ package: "plaster", mode: "labour", contractor: "Panel Co" }) });
+  const made = (await r.json()) as { ok: boolean; text: string; name: string };
+  assert.ok(made.ok, made.text);
+  assert.equal(made.name, "house-plaster-labour");
+  assert.ok(existsSync(join(work, "exports", "contracts", "house-plaster-labour.docx")));
+  r = await fetch(`${base}/view/house/contracts/house-plaster-labour.docx`, { headers: { cookie } });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get("content-disposition")!, /attachment/);
+  r = await fetch(`${base}/view/house/contracts/..%2F..%2Fstate%2Fauth.json`, { headers: { cookie } });
+  assert.equal(r.status, 404);
   r = await fetch(`${base}/admin`, { headers: { cookie } });
   assert.match(await r.text(), /lmstudio/);
 });

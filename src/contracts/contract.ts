@@ -224,7 +224,8 @@ export function buildContract(c: Compiled, opts: ContractOptions): Contract {
   const roomArea = project.levels.reduce((a, l) => a + l.rooms.reduce((s, r) => s + polygonArea(r.polygon as Vec2[]), 0), 0);
   const floorArea = roomArea > 0 ? roomArea : 150 * c.levels.length;
   const facts: BuildingFacts = { levels: c.levels.length, suspendedSlabs: suspended, floorArea };
-  const date = opts.date ?? new Date().toISOString().slice(0, 10);
+  // the local calendar date (Kuwait is UTC+3: just after midnight the UTC date is still yesterday)
+  const date = opts.date ?? new Date().toLocaleDateString("en-CA");
   const startDate = opts.startDate ?? addDays(date, 7);
   const durationDays = opts.durationDays ?? pkg.durationDays(facts);
   const stages = pkg.milestones(facts, mode);

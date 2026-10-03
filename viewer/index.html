@@ -63,6 +63,18 @@
           <a class="button" href="estimate.csv?scope=full" title="The full-build bill as a spreadsheet">CSV</a>
         </div>
       </section>
+      <section id="contracts">
+        <h2>Contracts</h2>
+        <select id="ctPackage" aria-label="Contract package" title="Trade package"></select>
+        <div class="tabs" id="ctMode" role="tablist">
+          <button data-mode="labour" role="tab" title="مصنعية فقط: the owner supplies the materials">Labour only</button>
+          <button data-mode="supply" role="tab" title="توريد وتركيب: the contractor supplies everything">Supply &amp; install</button>
+        </div>
+        <input id="ctContractor" placeholder="Contractor (optional)" aria-label="Contractor name" maxlength="120" />
+        <button id="ctGenerate" title="English then Arabic; Word and a printable page. Quantities and prices from the model.">📄 Generate contract</button>
+        <div id="ctStatus" class="muted" aria-live="polite"></div>
+        <ul id="ctList"></ul>
+      </section>
       <section id="picked" hidden>
         <h2>Selected</h2>
         <pre id="pickedInfo"></pre>

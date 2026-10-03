@@ -715,7 +715,7 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
       "Scope: fit-out only — the structure and shell (foundations, reinforced concrete frame and slabs, rebar, formwork, blockwork, plaster / render, roof build-up) are NOT included. Ask for scope 'full' (project.costs.scope) to add them.",
     );
   return {
-    project: project.name, currency: cur, date: new Date().toISOString().slice(0, 10), scope, sections: out, trades, retail, adjustments, total,
+    project: project.name, currency: cur, date: new Date().toLocaleDateString("en-CA"), scope, sections: out, trades, retail, adjustments, total,
     notes: [...new Set(notes)], ratesUsed: Object.fromEntries(Object.entries(used).sort()),
     sources: [
       ...new Map(

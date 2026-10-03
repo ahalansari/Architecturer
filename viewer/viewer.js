@@ -6,6 +6,7 @@ import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { WalkMode } from "./walk.js";
 import { DayNight } from "./lighting.js";
 import { PlanViewer } from "./plans.js";
+import { initContracts } from "./contracts.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view");
@@ -246,6 +247,7 @@ $("cut").onchange = applyVisibility;
 document.querySelectorAll("button[data-view]").forEach((b) => (b.onclick = () => frame(b.dataset.view)));
 // 2D plan sheets: plan / lighting / finishes (opens on the cut level, else the first)
 const plans = new PlanViewer();
+initContracts();
 document.querySelectorAll("#panel button[data-sheet]").forEach(
   (b) => (b.onclick = () => plans.show(b.dataset.sheet, plans.isOpen ? plans.level : $("cut").value || levels[0]?.id)),
 );
