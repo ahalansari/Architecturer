@@ -24,6 +24,440 @@
    "color": "#d8c4ad"
   }
  },
+ "products": [
+  {
+   "id": "kivik_corner_sofa",
+   "name": "KIVIK Corner sofa, 5-seat - Tibbleby beige/grey",
+   "vendor": "IKEA",
+   "sku": "394.404.75",
+   "price": 339,
+   "currency": "KWD",
+   "type": "sectional_sofa",
+   "url": "https://www.ikea.com/kw/en/p/kivik-corner-sofa-5-seat-tibbleby-beige-grey-s39440475/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/39440475/PS01_S01_NV_01/simple/glb/029a5cd49d62ffee0bfde351724537a5-G-39440475-79a9d6d7686337a06e74d7616ebd192938b0284b-simple.glb?cn=pip",
+   "depth": 0.95,
+   "height": 0.83,
+   "image": "https://www.ikea.com/kw/en/images/products/kivik-corner-sofa-5-seat-tibbleby-beige-grey__1577296_pe1033072_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "idanas_coffee_table",
+   "name": "IDANÄS Coffee table - dark brown stained 107x55 cm",
+   "vendor": "IKEA",
+   "sku": "804.878.70",
+   "price": 89.99,
+   "currency": "KWD",
+   "type": "coffee_table",
+   "url": "https://www.ikea.com/kw/en/p/idanaes-coffee-table-dark-brown-stained-80487870/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/80487870/PS01_S01_NV01/rqp3/glb_draco/eb1a0a5b5ed3d61e14ccdc850b0260ea-80487870_PS01_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 1.07,
+   "depth": 0.55,
+   "height": 0.49,
+   "image": "https://www.ikea.com/kw/en/images/products/idanaes-coffee-table-dark-brown-stained__1161082_pe889290_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "stockholm_easy_chair",
+   "name": "STOCKHOLM 2025 Easy chair - birch veneer",
+   "vendor": "IKEA",
+   "sku": "805.947.85",
+   "price": 99.99,
+   "currency": "KWD",
+   "type": "lounge_chair",
+   "url": "https://www.ikea.com/kw/en/p/stockholm-2025-easy-chair-birch-veneer-80594785/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/80594785/LPT_S01_NV01/rqp3/glb_draco/3ad4cfdff479fee1be618b074b1ffb72-80594785_LPT_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 0.71,
+   "depth": 0.79,
+   "height": 0.63,
+   "image": "https://www.ikea.com/kw/en/images/products/stockholm-2025-easy-chair-birch-veneer__1362745_pe955317_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "fejka_weeping_fig",
+   "name": "FEJKA Artificial potted plant - in/outdoor/weeping fig 23 cm",
+   "vendor": "IKEA",
+   "sku": "106.106.04",
+   "price": 24.99,
+   "currency": "KWD",
+   "type": "plant_large",
+   "url": "https://www.ikea.com/kw/en/p/fejka-artificial-potted-plant-in-outdoor-weeping-fig-10610604/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/10610604/PS01_S01_NV_01/simple/glb_draco/f6f023b3a512f8ac944ece53132eb196-G-10610604-1cc6ec87048abae114972f929e9c65d15cd9f0a0-simple+draco.glb?cn=pip",
+   "width": 0.3,
+   "height": 0.25,
+   "image": "https://www.ikea.com/kw/en/images/products/fejka-artificial-potted-plant-in-outdoor-weeping-fig__1423296_pe979094_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "boastad_sideboard",
+   "name": "BOASTAD Sideboard - black/oak veneer 161x52x75 cm",
+   "vendor": "IKEA",
+   "sku": "305.070.12",
+   "price": 179,
+   "currency": "KWD",
+   "type": "sideboard",
+   "url": "https://www.ikea.com/kw/en/p/boastad-sideboard-black-oak-veneer-30507012/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/30507012/PS01_S01_NV01/rqp3/glb_draco/f03d7281ada376bc31e82c491f540c02-30507012_PS01_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 1.614,
+   "depth": 0.521,
+   "height": 0.751,
+   "image": "https://www.ikea.com/kw/en/images/products/boastad-sideboard-black-oak-veneer__1241274_pe919730_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "arstid_table_lamp",
+   "name": "ÅRSTID Table lamp - brass/white",
+   "vendor": "IKEA",
+   "sku": "603.213.76",
+   "price": 8.99,
+   "currency": "KWD",
+   "type": "table_lamp",
+   "url": "https://www.ikea.com/kw/en/p/arstid-table-lamp-brass-white-60321376/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/30321373/PS01_S01_NV_01/simple/glb_draco/a2a236c85204a61f6ff6e8f1de0ff30e-G-30321373-a7b8e606f014d31487ddc46306de9cd82727c556-simple+draco.glb?cn=pip",
+   "width": 0.24,
+   "height": 0.55,
+   "image": "https://www.ikea.com/kw/en/images/products/arstid-table-lamp-brass-white__0609329_pe684454_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "geolog_rug",
+   "name": "GEOLOG Rug, high pile - off-white 200x300 cm",
+   "vendor": "IKEA",
+   "sku": "106.323.71",
+   "price": 89.99,
+   "currency": "KWD",
+   "type": "rug",
+   "url": "https://www.ikea.com/kw/en/p/geolog-rug-high-pile-off-white-10632371/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/10632371/PS01_S01_NV01/rqp3/glb_draco/b77c5c1822621cf83b4596c54fb3e075-10632371_PS01_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 3,
+   "depth": 2,
+   "image": "https://www.ikea.com/kw/en/images/products/geolog-rug-high-pile-off-white__1492019_pe1004340_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "skansnas_table",
+   "name": "SKANSNÄS Extendable table - brown beech/veneer 150/205x90 cm",
+   "vendor": "IKEA",
+   "sku": "005.657.58",
+   "price": 299,
+   "currency": "KWD",
+   "type": "table",
+   "url": "https://www.ikea.com/kw/en/p/skansnaes-extendable-table-brown-beech-veneer-00565758/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/00565758/LPT_S01_NV01/rqp3/glb_draco/2cf84b626de8acb458994289a0ff38c6-00565758_LPT_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 1.5,
+   "depth": 0.9,
+   "height": 0.75,
+   "image": "https://www.ikea.com/kw/en/images/products/skansnaes-extendable-table-brown-beech-veneer__1262376_pe927062_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "skansnas_chair",
+   "name": "SKANSNÄS Chair - brown beech",
+   "vendor": "IKEA",
+   "sku": "705.632.42",
+   "price": 39.99,
+   "currency": "KWD",
+   "type": "chair",
+   "url": "https://www.ikea.com/kw/en/p/skansnaes-chair-brown-beech-70563242/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/70563242/PS01_S01_NV01/rqp3/glb_draco/d84a620406b090321b4350776d8a991d-70563242_PS01_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 0.48,
+   "depth": 0.51,
+   "height": 0.78,
+   "image": "https://www.ikea.com/kw/en/images/products/skansnaes-chair-brown-beech__1319860_pe941001_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "glenn_counter_stool",
+   "name": "GLENN Bar stool - counter height white/chrome-plated 66 cm",
+   "vendor": "IKEA",
+   "sku": "601.317.34",
+   "price": 35.95,
+   "currency": "KWD",
+   "type": "bar_stool",
+   "url": "https://www.ikea.com/kw/en/p/glenn-bar-stool-counter-height-white-chrome-plated-60131734/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/60131734/PS01_S01_NV01/iqp3/glb_draco/180a49c057144d97ae40948069350326-60131734_PS01_S01_NV01_iqp3_v1.4.11.glb?cn=pip",
+   "width": 0.5,
+   "depth": 0.48,
+   "height": 0.89,
+   "image": "https://www.ikea.com/kw/en/images/products/glenn-bar-stool-counter-height-white-chrome-plated__0728083_pe736048_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "idanas_console",
+   "name": "IDANÄS Console table - white 104x32x95 cm",
+   "vendor": "IKEA",
+   "sku": "904.878.79",
+   "price": 59.99,
+   "currency": "KWD",
+   "type": "console_table",
+   "url": "https://www.ikea.com/kw/en/p/idanaes-console-table-white-90487879/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/90487879/PS01_S01_NV01/rqp3/glb_draco/0c2d3359a34296250753b4c67737a2af-90487879_PS01_S01_NV01_RQP3_3.0.glb?cn=pip",
+   "width": 1.04,
+   "depth": 0.32,
+   "height": 0.95,
+   "image": "https://www.ikea.com/kw/en/images/products/idanaes-console-table-white__1161086_pe889294_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "brusali_shoe_cabinet",
+   "name": "BRUSALI Shoe cabinet with 3 compartments - white 61x30x130 cm",
+   "vendor": "IKEA",
+   "sku": "804.803.93",
+   "price": 34.99,
+   "currency": "KWD",
+   "type": "shoe_cabinet",
+   "url": "https://www.ikea.com/kw/en/p/brusali-shoe-cabinet-with-3-compartments-white-80480393/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/80480393/PS01_S01_NV01/isp3/glb_draco/80480393_PS01_S01_NV01_ISP3_2.0_3796f677952844239581144ac200adf3.glb?cn=pip",
+   "width": 0.61,
+   "depth": 0.3,
+   "height": 1.3,
+   "image": "https://www.ikea.com/kw/en/images/products/brusali-shoe-cabinet-with-3-compartments-white__0828435_pe776595_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "nipasen_coat_stand",
+   "name": "NIPÅSEN Hat and coat stand - black 181 cm",
+   "vendor": "IKEA",
+   "sku": "505.861.50",
+   "price": 12.99,
+   "currency": "KWD",
+   "type": "coat_rack",
+   "url": "https://www.ikea.com/kw/en/p/nipasen-hat-and-coat-stand-black-50586150/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/50586150/PS01_S01_NV01/rqp3/glb_draco/c09b87422280e8e6911f95ad9a2125e2-50586150_PS01_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 0.56,
+   "depth": 0.56,
+   "height": 1.81,
+   "image": "https://www.ikea.com/kw/en/images/products/nipasen-hat-and-coat-stand-black__1384329_pe962962_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "ridspo_desk",
+   "name": "RIDSPÖ Desk - oak 140x70 cm",
+   "vendor": "IKEA",
+   "sku": "004.852.24",
+   "price": 149,
+   "currency": "KWD",
+   "type": "desk",
+   "url": "https://www.ikea.com/kw/en/p/ridspoe-desk-oak-00485224/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/00485224/LPT_S01_NV01/rqp3/glb_draco/3a37684dd4eabb7eaee3d26a256c162a-00485224_LPT_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 1.4,
+   "depth": 0.7,
+   "height": 0.77,
+   "image": "https://www.ikea.com/kw/en/images/products/ridspoe-desk-oak__1188767_pe899574_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "nymane_work_lamp",
+   "name": "NYMÅNE Work lamp with wireless charging - white",
+   "vendor": "IKEA",
+   "sku": "204.486.07",
+   "price": 29.99,
+   "currency": "KWD",
+   "type": "table_lamp",
+   "url": "https://www.ikea.com/kw/en/p/nymane-work-lamp-with-wireless-charging-white-20448607/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/20448607/PS01_S01_NV01/rqp3/glb_draco/1130ecc72da8447b8f7f42eee2c82a56-20448607_PS01_S01_NV01_RQP3_3.0.glb?cn=pip",
+   "width": 0.37,
+   "height": 0.67,
+   "image": "https://www.ikea.com/kw/en/images/products/nymane-work-lamp-with-wireless-charging-white__0991755_pe819570_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "hemnes_daybed",
+   "name": "HEMNES Day-bed frame with 3 drawers - white 80x200 cm",
+   "vendor": "IKEA",
+   "sku": "903.493.26",
+   "price": 149,
+   "currency": "KWD",
+   "type": "daybed",
+   "url": "https://www.ikea.com/kw/en/p/hemnes-day-bed-frame-with-3-drawers-white-90349326/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/90349326/PS01_S01_NV01/isp3/glb_draco/90349326_PS01_S01_NV01_ISP3_2.0_085a0b85c9ff412b9ef3a5dc6f465d1e.glb?cn=pip",
+   "width": 2.09,
+   "depth": 0.89,
+   "height": 0.83,
+   "image": "https://www.ikea.com/kw/en/images/products/hemnes-day-bed-frame-with-3-drawers-white__1180454_pe896328_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "ekenaset_armchair",
+   "name": "EKENÄSET Armchair - oak effect/Kilanda light beige",
+   "vendor": "IKEA",
+   "sku": "106.243.28",
+   "price": 69.99,
+   "currency": "KWD",
+   "type": "accent_chair",
+   "url": "https://www.ikea.com/kw/en/p/ekenaeset-armchair-oak-effect-kilanda-light-beige-10624328/",
+   "width": 0.65,
+   "depth": 0.74,
+   "height": 0.75,
+   "color": "#ac9170",
+   "image": "https://www.ikea.com/kw/en/images/products/ekenaeset-armchair-oak-effect-kilanda-light-beige__1489627_pe1003901_s5.jpg"
+  },
+  {
+   "id": "idanas_bed",
+   "name": "IDANÄS Bed frame - dark brown/Lönset 180x200 cm",
+   "vendor": "IKEA",
+   "sku": "893.922.12",
+   "price": 179,
+   "currency": "KWD",
+   "type": "platform_bed",
+   "url": "https://www.ikea.com/kw/en/p/idanaes-bed-frame-dark-brown-loenset-s89392212/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/89392212/PS01_S01_NV01/simple/glb_draco/G-89392212-134ee8821e0d4bdc8035dd5c8542b2d054737886_254d4378c8e746e3b5ef9bc2e68b1d4e.glb?cn=pip",
+   "width": 2.07,
+   "depth": 1.91,
+   "image": "https://www.ikea.com/kw/en/images/products/idanaes-bed-frame-dark-brown-loenset__0916068_pe784944_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "idanas_side_table",
+   "name": "IDANÄS Side table - dark brown stained 46x36 cm",
+   "vendor": "IKEA",
+   "sku": "604.960.45",
+   "price": 39.99,
+   "currency": "KWD",
+   "type": "nightstand",
+   "url": "https://www.ikea.com/kw/en/p/idanaes-side-table-dark-brown-stained-60496045/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/60496045/PS01_S01_NV01/rqp3/glb_draco/7709264affd74539a36c3379bef63e57-60496045_PS01_S01_NV01_RQP3_3.0.glb?cn=pip",
+   "width": 0.46,
+   "depth": 0.36,
+   "height": 0.63,
+   "image": "https://www.ikea.com/kw/en/images/products/idanaes-side-table-dark-brown-stained__1161079_pe889287_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "poang_low_back",
+   "name": "POÄNG Low-back armchair - natural colour/beige/Vissle black",
+   "vendor": "IKEA",
+   "sku": "695.515.94",
+   "price": 39.99,
+   "currency": "KWD",
+   "type": "lounge_chair",
+   "url": "https://www.ikea.com/kw/en/p/poaeng-low-back-armchair-natural-colour-beige-vissle-black-s69551594/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/69551594/PS01_S01_NV_01/simple/glb/2e107c219694b7fd811db35309ec4474-G-69551594-7d0526ecdacc01f6ccb22276a08777f4baec7ed3-simple.glb?cn=pip",
+   "image": "https://www.ikea.com/kw/en/images/products/poaeng-low-back-armchair-natural-colour-beige-vissle-black__1315065_pe940387_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "tyssedal_dressing_table",
+   "name": "TYSSEDAL Dressing table - white 120x51 cm",
+   "vendor": "IKEA",
+   "sku": "203.599.84",
+   "price": 89.99,
+   "currency": "KWD",
+   "type": "dressing_table",
+   "url": "https://www.ikea.com/kw/en/p/tyssedal-dressing-table-white-20359984/",
+   "width": 1.2,
+   "depth": 0.51,
+   "height": 0.86,
+   "color": "#e6e6e6",
+   "image": "https://www.ikea.com/kw/en/images/products/tyssedal-dressing-table-white__0563360_pe663833_s5.jpg"
+  },
+  {
+   "id": "forlunda_pouffe",
+   "name": "FÖRLUNDA Pouffe - with storage/Vissle beige",
+   "vendor": "IKEA",
+   "sku": "305.527.64",
+   "price": 17.99,
+   "currency": "KWD",
+   "type": "ottoman",
+   "url": "https://www.ikea.com/kw/en/p/foerlunda-pouffe-with-storage-vissle-beige-30552764/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/30552764/LPT_S01_NV01/rqp3/glb_draco/7dd21b1140d4b492ea1c465c03da0410-30552764_LPT_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 0.44,
+   "depth": 0.44,
+   "height": 0.41,
+   "image": "https://www.ikea.com/kw/en/images/products/foerlunda-pouffe-with-storage-vissle-beige__1320736_pe941339_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "arende_rug",
+   "name": "ÄRENDE Rug, high pile - off-white 160x230 cm",
+   "vendor": "IKEA",
+   "sku": "205.764.35",
+   "price": 24.99,
+   "currency": "KWD",
+   "type": "rug",
+   "url": "https://www.ikea.com/kw/en/p/aerende-rug-high-pile-off-white-20576435/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/20576435/PS01_S01_NV_01/simple/glb_draco/6e59c56f73e0aea3376e6117c4b7c88d-G-20576435-709020497ca1bc74607bafb16e4140a5d7e430dc-simple+draco.glb?cn=pip",
+   "width": 2.3,
+   "depth": 1.6,
+   "image": "https://www.ikea.com/kw/en/images/products/aerende-rug-high-pile-off-white__1416048_pe975419_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "segeron_sun_lounger",
+   "name": "SEGERÖN Sun lounger - white/beige",
+   "vendor": "IKEA",
+   "sku": "205.107.98",
+   "price": 60,
+   "currency": "KWD",
+   "type": "sun_lounger",
+   "url": "https://www.ikea.com/kw/en/p/segeroen-sun-lounger-white-beige-20510798/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/20510798/PS01_S01_NV01/rqp3/glb_draco/f87dbb19e1fe4f919a4cd7697c381d06-20510798_PS01_S01_NV01_RQP3_3.0.glb?cn=pip",
+   "width": 2.05,
+   "depth": 0.72,
+   "height": 0.38,
+   "image": "https://www.ikea.com/kw/en/images/products/segeroen-sun-lounger-white-beige__1138768_pe880070_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "havsten_outdoor_sofa",
+   "name": "HAVSTEN 2-seat sofa, outdoor - beige/beige",
+   "vendor": "IKEA",
+   "sku": "494.950.66",
+   "price": 188.99,
+   "currency": "KWD",
+   "type": "outdoor_sofa",
+   "url": "https://www.ikea.com/kw/en/p/havsten-2-seat-sofa-outdoor-beige-beige-s49495066/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/09251956/PS01_S01_NV_01/simple/glb_draco/642e13bda32305cfd563b8931c381284-G-09251956-20013313cb62863eb901261c14b83f1206881b0f-simple+draco.glb?cn=pip",
+   "width": 1.79,
+   "depth": 0.92,
+   "height": 0.76,
+   "image": "https://www.ikea.com/kw/en/images/products/havsten-2-seat-sofa-outdoor-beige-beige__0729049_pe736632_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "hakanskar_outdoor_table",
+   "name": "HÅKANSKÄR Coffee table - outdoor/light brown stained 80x64 cm",
+   "vendor": "IKEA",
+   "sku": "705.971.62",
+   "price": 32.99,
+   "currency": "KWD",
+   "type": "coffee_table",
+   "url": "https://www.ikea.com/kw/en/p/hakanskaer-coffee-table-outdoor-light-brown-stained-70597162/",
+   "model": "https://web-api.ikea.com/dimma/assets/1.2/70597162/PS01_S01_NV01/rqp3/glb_draco/0c9e7551c879f960152f61c1d898f7ef-70597162_PS01_S01_NV01_RQP3_4.0.glb?cn=pip",
+   "width": 0.8,
+   "depth": 0.64,
+   "height": 0.43,
+   "image": "https://www.ikea.com/kw/en/images/products/hakanskaer-coffee-table-outdoor-light-brown-stained__1453921_pe991428_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "laktare_chair",
+   "name": "LÄKTARE Conference chair - birch veneer/white",
+   "vendor": "IKEA",
+   "sku": "095.031.91",
+   "price": 24.99,
+   "currency": "KWD",
+   "type": "office_chair",
+   "url": "https://www.ikea.com/kw/en/p/laektare-conference-chair-birch-veneer-white-s09503191/",
+   "model": "https://web-api.ikea.com/dimma/assets/geomagical/09503191/PS01_S01_NV_01/simple/glb_draco/a544ee36284c3adaa76cac7e435882c9-G-09503191-4cf2aff9629a2b7b54f10c621c217eae05791cf1-simple+draco.glb?cn=pip",
+   "image": "https://www.ikea.com/kw/en/images/products/laektare-conference-chair-birch-veneer-white__1188525_pe899485_s5.jpg",
+   "license": "vendor"
+  },
+  {
+   "id": "luktvicker_duvet_set",
+   "name": "LUKTVICKER Duvet cover and 2 pillowcases - dark green 240x220/50x80 cm",
+   "vendor": "IKEA",
+   "sku": "906.249.99",
+   "price": 17.99,
+   "currency": "KWD",
+   "type": "bedding",
+   "url": "https://www.ikea.com/kw/en/p/luktvicker-duvet-cover-and-2-pillowcases-dark-green-90624999/",
+   "image": "https://www.ikea.com/kw/en/images/products/luktvicker-duvet-cover-and-2-pillowcases-dark-green__1599604_pe1042437_s5.jpg",
+   "width": 1.8,
+   "depth": 2,
+   "height": 0.22,
+   "color": "#4e5449"
+  }
+ ],
  "site": {
   "groundMaterial": "grass",
   "margin": 5
@@ -631,14 +1065,12 @@
    "furniture": [
     {
      "id": "sofa",
-     "type": "sectional_sofa",
+     "product": "kivik_corner_sofa",
      "position": [
       3.75,
       3.3
      ],
-     "facing": "west",
-     "width": 2.8,
-     "depth": 2.0
+     "facing": "west"
     },
     {
      "id": "cushion1",
@@ -668,25 +1100,21 @@
     },
     {
      "id": "living_rug",
-     "type": "rug",
+     "product": "geolog_rug",
      "position": [
       2.3,
       3.3
      ],
-     "width": 3.0,
-     "depth": 2.4,
      "rotation": 90
     },
     {
      "id": "coffee_table",
-     "type": "coffee_table",
+     "product": "idanas_coffee_table",
      "position": [
       1.9,
       3.3
      ],
-     "rotation": 90,
-     "width": 1.1,
-     "depth": 0.6
+     "rotation": 90
     },
     {
      "id": "coffee_decor",
@@ -709,7 +1137,7 @@
     },
     {
      "id": "lounge_chair",
-     "type": "lounge_chair",
+     "product": "stockholm_easy_chair",
      "position": [
       1.75,
       5.3
@@ -726,29 +1154,29 @@
     },
     {
      "id": "living_plant",
-     "type": "plant_large",
+     "product": "fejka_weeping_fig",
      "position": [
-      5.25,
-      0.7
+      5.2,
+      0.95
      ],
      "options": {
       "species": "monstera",
       "pot": "basket"
-     }
+     },
+     "height": 1.6
     },
     {
      "id": "sideboard",
-     "type": "sideboard",
+     "product": "boastad_sideboard",
      "position": [
       3.8,
-      6.3
+      6.24
      ],
-     "facing": "south",
-     "width": 1.8
+     "facing": "south"
     },
     {
      "id": "sideboard_lamp",
-     "type": "table_lamp",
+     "product": "arstid_table_lamp",
      "position": [
       3.15,
       6.32
@@ -786,17 +1214,15 @@
     },
     {
      "id": "dining_table",
-     "type": "table",
+     "product": "skansnas_table",
      "position": [
       7.3,
       1.68
-     ],
-     "width": 1.9,
-     "depth": 0.95
+     ]
     },
     {
      "id": "dchair1",
-     "type": "chair",
+     "product": "skansnas_chair",
      "position": [
       6.75,
       0.98
@@ -805,7 +1231,7 @@
     },
     {
      "id": "dchair2",
-     "type": "chair",
+     "product": "skansnas_chair",
      "position": [
       7.85,
       0.98
@@ -814,7 +1240,7 @@
     },
     {
      "id": "dchair3",
-     "type": "chair",
+     "product": "skansnas_chair",
      "position": [
       6.75,
       2.38
@@ -823,7 +1249,7 @@
     },
     {
      "id": "dchair4",
-     "type": "chair",
+     "product": "skansnas_chair",
      "position": [
       7.85,
       2.38
@@ -832,7 +1258,7 @@
     },
     {
      "id": "dchair5",
-     "type": "chair",
+     "product": "skansnas_chair",
      "position": [
       6.1,
       1.68
@@ -841,7 +1267,7 @@
     },
     {
      "id": "dchair6",
-     "type": "chair",
+     "product": "skansnas_chair",
      "position": [
       8.5,
       1.68
@@ -863,7 +1289,7 @@
     },
     {
      "id": "console",
-     "type": "console_table",
+     "product": "idanas_console",
      "position": [
       0.34,
       8.6
@@ -884,16 +1310,16 @@
     },
     {
      "id": "hall_lamp",
-     "type": "table_lamp",
+     "product": "arstid_table_lamp",
      "position": [
       0.34,
       8.15
      ],
-     "elevation": 0.8
+     "elevation": 0.95
     },
     {
      "id": "shoe_cab",
-     "type": "shoe_cabinet",
+     "product": "brusali_shoe_cabinet",
      "position": [
       0.3,
       10.1
@@ -902,7 +1328,7 @@
     },
     {
      "id": "coat_rack",
-     "type": "coat_rack",
+     "product": "nipasen_coat_stand",
      "position": [
       2.75,
       10.45
@@ -910,18 +1336,16 @@
     },
     {
      "id": "hall_plant",
-     "type": "plant_large",
+     "product": "fejka_weeping_fig",
      "position": [
-      0.45,
-      7.25
+      0.46,
+      7.5
      ],
-     "width": 0.6,
-     "depth": 0.6,
-     "height": 1.3,
      "options": {
       "species": "snake_plant",
       "pot": "cylinder"
-     }
+     },
+     "height": 0.9
     },
     {
      "id": "wc_toilet",
@@ -944,17 +1368,16 @@
     },
     {
      "id": "desk",
-     "type": "desk",
+     "product": "ridspo_desk",
      "position": [
       7.3,
       10.5
      ],
-     "facing": "south",
-     "width": 1.6
+     "facing": "south"
     },
     {
      "id": "desk_chair",
-     "type": "office_chair",
+     "product": "laktare_chair",
      "position": [
       7.3,
       9.75
@@ -963,16 +1386,16 @@
     },
     {
      "id": "desk_lamp",
-     "type": "table_lamp",
+     "product": "nymane_work_lamp",
      "position": [
       6.75,
       10.6
      ],
-     "elevation": 0.75
+     "elevation": 0.88
     },
     {
      "id": "daybed",
-     "type": "daybed",
+     "product": "hemnes_daybed",
      "position": [
       5.55,
       9.3
@@ -994,7 +1417,7 @@
     },
     {
      "id": "study_chair",
-     "type": "accent_chair",
+     "product": "ekenaset_armchair",
      "position": [
       8.55,
       8.7
@@ -1003,14 +1426,15 @@
     },
     {
      "id": "study_plant",
-     "type": "plant_large",
+     "product": "fejka_weeping_fig",
      "position": [
-      9.1,
-      10.4
+      9.05,
+      10.0
      ],
      "options": {
       "species": "fiddle_leaf"
-     }
+     },
+     "height": 1.2
     },
     {
      "id": "study_art",
@@ -1024,18 +1448,26 @@
     },
     {
      "id": "bed",
-     "type": "platform_bed",
+     "product": "idanas_bed",
      "position": [
       10.85,
       3.8
      ],
+     "facing": "east"
+    },
+    {
+     "id": "bed_linen",
+     "product": "luktvicker_duvet_set",
+     "position": [
+      10.885,
+      3.8
+     ],
      "facing": "east",
-     "width": 1.8,
-     "depth": 2.2
+     "elevation": 0.47
     },
     {
      "id": "ns_left",
-     "type": "nightstand",
+     "product": "idanas_side_table",
      "position": [
       9.9,
       2.35
@@ -1044,7 +1476,7 @@
     },
     {
      "id": "ns_right",
-     "type": "nightstand",
+     "product": "idanas_side_table",
      "position": [
       9.9,
       5.25
@@ -1053,21 +1485,21 @@
     },
     {
      "id": "lamp_left",
-     "type": "table_lamp",
+     "product": "arstid_table_lamp",
      "position": [
       9.9,
       2.35
      ],
-     "elevation": 0.55
+     "elevation": 0.63
     },
     {
      "id": "lamp_right",
-     "type": "table_lamp",
+     "product": "arstid_table_lamp",
      "position": [
       9.9,
       5.25
      ],
-     "elevation": 0.55
+     "elevation": 0.63
     },
     {
      "id": "bed_art",
@@ -1087,13 +1519,11 @@
     },
     {
      "id": "bed_rug",
-     "type": "rug",
+     "product": "arende_rug",
      "position": [
       11.4,
       3.8
      ],
-     "width": 3.2,
-     "depth": 2.4,
      "rotation": 90
     },
     {
@@ -1117,14 +1547,14 @@
       3.8
      ],
      "rotation": 90,
-     "elevation": 0.4,
+     "elevation": 0.67,
      "options": {
       "style": "folded"
      }
     },
     {
      "id": "reading_chair",
-     "type": "lounge_chair",
+     "product": "poang_low_back",
      "position": [
       15.1,
       5.5
@@ -1141,7 +1571,7 @@
     },
     {
      "id": "dresser",
-     "type": "dressing_table",
+     "product": "tyssedal_dressing_table",
      "position": [
       15.6,
       1.4
@@ -1153,13 +1583,11 @@
     },
     {
      "id": "dresser_stool",
-     "type": "ottoman",
+     "product": "forlunda_pouffe",
      "position": [
       15.0,
       1.4
-     ],
-     "width": 0.42,
-     "depth": 0.42
+     ]
     },
     {
      "id": "tub",
@@ -1199,41 +1627,32 @@
     },
     {
      "id": "bath_plant",
-     "type": "plant_large",
+     "product": "fejka_weeping_fig",
      "position": [
-      15.5,
-      10.5
+      15.55,
+      10.1
      ],
-     "width": 0.5,
-     "depth": 0.5,
-     "height": 1.1,
      "options": {
       "species": "snake_plant"
-     }
+     },
+     "height": 0.9
     },
     {
      "id": "deck_sofa",
-     "type": "outdoor_sofa",
+     "product": "havsten_outdoor_sofa",
      "position": [
       3.0,
       -1.9
      ],
-     "facing": "north",
-     "width": 2.2
+     "facing": "north"
     },
     {
      "id": "deck_table",
-     "type": "coffee_table",
+     "product": "hakanskar_outdoor_table",
      "position": [
       3.0,
       -1.0
-     ],
-     "width": 1.0,
-     "depth": 0.5,
-     "materials": {
-      "top": "wood_teak",
-      "legs": "wood_teak"
-     }
+     ]
     },
     {
      "id": "deck_planter1",
@@ -1255,25 +1674,21 @@
     },
     {
      "id": "lounger1",
-     "type": "sun_lounger",
+     "product": "segeron_sun_lounger",
      "position": [
       12.0,
       -1.4
      ],
-     "rotation": 0,
-     "width": 0.7,
-     "depth": 1.9
+     "rotation": 0
     },
     {
      "id": "lounger2",
-     "type": "sun_lounger",
+     "product": "segeron_sun_lounger",
      "position": [
       12.9,
       -1.4
      ],
-     "rotation": 0,
-     "width": 0.7,
-     "depth": 1.9
+     "rotation": 0
     },
     {
      "id": "tree1",
@@ -1299,7 +1714,7 @@
     },
     {
      "id": "stool1",
-     "type": "bar_stool",
+     "product": "glenn_counter_stool",
      "position": [
       5.8,
       3.35
@@ -1308,7 +1723,7 @@
     },
     {
      "id": "stool2",
-     "type": "bar_stool",
+     "product": "glenn_counter_stool",
      "position": [
       6.5,
       3.35
@@ -1317,7 +1732,7 @@
     },
     {
      "id": "stool3",
-     "type": "bar_stool",
+     "product": "glenn_counter_stool",
      "position": [
       7.2,
       3.35

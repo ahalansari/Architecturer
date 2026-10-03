@@ -388,6 +388,7 @@ const base = (file: string) => file.replace(/\.json$/, "");
 function report(c: Compiled, stats = false) {
   for (const e of c.errors) console.error(`error: ${e}`);
   for (const w of c.warnings) console.error(`warning: ${w}`);
+  for (const n of c.notes ?? []) console.error(`note: ${n}`);
   if (stats && c.root)
     console.error(`${c.stats.triangles.toLocaleString()} triangles, ${c.stats.meshes} meshes, ${c.stats.nodes} nodes, ${c.stats.materials} materials`);
 }

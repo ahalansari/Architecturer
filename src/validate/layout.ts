@@ -76,7 +76,7 @@ const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat"
 /** Mounted flat on a wall (back at +Y): never "faces into a wall", fine beside/over windows. */
 const WALL_MOUNTED = new Set(["wall_art", "gallery_wall", "floating_shelf", "wall_clock", "mirror", "mirror_round", "mirror_arched", "mirror_full_length", "towel_rail", "towel_hook_set", "toilet_roll_holder", "shower_curtain"]);
 /** Small decor that rests on other furniture (sofas, counters, tables): no overlap warning when raised above the other item's base. */
-const ON_TOP = new Set(["vase", "books_stack", "decor_bowl", "candle_set", "cushion", "throw_blanket", "sculpture", "tray_with_decor", "lantern", "kettle", "coffee_machine", "fruit_bowl", "cutting_boards", "utensil_jar", "plant_herbs", "soap_dispenser", "table_lamp"]);
+const ON_TOP = new Set(["bedding", "vase", "books_stack", "decor_bowl", "candle_set", "cushion", "throw_blanket", "sculpture", "tray_with_decor", "lantern", "kettle", "coffee_machine", "fruit_bowl", "cutting_boards", "utensil_jar", "plant_herbs", "soap_dispenser", "table_lamp"]);
 /** Canopies that other furniture is meant to stand under. */
 const CANOPY = new Set(["parasol", "tree"]);
 /** Things that are fine in front of a window. */

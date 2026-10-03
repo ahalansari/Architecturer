@@ -47,6 +47,7 @@ function summary(c: Compiled): string {
   lines.push(c.ok ? "Plan is valid." : `Plan has ${c.errors.length} error(s).`);
   for (const e of c.errors) lines.push(`ERROR: ${e}`);
   for (const w of c.warnings) lines.push(`warning: ${w}`);
+  for (const n of c.notes ?? []) lines.push(`note: ${n}`);
   if (c.root) lines.push(`${c.stats.triangles} triangles, ${c.stats.nodes} nodes, ${c.stats.materials} materials.`);
   if (c.credits.length) {
     const lic = new Map<string, number>();

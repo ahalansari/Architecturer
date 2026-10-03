@@ -4820,6 +4820,15 @@ export const FURNITURE: Record<string, FurnitureType> = {
     slots: { frame: "fabric_beige", legs: "wood_walnut", mattress: "linen_white", pillows: "fabric_white", cushions: "velvet_rust" },
     build: buildDaybed,
   }),
+  bedding: def({
+    description: "Made-up mattress (mattress, duvet with folded edge, pillows at +Y) to dress a bed frame sold without bedding, e.g. an IKEA frame: same position and facing as the frame, elevation = the frame's slat height.",
+    defaults: { width: 1.8, depth: 2.0, height: 0.22 },
+    slots: { mattress: "linen_white", duvet: "linen_natural", pillows: "linen_white" },
+    options: { pillows: { description: "Pillows at the head end", default: true } },
+    build(mb, s) {
+      mattressSet(mb, s.materials, -s.width / 2, s.width / 2, -s.depth / 2, s.depth / 2, 0, s.height * 0.75, s.options.pillows !== false);
+    },
+  }),
   platform_bed: def({
     description: "Low floating platform bed with wide headboard (+Y); nightstands=true builds integrated side shelves (width then includes them, e.g. 2.6).",
     defaults: { width: 1.8, depth: 2.2, height: 0.9 },

@@ -48,7 +48,9 @@ export function productId(name: string, sku: string | undefined, existing: { id:
   return `${head}_${tail}`;
 }
 
-const SLOT_PRIORITY = ["fabric", "upholstery", "body", "main", "cushion", "frame", "top", "wood", "shade", "metal"];
+const SLOT_PRIORITY = ["fabric", "upholstery", "duvet", "body", "main", "cushion", "frame", "top", "wood", "shade", "metal"];
+/** Slots that take the product colour along with the primary one (sofa cushions, pillowcases of a duvet set). */
+const TINT_ALSO: Record<string, string[]> = { body: ["cushions"], duvet: ["pillows"] };
 
 /** Main material slot of a furniture type (the one a product colour tints). */
 export function primarySlot(type: string): string | undefined {
@@ -95,11 +97,12 @@ export function applyProducts(input: unknown): { input: unknown; errors: string[
           const slots = FURNITURE[String(g.type)]?.slots ?? {};
           mats[name] ??= { base: slots[slot] ?? "plaster_white", color: pr.color };
           m[slot] = name;
-          // upholstered pieces: the cushions match the body
-          if (slots.cushions && m.cushions === undefined) {
-            mats[`${name}_cushions`] ??= { base: slots.cushions, color: pr.color };
-            m.cushions = `${name}_cushions`;
-          }
+          // upholstered pieces: the cushions match the body; a duvet set includes the pillowcases
+          for (const extra of TINT_ALSO[slot] ?? [])
+            if (slots[extra] && m[extra] === undefined) {
+              mats[`${name}_${extra}`] ??= { base: slots[extra], color: pr.color };
+              m[extra] = `${name}_${extra}`;
+            }
         }
         g.materials = m;
       }

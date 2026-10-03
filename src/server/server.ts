@@ -35,10 +35,19 @@ function sendFile(res: ServerResponse, base: string, rel: string) {
 export async function serve(planPath: string, opts: { port: number; textureSize?: number }) {
   const file = resolve(planPath);
   let cache: { mtime: number; compiled: Compiled; glb: Map<string, Uint8Array> } | undefined;
+  // compiles fetch online assets (seconds on a cold cache): concurrent requests share one in-flight build
+  let building: { mtime: number; p: Promise<NonNullable<typeof cache>> } | undefined;
   const current = async () => {
     const m = (await stat(file)).mtimeMs;
-    if (!cache || cache.mtime !== m) cache = { mtime: m, compiled: await loadAndCompile(file), glb: new Map() };
-    return cache;
+    if (cache && cache.mtime === m) return cache;
+    if (!building || building.mtime !== m) {
+      const p = loadAndCompile(file).then((compiled) => (cache = { mtime: m, compiled, glb: new Map() }));
+      building = { mtime: m, p };
+      p.catch(() => undefined).finally(() => {
+        if (building?.p === p) building = undefined;
+      });
+    }
+    return building.p;
   };
   const clients = new Set<ServerResponse>();
 
@@ -98,13 +107,16 @@ export async function serve(planPath: string, opts: { port: number; textureSize?
       if (url.pathname === "/plan.svg") {
         const sheet = url.searchParams.get("sheet") || "plan";
         if (!(PLAN_SHEETS as readonly string[]).includes(sheet)) return void res.writeHead(400).end(`sheet must be one of ${PLAN_SHEETS.join(", ")}`);
+        const svg = renderPlanSVG(c, url.searchParams.get("level") || undefined, { sheet: sheet as PlanSheet });
         res.writeHead(200, { "content-type": MIME[".svg"], "cache-control": "no-store" });
-        res.end(renderPlanSVG(c, url.searchParams.get("level") || undefined, { sheet: sheet as PlanSheet }));
+        res.end(svg);
         return;
       }
       res.writeHead(404).end("not found");
     } catch (e) {
-      res.writeHead(500, { "content-type": "text/plain" }).end((e as Error).stack ?? String(e));
+      // never write headers twice (a failure after the response started would crash the server)
+      if (!res.headersSent) res.writeHead(500, { "content-type": "text/plain" }).end((e as Error).stack ?? String(e));
+      else res.end();
     }
   });
   await new Promise<void>((ok) => server.listen(opts.port, ok));

@@ -186,9 +186,14 @@ export function parseProductHtml(html: string, url?: string): ProductInfo {
     const m = new RegExp(`"measure":"((?:[^"\\\\]|\\\\.)*)","name":"${name}"`).exec(html);
     return m ? parseLength(m[1].replace(/\\"/g, '"'), "cm") : undefined;
   };
-  info.width ??= ikea("Width") ?? ikea("Length") ?? ikea("Diameter");
-  info.depth ??= ikea("Depth") ?? ikea("Diameter");
-  info.height ??= ikea("Height") ?? ikea("Max. height");
+  // IKEA's own measurement list beats the JSON-LD (whose width/depth follow IKEA naming): tables, rugs and beds
+  // give Length (long side) × Width, everything else Width × Depth
+  const iL = ikea("Length"), iW = ikea("Width"), iD = ikea("Depth"), iDia = ikea("Diameter"), iH = ikea("Height") ?? ikea("Max. height");
+  if (iL !== undefined || iW !== undefined || iDia !== undefined) {
+    if (iL !== undefined) (info.width = iL), (info.depth = iW ?? iD ?? info.depth);
+    else (info.width = iW ?? iDia ?? info.width), (info.depth = iD ?? iDia ?? info.depth);
+    info.height = iH ?? info.height;
+  }
 
   // free text: "Width: 80 cm" / "200 x 90 x 75 cm" / 30"D x 28"W x 35"H
   if (info.width === undefined || info.depth === undefined || info.height === undefined) {

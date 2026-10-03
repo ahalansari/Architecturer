@@ -13,6 +13,7 @@ import type { MeshData } from "../geometry/mesh.js";
 import type { AssetSource, MaterialDef, RGB } from "../materials/types.js";
 import { cachePathFor, cacheRoot, download, fetchCached, hashOf } from "./cache.js";
 import { registerMaterial, type ImportedModel } from "./registry.js";
+import { webpToPng } from "./images.js";
 
 let ioPromise: Promise<NodeIO> | null = null;
 async function getIO(): Promise<NodeIO> {
@@ -94,6 +95,16 @@ export async function loadModelFile(path: string, key: string, source: AssetSour
     else if (ext3 > 20) unit = 0.01;
     else if (ext3 > 8) unit = 0.0254;
     if (unit !== 1) warn(`model ${source.id}: OBJ has no units; ${ext3.toFixed(0)} units across, read as ${unit === 0.001 ? "mm" : unit === 0.01 ? "cm" : "inches"}`);
+  }
+  // game budget by size: ~7k triangles for a lamp, ~10k for a chair, up to 20k for a sofa or bed
+  // (ARCHITECTURER_MODEL_TRIANGLES sets a fixed budget; 0 keeps full detail)
+  const before = raw.reduce((a, m) => a + m.indices.length / 3, 0);
+  const env = process.env.ARCHITECTURER_MODEL_TRIANGLES;
+  const budget = env !== undefined ? Number(env) : Math.round(Math.min(20000, Math.max(5000, 2500 + 9000 * ext3 * unit)));
+  if (budget > 0 && before > budget * 1.15) {
+    await simplifyMeshes(raw, budget / before);
+    const after = raw.reduce((a, m) => a + m.indices.length / 3, 0);
+    warn(`model ${source.title ?? source.id}: simplified ${Math.round(before / 1000)}k → ${Math.round(after / 1000)}k triangles for real-time use (ARCHITECTURER_MODEL_TRIANGLES=0 keeps full detail)`);
   }
   const cx = (min[0] + max[0]) / 2, cy = (min[1] + max[1]) / 2, z0 = min[2];
   let triangles = 0;
@@ -192,9 +203,18 @@ async function gltfMaterial(m: GMaterial, name: string, source: AssetSource, war
   const f = m.getBaseColorFactor();
   const save = async (t: Texture | null, what: string): Promise<string | undefined> => {
     if (!t) return undefined;
-    const img = t.getImage();
-    const mime = t.getMimeType();
+    let img = t.getImage();
+    let mime = t.getMimeType();
     if (!img) return undefined;
+    if (mime === "image/webp") {
+      try {
+        img = new Uint8Array(await webpToPng(img));
+        mime = "image/png";
+      } catch (e) {
+        warn(`model ${source.id}: ${what} WebP texture could not be decoded (${(e as Error).message}); using flat colour`);
+        return undefined;
+      }
+    }
     if (mime !== "image/png" && mime !== "image/jpeg") {
       warn(`model ${source.id}: ${what} texture is ${mime}, which cannot be decoded; using flat colour`);
       return undefined;
@@ -228,6 +248,47 @@ async function gltfMaterial(m: GMaterial, name: string, source: AssetSource, war
     ...(mask ? { alphaCutoff: m.getAlphaCutoff() } : {}),
     source,
   };
+}
+
+/** Reduce each mesh to about `ratio` of its triangles (meshoptimizer), then drop unused vertices. */
+async function simplifyMeshes(raw: RawMesh[], ratio: number) {
+  const { MeshoptSimplifier } = await import("meshoptimizer");
+  await MeshoptSimplifier.ready;
+  for (const m of raw) {
+    const tris = m.indices.length / 3;
+    if (tris < 200) continue;
+    const target = Math.max(3, Math.floor(tris * ratio) * 3);
+    // attribute-aware (UVs + normals weigh in, so textures do not smear across seams); loosen the allowed error
+    // a little at a time and stop short of the target rather than distort the model
+    const attrs = new Float32Array((m.positions.length / 3) * 5);
+    for (let v = 0; v < m.positions.length / 3; v++) {
+      attrs[v * 5] = m.uvs[v * 2] ?? 0;
+      attrs[v * 5 + 1] = m.uvs[v * 2 + 1] ?? 0;
+      attrs[v * 5 + 2] = m.normals[v * 3] ?? 0;
+      attrs[v * 5 + 3] = m.normals[v * 3 + 1] ?? 0;
+      attrs[v * 5 + 4] = m.normals[v * 3 + 2] ?? 0;
+    }
+    let idx: Uint32Array = new Uint32Array(m.indices);
+    for (const err of [0.005, 0.01, 0.02, 0.035]) {
+      [idx] = MeshoptSimplifier.simplifyWithAttributes(new Uint32Array(m.indices), new Float32Array(m.positions), 3, attrs, 5, [1, 1, 0.3, 0.3, 0.3], null, target, err, []);
+      if (idx.length <= target * 1.2) break;
+    }
+    // compact the vertex arrays to the vertices still referenced
+    const remap = new Map<number, number>();
+    const P: number[] = [], N: number[] = [], U: number[] = [], I: number[] = [];
+    for (const v of idx) {
+      let k = remap.get(v);
+      if (k === undefined) {
+        k = remap.size;
+        remap.set(v, k);
+        P.push(m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]);
+        if (m.normals.length) N.push(m.normals[v * 3], m.normals[v * 3 + 1], m.normals[v * 3 + 2]);
+        U.push(m.uvs[v * 2] ?? 0, m.uvs[v * 2 + 1] ?? 0);
+      }
+      I.push(k);
+    }
+    Object.assign(m, { positions: P, normals: N, uvs: U, indices: I });
+  }
 }
 
 function computeNormals(m: RawMesh) {

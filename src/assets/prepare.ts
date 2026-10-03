@@ -16,6 +16,8 @@ import { externalMaterial, getModel, registerMaterial, registerModel } from "./r
 export interface PrepareResult {
   input: unknown;
   warnings: string[];
+  /** Informational: models simplified, vendor sizes corrected, texture formats converted... */
+  notes: string[];
 }
 
 type Json = Record<string, unknown>;
@@ -34,7 +36,8 @@ const failed = new Map<string, string>();
 
 export async function prepareAssets(raw: unknown, opts: { baseDir: string }): Promise<PrepareResult> {
   const warnings: string[] = [];
-  if (!raw || typeof raw !== "object") return { input: raw, warnings };
+  const notes: string[] = [];
+  if (!raw || typeof raw !== "object") return { input: raw, warnings, notes };
   const input = structuredClone(raw) as Json;
 
   // ---- online materials referenced anywhere (material fields, custom material bases, product materials) ----
@@ -65,6 +68,8 @@ export async function prepareAssets(raw: unknown, opts: { baseDir: string }): Pr
   const products = Array.isArray(input.products) ? (input.products as Json[]) : [];
   const levels = Array.isArray(input.levels) ? (input.levels as Json[]) : [];
   const keyFor = (src: string) => (/^(https?:|[a-z0-9]+:)/i.test(src) && !/^[a-z]:[\\/]/i.test(src) ? src : resolve(opts.baseDir, src));
+  const titles = new Map<string, string>();
+  for (const p of products) if (typeof p.model === "string" && typeof p.name === "string") titles.set(p.model, p.name);
   const load = async (src: string): Promise<string | null> => {
     const key = keyFor(src);
     if (getModel(key)) return key;
@@ -74,7 +79,8 @@ export async function prepareAssets(raw: unknown, opts: { baseDir: string }): Pr
     }
     try {
       const { path, source } = await resolveModelPath(src, opts.baseDir, fetchOnlineModel);
-      registerModel(await loadModelFile(path, key, source as AssetSource, (w) => warnings.push(w)));
+      if (titles.has(src)) source.title = titles.get(src);
+      registerModel(await loadModelFile(path, key, source as AssetSource, (w) => notes.push(w)));
       return key;
     } catch (e) {
       const msg = (e as Error).message;
@@ -121,7 +127,16 @@ export async function prepareAssets(raw: unknown, opts: { baseDir: string }): Pr
   };
   for (const p of products)
     if (p.model) {
-      canon(p);
+      // a real model knows its own size: vendor page sizes are kept as information (and for stand-ins if the
+      // model fails), but placements use the model's geometry unless the furniture item sizes it itself
+      if (canon(p) && getModel(p.model as string)) {
+        const m = getModel(p.model as string)!;
+        const [w, d, h] = rotatedSize(m, Number(p.modelRotation ?? 0));
+        const given = [p.width, p.depth, p.height] as (number | undefined)[];
+        const off = given.some((v, i) => typeof v === "number" && Math.abs(v - [w, d, h][i]) > Math.max(0.05, 0.12 * [w, d, h][i]));
+        if (off) notes.push(`product '${p.id}': listed size ${given.map((v) => v?.toFixed(2) ?? "?").join("×")} differs from its model (${[w, d, h].map((v) => v.toFixed(2)).join("×")}); using the model`);
+        delete p.width, delete p.depth, delete p.height;
+      }
       // credit vendor / product models by the product, not the file name
       const m = typeof p.model === "string" ? getModel(p.model) : undefined;
       if (m)
@@ -139,7 +154,7 @@ export async function prepareAssets(raw: unknown, opts: { baseDir: string }): Pr
     if (!keys.has(f.model)) keys.set(f.model, getModel(f.model) ? f.model : await load(f.model));
     fill(f);
   }
-  return { input: out, warnings };
+  return { input: out, warnings, notes };
 }
 
 /** Credits for the external assets a compiled plan uses (for exports and the README of a game build). */

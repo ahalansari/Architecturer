@@ -14,6 +14,32 @@ export interface Img {
   data: Uint8Array;
 }
 
+let webpReady: Promise<(b: ArrayBuffer) => Promise<{ data: Uint8ClampedArray; width: number; height: number }>> | null = null;
+
+/** WebP → PNG (IKEA and other vendor GLBs often embed WebP textures; the texture pipeline reads PNG / JPEG). */
+export async function webpToPng(buf: Uint8Array): Promise<Buffer> {
+  webpReady ??= (async () => {
+    // the emscripten build returns an ImageData; Node has none
+    const g = globalThis as { ImageData?: unknown };
+    g.ImageData ??= class {
+      constructor(public data: Uint8ClampedArray, public width: number, public height: number) {}
+    };
+    const { readFile } = await import("node:fs/promises");
+    const { createRequire } = await import("node:module");
+    const req = createRequire(import.meta.url);
+    const wasmPath = req.resolve("@jsquash/webp/codec/dec/webp_dec.wasm");
+    const mod = await import("@jsquash/webp/decode.js");
+    await mod.init(await WebAssembly.compile(await readFile(wasmPath)));
+    return mod.default as never;
+  })();
+  const decode = await webpReady;
+  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  const im = await decode(ab);
+  const png = new PNG({ width: im.width, height: im.height });
+  png.data = Buffer.from(im.data.buffer, im.data.byteOffset, im.data.byteLength);
+  return PNG.sync.write(png);
+}
+
 export function decodeImage(buf: Uint8Array, hint = ""): Img {
   const isPng = buf[0] === 0x89 && buf[1] === 0x50;
   const isJpg = buf[0] === 0xff && buf[1] === 0xd8;

@@ -22,6 +22,8 @@ export interface Compiled {
   stats: { triangles: number; meshes: number; nodes: number; materials: number };
   /** External assets used (online materials, imported / vendor models) with their licences. */
   credits: AssetSource[];
+  /** Informational messages (not problems): models simplified for real-time use, vendor sizes corrected... */
+  notes?: string[];
 }
 
 const MISSING: MaterialDef = {
@@ -105,6 +107,7 @@ export async function compileWithAssets(input: unknown, opts: { baseDir: string 
   const prep = await prepareAssets(input, opts);
   const c = compile(prep.input);
   c.warnings.unshift(...prep.warnings);
+  c.notes = prep.notes;
   return c;
 }
 
