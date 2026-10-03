@@ -14,7 +14,8 @@ Every bill line is tagged *vendor price*, *market rate*, *your rate* or *indicat
 | File | Covers |
 | --- | --- |
 | `finishes.json` | Floors, wall finishes, skirting, cornice, thresholds |
-| `construction.json` | Partitions, shell, ceilings, doors, windows, window treatments, joinery per metre, installation labour, railings |
+| `structure.json` | Concrete (placed), rebar (supply & fix), formwork, blinding, concrete blocks 100/150/200 and insulated AAC block, cement plaster and render, drywall, roof waterproofing, insulation and screed, floor screed, rebar ratios, frame concrete per m², Kuwaiti skeleton / finishing / turnkey benchmarks per m² |
+| `construction.json` | Ceilings, doors, windows, window treatments, joinery per metre, installation labour, railings |
 | `mep.json` | Electrical points, fixtures, circuits, DB, plumbing fixtures, pipes, heaters |
 | `appliances.json` | Appliance allowances, furniture and decor allowances, percentages (preliminaries, OHP, contingency, VAT), the fit-out benchmark |
 
@@ -27,6 +28,24 @@ Entry format:
 ```
 
 After editing a file, run `node scripts/build-market-rates.mjs kw` to regenerate `src/cost/market_kw.ts`. The script rejects entries with no source URL, values that are not numbers, and duplicate keys. Entries with `"value": null` are skipped, and the indicative rate is used for them.
+
+## Structure (`costs.scope: "full"`)
+
+`project.construction` says what the building is made of. The default is `rc_block`, the Kuwait / GCC practice. Section A of the bill measures it from the model:
+
+| Line | Measured as |
+| --- | --- |
+| Excavation, blinding, foundations, bitumen to buried concrete | Ground-floor footprint × m³ per m² (isolated 0.3, raft 0.6, strip 0.25), 100 mm blinding |
+| Ground, suspended and roof slabs | Slab area × thickness (auto slabs under closed wall loops, explicit slabs, roofs) |
+| RC columns & beams | Modelled columns plus beams by ratio, or 0.13 m³ per m² of floor when no columns are drawn |
+| RC staircases and RC walls | Stair width × rise × 1.1; walls with `construction: "rc_200" / "rc_250"` |
+| Rebar (t) | Concrete × kg/m³: slabs 90, frame 150, foundations 90 (override in `construction.rebar`) |
+| Formwork | Slab soffits + 9 m² per m³ of frame + foundation sides + RC wall faces |
+| Blockwork | External walls by assembly (insulated 200 mm by default), roof parapets |
+| Cement plaster / render | Inner faces of external walls and parapets; facades |
+| Roof build-up, floor screed | Flat roof area; room floor area |
+
+Internal walls (section B, both scopes) are billed by assembly. Each wall's block size is picked from its drawn thickness, and every plastered face gets cement plaster. The notes compare the structure's cost per m² with Kuwaiti skeleton (هيكل أسود) contract prices.
 
 ## Caveats
 

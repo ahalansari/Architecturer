@@ -11,6 +11,9 @@ import { EL, elecSymbol, fixtureSymbol, PL, pipeSVG, plumbPointSymbol, switchWir
 import { FIXTURE_LABEL } from "../elements/services.js";
 import { ceilingLevels, dimension, fcpRoom, fmtH, levelKey, levelTag, rcpRoom, traySection } from "./plan-ceilings.js";
 import { floorPattern, levelFixtures, LUX_BANDS, luxFill, lightSymbol, materialLabel, materialTone, roomFinishBands, roomLux, type PlanFixture, type Tone } from "./plan-sheets.js";
+import { WALL_ASSEMBLIES, type WallKind } from "../elements/construction.js";
+
+const WALL_FILL: Record<WallKind, string> = { block: "url(#wall_block)", rc: "#3a3a3a", drywall: "#ececec", glass: "#dcebf7", timber: "url(#wall_timber)" };
 
 export interface PlanOptions {
   /** Pixels per meter. */
@@ -316,6 +319,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       `<pattern id="hatch_soffit" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#7d7d7d" stroke-width="0.6"/></pattern>` +
       `<pattern id="hatch_open" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(-45)"><rect width="10" height="10" fill="#f6f6f6"/><line x1="0" y1="0" x2="0" y2="10" stroke="#c8c8c8" stroke-width="0.8"/></pattern>` +
       `<pattern id="hatch_slab" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect width="5" height="5" fill="#e4e4e4"/><line x1="0" y1="0" x2="0" y2="5" stroke="#999" stroke-width="0.6"/></pattern>` +
+      `<pattern id="wall_block" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)"><rect width="4" height="4" fill="#d6d6d6"/><line x1="0" y1="0" x2="0" y2="4" stroke="#3a3a3a" stroke-width="0.9"/></pattern>` +
+      `<pattern id="wall_timber" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><rect width="6" height="6" fill="#ead9bf"/><line x1="0" y1="0" x2="0" y2="6" stroke="#9a6b3a" stroke-width="0.7"/><line x1="0" y1="0" x2="6" y2="0" stroke="#9a6b3a" stroke-width="0.7"/></pattern>` +
       `<pattern id="hatch_overhead" patternUnits="userSpaceOnUse" width="${hatchStep}" height="${hatchStep}" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${hatchStep}" stroke="#b07a45" stroke-width="1"/></pattern>` +
       `</defs>`,
   );
@@ -568,10 +573,15 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     else out.push(`<rect x="${X(x - col.size / 2)}" y="${Y(y + col.size / 2)}" width="${col.size * S}" height="${col.size * S}" fill="#444"/>`);
   }
 
-  // walls
+  // walls: the plan sheet hatches them by what they are built of (block, RC, drywall, glass, timber); the
+  // overlay sheets keep a solid poché so their symbols read clearly
   const wallPx: Vec2[][] = [];
+  const kinds = new Set<WallKind>();
   for (const s of info.segments) {
-    out.push(`<polygon points="${poly([s.aR, s.bR, s.b, s.bL, s.aL, s.a])}" fill="#3a3a3a" stroke="#3a3a3a" stroke-width="0.5"/>`);
+    const kind = WALL_ASSEMBLIES[s.construction ?? "block_200"].kind;
+    kinds.add(kind);
+    const fill = sheet !== "plan" ? "#3a3a3a" : WALL_FILL[kind];
+    out.push(`<polygon points="${poly([s.aR, s.bR, s.b, s.bL, s.aL, s.a])}" fill="${fill}" stroke="#3a3a3a" stroke-width="${sheet === "plan" ? 0.9 : 0.5}"/>`);
     wallPx.push([s.aR, s.bR, s.bL, s.aL].map(px));
   }
   // openings: clear the wall, then draw symbols
@@ -1067,6 +1077,22 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
     out.push(`<line x1="${W0}" y1="${pad + 10}" x2="${W0}" y2="${Math.max(H, y + 20) - 20}" stroke="#ddd" stroke-width="1"/>`, ...lg);
     H = Math.max(H, y + 30);
+  }
+
+  // wall construction key (plan sheet)
+  if (sheet === "plan" && info.segments.length) {
+    const used = [...new Set(info.segments.map((s) => s.construction ?? "block_200"))];
+    let x = pad, y = H + 4;
+    for (const id of used) {
+      const a = WALL_ASSEMBLIES[id];
+      const label = a.label + (a.plastered ? ", plastered" : "");
+      const w = 27 + label.length * 5.6 + 18;
+      if (x > pad && x + w > W0 - pad) (x = pad), (y += 16);
+      out.push(`<rect x="${x}" y="${y - 8}" width="22" height="10" fill="${WALL_FILL[a.kind]}" stroke="#3a3a3a" stroke-width="0.9"/>`);
+      out.push(`<text x="${x + 27}" y="${y + 1}" font-size="10.5" fill="#444">${esc(label)}</text>`);
+      x += w;
+    }
+    H = y + 18;
   }
 
   // north arrow + scale bar

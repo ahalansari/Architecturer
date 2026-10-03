@@ -12,6 +12,7 @@ import { renderScene, type MaterialLookup } from "../src/render/raster.js";
 function twoRooms(level: Record<string, unknown> = {}) {
   return {
     site: { ground: false },
+    defaults: { floorMaterial: "wood_floor_oak" }, // the luminance thresholds below are tuned to a mid-tone floor
     levels: [
       {
         id: "g",

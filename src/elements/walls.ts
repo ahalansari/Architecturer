@@ -1,6 +1,7 @@
 import { lineIntersect, pointSegment, signedArea, v2, type Vec2, type Vec3 } from "../geometry/math.js";
 import type { MeshBuilder } from "../geometry/mesh.js";
 import type { Project, Wall } from "../schema/schema.js";
+import { assemblyThickness, wallAssembly, type WallAssemblyId } from "./construction.js";
 
 /** One straight piece of wall after polylines are expanded and junctions split. */
 export interface WallSegment {
@@ -31,6 +32,8 @@ export interface WallSegment {
   holes: WallHole[];
   /** Part of a closed loop (exterior wall): reveals take the interior face's finish across the whole thickness. */
   exterior?: boolean;
+  /** What the wall is built of (elements/construction.ts). */
+  construction?: WallAssemblyId;
   /** Per-room face finishes (set by elements/finishes.ts); faces without a zone keep matLeft/matRight/matTop. */
   paint?: WallPaint;
 }
@@ -121,7 +124,8 @@ export function expandWalls(
   walls.forEach((w, wi) => {
     const pts = w.points;
     const closed = w.closed && pts.length >= 3;
-    const thickness = w.thickness ?? (closed ? d.exteriorWallThickness ?? d.wallThickness : d.wallThickness);
+    const thickness = w.thickness ?? (w.construction ? assemblyThickness(w.construction) : closed ? d.exteriorWallThickness ?? d.wallThickness : d.wallThickness);
+    const construction = wallAssembly(project.construction, w, closed, thickness);
     // For closed loops the interior is on the left of a counter-clockwise loop.
     const ccw = closed ? signedArea(pts) > 0 : true;
     const interiorSide: "left" | "right" = ccw ? "left" : "right";
@@ -153,6 +157,7 @@ export function expandWalls(
         matTop: w.topMaterial ?? base,
         interiorSide,
         exterior: closed,
+        construction,
         dist0: dist,
         aL: a, aR: a, bL: b, bR: b,
         freeA: true,

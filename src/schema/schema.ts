@@ -16,6 +16,7 @@ import { ElectricalSchema, PlumbingSchema, ServicesSchema } from "../elements/se
 import { ProductSchema } from "../elements/products.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
+import { applyConstructionDefaults, ConstructionSchema, WALL_ASSEMBLY_IDS } from "../elements/construction.js";
 
 export { Direction, Id, Mat, Point, Polygon, Vec3 };
 
@@ -40,7 +41,11 @@ export const WallSchema = z
     id: Id.optional(),
     points: z.array(Point).min(2).describe("Wall centerline as a polyline. Each consecutive pair is one wall segment."),
     closed: z.boolean().default(false).describe("Connect the last point back to the first (a closed loop, e.g. the exterior walls)"),
-    thickness: z.number().positive().optional().describe("Default: project defaults.wallThickness (0.2)"),
+    thickness: z.number().positive().optional().describe("Default: the construction assembly's thickness when `construction` is set, else project defaults.wallThickness (0.2)"),
+    construction: z
+      .enum(WALL_ASSEMBLY_IDS)
+      .optional()
+      .describe("What the wall is built of: block_100 | block_150 | block_200 | block_insulated_200 | rc_200 | rc_250 | drywall | glass | timber_stud. Default: from project.construction (Kuwait: concrete block, insulated outside)"),
     height: z.number().positive().optional().describe("Default: the level's wall height (level.height)"),
     baseOffset: z.number().default(0).describe("Bottom of the wall relative to the level elevation"),
     material: Mat.optional().describe("Material for both faces (overridden by the more specific fields)"),
@@ -159,7 +164,7 @@ export const ColumnSchema = z
 export const RoofSchema = z
   .object({
     id: Id.optional(),
-    type: z.enum(["flat", "gable", "hip", "shed"]).default("gable"),
+    type: z.enum(["flat", "gable", "hip", "shed"]).default("flat").describe("Default from the construction system (rc_block: flat RC roof; timber_frame: gable)"),
     polygon: Polygon.describe("Footprint to cover: use the same points as the exterior wall loop (centerline); the roof grows by half the wall thickness plus `overhang`. gable/hip/shed use the polygon's oriented bounding rectangle."),
     baseHeight: z.number().optional().describe("Height of the eaves above the level elevation. Default: level.height"),
     pitch: z.number().min(0).max(75).default(30).describe("Slope in degrees (ignored for flat)"),
@@ -167,7 +172,7 @@ export const RoofSchema = z
     thickness: z.number().positive().default(0.2),
     ridge: z.enum(["long", "short"]).default("long").describe("gable/hip: ridge runs along the longer or shorter side. shed: slope falls across this axis."),
     material: Mat.optional().describe("Default: roof_tiles_red (flat: concrete)"),
-    undersideMaterial: Mat.default("wood_painted_white"),
+    undersideMaterial: Mat.default("plaster_white").describe("Default from the construction system (RC soffit: plaster; timber_frame: painted boards)"),
     edgeMaterial: Mat.optional().describe("Fascia / roof edge. Default: undersideMaterial (flat roof without overhang: the exterior wall material)"),
     gableMaterial: Mat.optional().describe("gable: material for the triangular gable walls. Default: same as the walls below (plaster_white)"),
     parapet: z.number().min(0).default(0).describe("flat: parapet wall height around the edge"),
@@ -361,18 +366,19 @@ export const ProjectSchema = z
         slabThickness: z.number().positive().default(0.2),
         wallMaterial: Mat.default("plaster_white"),
         exteriorMaterial: Mat.optional().describe("Exterior face of closed wall loops. Default: wallMaterial"),
-        floorMaterial: Mat.default("wood_floor_oak"),
+        floorMaterial: Mat.default("tiles_porcelain_white").describe("Default from the construction system (rc_block: porcelain tiles; timber_frame: oak)"),
         ceilingMaterial: Mat.default("plaster_white"),
         doorFrameMaterial: Mat.default("wood_painted_white"),
         doorMaterial: Mat.default("wood_oak"),
         windowFrameMaterial: Mat.default("plastic_white"),
       })
       .prefault({}),
+    construction: ConstructionSchema,
     materials: z.record(z.string(), CustomMaterialSchema).default({}).describe("Custom materials by name"),
     costs: z
       .object({
         currency: z.string().default("KWD").describe("Bill currency"),
-        scope: z.enum(["fitout", "full"]).default("fitout").describe("fitout: interior fit-out of an existing shell; full: adds slabs, exterior walls and roofs"),
+        scope: z.enum(["fitout", "full"]).default("fitout").describe("fitout: interior fit-out of an existing shell; full: adds the structure (foundations, RC frame and slabs: concrete m³, rebar t, formwork), blockwork, plaster/render and roof build-up, from project.construction"),
         rates: z.record(z.string(), z.number().min(0)).default({}).describe("Unit-rate overrides by key, e.g. {'floor:wood_herringbone_oak': 28, 'paint': 3, 'door:single': 150, 'point:double_socket': 14} (arch estimate lists every key used)"),
         exchange: z.record(z.string(), z.number().positive()).default({}).describe("Currency → bill currency, e.g. {USD: 0.307}"),
         preliminaries: z.number().min(0).max(50).optional().describe("% on trades: site setup, protection, cleaning (default: researched Kuwait practice)"),
@@ -434,7 +440,7 @@ export interface ParseResult {
 
 /** Parse + validate with AI-readable error messages ("levels[0].walls[2].points: ..."). */
 export function parseProject(input: unknown): ParseResult {
-  const r = ProjectSchema.safeParse(input);
+  const r = ProjectSchema.safeParse(applyConstructionDefaults(input));
   if (r.success) return { ok: true, project: r.data, errors: [] };
   const errors = r.error.issues.map((i) => {
     const path = i.path.reduce<string>((s, p) => (typeof p === "number" ? `${s}[${p}]` : s ? `${s}.${String(p)}` : String(p)), "");

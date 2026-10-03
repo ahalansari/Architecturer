@@ -12,7 +12,8 @@
 import type { Compiled } from "../pipeline.js";
 import { FURNITURE } from "../elements/furniture.js";
 import { resolveLevelCasework } from "../elements/casework.js";
-import { pointInPolygon, polygonArea, v2, type Vec2 } from "../geometry/math.js";
+import { ensureCCW, offsetPolygon, pointInPolygon, polygonArea, v2, type Vec2 } from "../geometry/math.js";
+import { constructionSystem, SLAB_TYPES, WALL_ASSEMBLIES, type WallAssemblyId } from "../elements/construction.js";
 import { resolveMaterial } from "../materials/library.js";
 import { roomFinishBands } from "../render/plan-sheets.js";
 import type { Product } from "../elements/products.js";
@@ -74,8 +75,12 @@ export const DEFAULT_RATES: Record<string, number> = {
   skirting: 3.5, cornice: 4.5, rail: 3, "floor:border": 12, threshold: 25,
   // ceilings
   "ceiling:gypsum": 7.5, "ceiling:skim": 2.5, "ceiling:soffit": 9, "ceiling:cove": 6, "ceiling:beam": 28, "ceiling:coffer": 18,
-  // construction
-  partition: 16, "shell:slab": 22, "shell:exterior_wall": 30, "shell:roof": 35, "railing:glass": 95, "railing:bars": 60, "railing:solid": 40,
+  // structure (RC: cement + steel) and masonry
+  "struct:concrete_m3": 32, "struct:rebar_t": 260, "struct:formwork_m2": 4.5, "struct:blinding_m3": 25, "earthworks:m3": 3.5, "substructure:bitumen": 1.5,
+  "struct:timber_floor": 25, "wall:block_100": 4.5, "wall:block_150": 5.5, "wall:block_200": 6.5, "wall:block_insulated_200": 9,
+  "wall:cement_plaster": 2.2, "wall:render_external": 3.5, "wall:drywall": 9, "wall:glass_partition": 60, "wall:timber_stud": 14,
+  "roof:waterproofing": 4, "roof:insulation": 4, "roof:screed_tiles": 7, "roof:tiles": 12, "floor:screed": 2.5,
+  "railing:glass": 95, "railing:bars": 60, "railing:solid": 40,
   // doors & windows
   "door:single": 140, "door:double": 260, "door:sliding": 320, "door:glass": 220, "door:garage": 650, "door:front": 380, "door:opening": 35,
   window: 105, "treatment:curtains": 22, "treatment:sheers": 15, "treatment:roman": 18, "treatment:roller": 18, "treatment:venetian": 20, "treatment:shutters": 45,
@@ -175,7 +180,12 @@ export function estimate(c: Compiled): Bill {
 
   // aggregate measured quantities across levels, then emit lines
   const floors = new Map<string, number>(), walls = new Map<string, number>(), accents = new Map<string, number>(), wainscots = new Map<string, number>();
-  let skirting = 0, cornice = 0, rails = 0, borders = 0, thresholds = 0, partitions = 0, extWalls = 0, slabs = 0, roofs = 0;
+  let skirting = 0, cornice = 0, rails = 0, borders = 0, thresholds = 0, screed = 0;
+  // structure: wall areas by assembly, slab areas (ground-bearing / suspended), roofs, columns
+  const wallArea = new Map<WallAssemblyId, { area: number; exterior: boolean }>();
+  let stairM3 = 0, parapetArea = 0, groundSlab = 0, suspSlab = 0, flatRoof = 0, pitchedRoof = 0, roofSlabM3 = 0, groundM3 = 0, suspM3 = 0, columnsM3 = 0, rcWallM3 = 0, rcWallArea = 0;
+  const sys = constructionSystem(project.construction);
+  const slabType = SLAB_TYPES[project.construction.slab ?? sys.slab];
   let gypsum = 0, skim = 0, soffit = 0, cove = 0, beams = 0, coffer = 0;
   const doors = new Map<string, number>(), treatments = new Map<string, number>();
   let windows = 0, windowCount = 0;
@@ -211,6 +221,7 @@ export function estimate(c: Compiled): Bill {
         if (fin?.cornice) cornice += len;
         if (fin?.pictureRail || fin?.dadoRail) rails += len;
       }
+      if (!/terrace|outdoor|balcony|garden|roof/i.test(r.name ?? "")) screed += area;
       if (fin?.floorBorder) borders += pg.reduce((a, p, i) => a + v2.dist(p, pg[(i + 1) % pg.length]), 0);
       if (fin?.threshold) thresholds += info.openings.filter((o) => o.op.type !== "window" && pg.some((p, i) => distToSeg(v2.add(o.seg.a, v2.scale(v2.norm(v2.sub(o.seg.b, o.seg.a)), o.u)), p, pg[(i + 1) % pg.length]) < 0.3)).length;
       if (cl && cl.type !== "none") {
@@ -222,15 +233,40 @@ export function estimate(c: Compiled): Bill {
         if (cl.type === "coffered") coffer += area;
       }
     });
-    // ---- partitions / shell ----
+    // ---- walls by construction, slabs, roofs, columns ----
     for (const s of info.segments) {
       const len = v2.dist(s.a, s.b), h = s.z1 - s.z0;
       const holes = s.holes.reduce((a, hh) => a + (hh.u1 - hh.u0) * ((hh.z1 ?? s.z1) - (hh.z0 ?? s.z0)), 0);
-      if (s.exterior) extWalls += Math.max(0, len * h - holes);
-      else partitions += Math.max(0, len * h - holes);
+      const area = Math.max(0, len * h - holes);
+      const id = s.construction ?? "block_200";
+      const w = wallArea.get(id) ?? { area: 0, exterior: !!s.exterior };
+      w.area += area;
+      wallArea.set(id, w);
+      if (WALL_ASSEMBLIES[id].kind === "rc") (rcWallM3 += area * WALL_ASSEMBLIES[id].core), (rcWallArea += area);
     }
-    for (const sl of lv.slabs) slabs += polygonArea(sl.polygon as Vec2[]);
-    for (const rf of lv.roofs) roofs += polygonArea(rf.polygon as Vec2[]);
+    const T = lv.slabThickness ?? D.slabThickness;
+    const ground = li === 0;
+    const addSlab = (area: number, t: number) => {
+      if (ground) (groundSlab += area), (groundM3 += area * t);
+      else (suspSlab += area), (suspM3 += area * t);
+    };
+    if (lv.autoSlab)
+      for (const w of lv.walls) {
+        if (!w.closed || w.points.length < 3) continue;
+        const t = w.thickness ?? D.exteriorWallThickness ?? D.wallThickness;
+        addSlab(polygonArea(offsetPolygon(ensureCCW(w.points as Vec2[]), t / 2)), T);
+      }
+    for (const sl of lv.slabs) addSlab(Math.max(0, polygonArea(sl.polygon as Vec2[]) - sl.holes.reduce((a, h) => a + polygonArea(h as Vec2[]), 0)), sl.thickness ?? T);
+    for (const rf of lv.roofs) {
+      const a = polygonArea(offsetPolygon(ensureCCW(rf.polygon as Vec2[]), rf.overhang));
+      if (rf.type === "flat") flatRoof += a;
+      else pitchedRoof += a / Math.cos((rf.pitch * Math.PI) / 180);
+      roofSlabM3 += (rf.type === "flat" ? a : a / Math.cos((rf.pitch * Math.PI) / 180)) * rf.thickness;
+    }
+    // RC stairs: waist slab + steps ≈ 1.1 m³ per metre of rise per metre of width (spiral: steel, not counted)
+    for (const st of lv.stairs) if (st.type !== "spiral") stairM3 += 1.1 * st.width * (st.rise ?? info.height);
+    for (const rf of lv.roofs) if (rf.type === "flat" && rf.parapet > 0) parapetArea += rf.parapet * perimeter(offsetPolygon(ensureCCW(rf.polygon as Vec2[]), rf.overhang) as Vec2[]);
+    for (const col of lv.columns) columnsM3 += (col.shape === "round" ? Math.PI * (col.size / 2) ** 2 : col.size ** 2) * (col.height ?? info.height);
     // ---- openings ----
     for (const o of info.openings) {
       if (o.op.type === "window") {
@@ -336,14 +372,83 @@ export function estimate(c: Compiled): Bill {
   });
 
   // ---- emit sections in order ----
-  if (costs.scope === "full") {
-    const s = sec("A", "Shell & structure");
-    add(s, { description: "Floor slabs", qty: slabs, unit: "m²", rate: rate("shell:slab"), basis: "measured", key: "shell:slab" });
-    add(s, { description: "External walls incl. render & paint", qty: extWalls, unit: "m²", rate: rate("shell:exterior_wall"), basis: "measured", key: "shell:exterior_wall" });
-    add(s, { description: "Roofs incl. waterproofing & insulation", qty: roofs, unit: "m²", rate: rate("shell:roof"), basis: "measured", key: "shell:roof" });
+  const full = costs.scope === "full";
+  const ratio = (key: string, fallback: number) => marketRate(key)?.value ?? fallback;
+  const gfa = groundSlab + suspSlab;
+  let structureTotal = 0;
+  if (full) {
+    // A. Structure: reinforced concrete (cement + steel) measured from slabs, roofs, columns and RC walls
+    const s = sec("A", `Structure & shell — ${sys.label}`);
+    const C = project.construction;
+    const rcRoof = slabType.rc ? roofSlabM3 : 0;
+    const frameBase = suspSlab + flatRoof + pitchedRoof;
+    const frameRatio = C.frameRatio ?? ratio("ratio:frame_m3_per_m2", 0.09);
+    const frameM3 = sys.frame ? (columnsM3 > 0 ? columnsM3 + frameBase * frameRatio * 0.6 : frameBase * frameRatio) : columnsM3;
+    const fdnPerM2 = { isolated: 0.3, raft: 0.6, strip: 0.25 }[C.foundation];
+    const fdnM3 = groundSlab * fdnPerM2;
+    const slabC = slabType.rc ? (groundM3 + suspM3 + rcRoof) * slabType.concrete : 0;
+    const rebarKg = {
+      slab: C.rebar.slab ?? ratio("ratio:rebar_kg_per_m3_slab", 100),
+      frame: C.rebar.frame ?? ratio("ratio:rebar_kg_per_m3_frame", 180),
+      foundation: C.rebar.foundation ?? ratio("ratio:rebar_kg_per_m3_foundation", 90),
+      wall: C.rebar.wall ?? 120,
+    };
+    const stairC = slabType.rc ? stairM3 : 0;
+    const rebarT = ((slabC + stairC) * rebarKg.slab + frameM3 * rebarKg.frame + fdnM3 * rebarKg.foundation + rcWallM3 * rebarKg.wall) / 1000;
+    const n0 = s.lines.length;
+    add(s, { description: "Excavation, backfill & compaction for foundations", qty: fdnM3 * 2.5, unit: "m³", rate: rate("earthworks:m3"), basis: "measured", key: "earthworks:m3" });
+    add(s, { description: "Plain concrete blinding under foundations & ground slab (100 mm)", qty: groundSlab * 0.1, unit: "m³", rate: rate("struct:blinding_m3"), basis: "measured", key: "struct:blinding_m3" });
+    add(s, { description: `Reinforced concrete foundations (${C.foundation} footings + tie beams, ${fdnPerM2} m³ per m² of footprint)`, qty: fdnM3, unit: "m³", rate: rate("struct:concrete_m3"), basis: "allowance", key: "struct:concrete_m3" });
+    add(s, { description: "Bitumen coating to buried concrete", qty: fdnM3 * 3 + groundSlab * 0.15, unit: "m²", rate: rate("substructure:bitumen"), basis: "measured", key: "substructure:bitumen" });
+    if (slabType.rc) {
+      add(s, { description: "Ground-bearing slab", qty: groundM3 * slabType.concrete, unit: "m³", rate: rate("struct:concrete_m3"), basis: "measured", key: "struct:concrete_m3" });
+      add(s, { description: `Suspended floor slabs: ${slabType.label}`, qty: suspM3 * slabType.concrete, unit: "m³", rate: rate("struct:concrete_m3"), basis: "measured", key: "struct:concrete_m3" });
+      add(s, { description: "Roof slab", qty: rcRoof * slabType.concrete, unit: "m³", rate: rate("struct:concrete_m3"), basis: "measured", key: "struct:concrete_m3" });
+    } else add(s, { description: `Floors: ${slabType.label}`, qty: suspSlab + groundSlab, unit: "m²", rate: rate("struct:timber_floor"), basis: "measured", key: "struct:timber_floor" });
+    add(s, {
+      description: columnsM3 > 0 ? "RC columns (measured) & beams (by ratio)" : `RC columns & beams (${frameRatio} m³ per m² of floor)`,
+      qty: frameM3, unit: "m³", rate: rate("struct:concrete_m3"), basis: columnsM3 > 0 ? "measured" : "allowance", key: "struct:concrete_m3",
+    });
+    if (slabType.rc) add(s, { description: "RC staircases (waist slab & steps)", qty: stairM3, unit: "m³", rate: rate("struct:concrete_m3"), basis: "measured", key: "struct:concrete_m3" });
+    add(s, { description: "Reinforced concrete walls", qty: rcWallM3, unit: "m³", rate: rate("struct:concrete_m3"), basis: "measured", key: "struct:concrete_m3" });
+    add(s, {
+      description: `Steel reinforcement (rebar) — ${rebarKg.slab} kg/m³ slabs, ${rebarKg.frame} frame, ${rebarKg.foundation} foundations`,
+      qty: rebarT, unit: "t", rate: rate("struct:rebar_t"), basis: "measured", key: "struct:rebar_t",
+    });
+    add(s, { description: "Formwork (slab soffits, columns & beams, foundation sides, RC walls)", qty: (slabType.rc ? suspSlab + flatRoof + pitchedRoof + stairC * 4 : 0) + frameM3 * 9 + fdnM3 * 1.5 + rcWallArea * 2, unit: "m²", rate: rate("struct:formwork_m2"), basis: "measured", key: "struct:formwork_m2" });
+    // masonry: exterior walls, then plaster / render
+    let inside = 0, outside = 0;
+    for (const [id, w] of wallArea) {
+      const a = WALL_ASSEMBLIES[id];
+      if (!w.exterior) continue;
+      if (a.kind !== "rc") add(s, { description: `External walls: ${a.label}`, qty: w.area, unit: "m²", rate: rate(a.costKey), basis: "measured", key: a.costKey });
+      if (a.plastered) (inside += w.area), (outside += w.area);
+    }
+    add(s, { description: "Roof parapets: 200 mm hollow concrete block", qty: parapetArea, unit: "m²", rate: rate("wall:block_200"), basis: "measured", key: "wall:block_200" });
+    outside += parapetArea;
+    inside += parapetArea;
+    add(s, { description: "Cement-sand plaster to inner face of external walls & parapets", qty: inside, unit: "m²", rate: rate("wall:cement_plaster"), basis: "measured", key: "wall:cement_plaster" });
+    add(s, { description: "External render to facades", qty: outside, unit: "m²", rate: rate("wall:render_external"), basis: "measured", key: "wall:render_external" });
+    // roof build-up
+    add(s, { description: "Roof: screed to falls + protection tiles", qty: flatRoof, unit: "m²", rate: rate("roof:screed_tiles"), basis: "measured", key: "roof:screed_tiles" });
+    add(s, { description: "Roof: waterproofing membrane", qty: flatRoof + pitchedRoof, unit: "m²", rate: rate("roof:waterproofing"), basis: "measured", key: "roof:waterproofing" });
+    add(s, { description: "Roof: thermal insulation", qty: flatRoof + pitchedRoof, unit: "m²", rate: rate("roof:insulation"), basis: "measured", key: "roof:insulation" });
+    add(s, { description: "Roof tiles on pitched roofs", qty: pitchedRoof, unit: "m²", rate: rate("roof:tiles"), basis: "measured", key: "roof:tiles" });
+    add(s, { description: "Sand-cement floor screed", qty: screed, unit: "m²", rate: rate("floor:screed"), basis: "measured", key: "floor:screed" });
+    structureTotal = s.lines.slice(n0).reduce((a, l) => a + l.amount, 0);
+
+    if (rebarT > 0) notes.push(`Structure: ${round(slabC + stairC + frameM3 + fdnM3 + rcWallM3 + groundSlab * 0.1, 1)} m³ of concrete and ${round(rebarT, 1)} t of steel reinforcement for ${round(gfa, 0)} m² of floor (${round(rebarT * 1000 / Math.max(1, slabC + stairC + frameM3 + fdnM3 + rcWallM3), 0)} kg/m³ on average).`);
   }
   const B = sec("B", "Partitions, floors & walls");
-  add(B, { description: "Internal partitions incl. plaster both faces", qty: partitions, unit: "m²", rate: rate("partition"), basis: "measured", key: "partition" });
+  // internal walls by what they are built of, then plaster both faces
+  let plasterFaces = 0;
+  for (const [id, w] of [...wallArea].sort((x, y) => y[1].area - x[1].area)) {
+    const a = WALL_ASSEMBLIES[id];
+    if (w.exterior) continue;
+    if (a.kind !== "rc") add(B, { description: `Internal walls: ${a.label}`, qty: w.area, unit: "m²", rate: rate(a.costKey), basis: "measured", key: a.costKey });
+    if (a.plastered) plasterFaces += 2 * w.area;
+  }
+  add(B, { description: "Cement-sand plaster to internal walls (both faces)", qty: plasterFaces, unit: "m²", rate: rate("wall:cement_plaster"), basis: "measured", key: "wall:cement_plaster" });
   for (const [m, a] of [...floors].sort((x, y) => y[1] - x[1])) {
     const k = `floor:${m}`;
     add(B, { description: `Floor finish: ${label(m)}`, qty: a, unit: "m²", rate: rate(k, `floor:${pattern(m)}`), basis: "measured", key: costs.rates[k] !== undefined ? k : `floor:${pattern(m)}` });
@@ -370,7 +475,7 @@ export function estimate(c: Compiled): Bill {
   add(C, { description: "Slab soffit skim & paint", qty: skim, unit: "m²", rate: rate("ceiling:skim"), basis: "measured", key: "ceiling:skim" });
   add(C, { description: "Tray ceiling soffit / bulkhead", qty: soffit, unit: "m", rate: rate("ceiling:soffit"), basis: "measured", key: "ceiling:soffit" });
   add(C, { description: "LED cove (profile, strip, driver)", qty: cove, unit: "m", rate: rate("ceiling:cove"), basis: "measured", key: "ceiling:cove" });
-  add(C, { description: "Exposed timber beams", qty: beams, unit: "m", rate: rate("ceiling:beam"), basis: "measured", key: "ceiling:beam" });
+  add(C, { description: "Decorative ceiling beams", qty: beams, unit: "m", rate: rate("ceiling:beam"), basis: "measured", key: "ceiling:beam" });
   add(C, { description: "Coffered ceiling (extra over)", qty: coffer, unit: "m²", rate: rate("ceiling:coffer"), basis: "measured", key: "ceiling:coffer" });
   add(C, { description: "Cornice", qty: cornice, unit: "m", rate: rate("cornice"), basis: "measured", key: "cornice" });
 
@@ -463,6 +568,17 @@ export function estimate(c: Compiled): Bill {
   const beforeVat = trades + retail + adjustments.reduce((a, x) => a + x.amount, 0);
   pct("VAT", P.vat, beforeVat);
   const total = round(trades + retail + adjustments.reduce((a, x) => a + x.amount, 0));
+  if (full && gfa > 0) {
+    // compare like with like: a skeleton contract price includes the contractor's preliminaries and margin
+    const withMarkup = (structureTotal * (1 + P.preliminaries / 100) * (1 + P.overheadProfit / 100)) / gfa;
+    const bench = marketRate("benchmark:skeleton_m2");
+    notes.push(
+      `Structure & shell: ${round(structureTotal / gfa, 1)} ${cur}/m² of floor (${round(gfa, 0)} m²), ${round(withMarkup, 1)} ${cur}/m² with preliminaries and overhead & profit` +
+        (bench?.value
+          ? `; Kuwaiti skeleton (هيكل أسود) contracts quote ${bench.low ?? bench.value}–${bench.high ?? bench.value} ${cur}/m² of built-up area (${bench.source}) — those prices also carry water tanks, boundary walls, site works, basements and the contractor's risk on small jobs, which this model does not.`
+          : "."),
+    );
+  }
   notes.unshift(
     "Quantities are measured from the model. Unit rates are researched Kuwait market prices (supply + install unless stated; source, quote and read date in Rates & sources) where one was found, otherwise indicative; vendor lines use the product page price. Override any rate in project.costs.rates.",
     "Market rates are single quoted prices or mid-points of published ranges, not tenders — several are GCC (UAE/KSA) prices converted to KWD where no Kuwait price was published; check 'low' confidence lines with a local quote.",
