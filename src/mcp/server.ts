@@ -11,7 +11,7 @@ import { exportGLB, exportGLTF } from "../export/gltf.js";
 import { fullGuide } from "../guide.js";
 import { readJson } from "../io.js";
 import { listMaterials } from "../materials/library.js";
-import { compile, type Compiled } from "../pipeline.js";
+import { compileWithAssets, vendorNotice, type Compiled } from "../pipeline.js";
 import { renderPlanSVG, svgToPng, PLAN_SHEETS } from "../render/plan.js";
 import { VIEW_PRESETS, type ViewPreset } from "../render/raster.js";
 import { renderViewPNG } from "../render/view.js";
@@ -48,6 +48,13 @@ function summary(c: Compiled): string {
   for (const e of c.errors) lines.push(`ERROR: ${e}`);
   for (const w of c.warnings) lines.push(`warning: ${w}`);
   if (c.root) lines.push(`${c.stats.triangles} triangles, ${c.stats.nodes} nodes, ${c.stats.materials} materials.`);
+  if (c.credits.length) {
+    const lic = new Map<string, number>();
+    for (const s of c.credits) lic.set(s.license, (lic.get(s.license) ?? 0) + 1);
+    lines.push(`External assets: ${c.credits.length} (${[...lic].map(([k, v]) => `${v}× ${k}`).join(", ")}).`);
+    const notice = vendorNotice(c);
+    if (notice) lines.push(notice);
+  }
   if (c.project)
     lines.push(
       "Levels: " +
@@ -66,7 +73,12 @@ async function save(path: string, project: Json): Promise<Compiled> {
   const p = abs(path);
   await mkdir(dirname(p), { recursive: true });
   await writeFile(p, JSON.stringify(project, null, 2) + "\n");
-  return compile(project);
+  return build(path, project);
+}
+
+/** Compile a plan after fetching its online materials / models (relative model paths resolve next to the file). */
+function build(path: string, project: Json): Promise<Compiled> {
+  return compileWithAssets(project, { baseDir: dirname(abs(path)) });
 }
 
 function findLevel(project: Json, level: string): Json {
@@ -121,7 +133,14 @@ server.registerTool(
 server.registerTool(
   "list_materials",
   { description: "Built-in materials (procedural PBR textures).", inputSchema: {} },
-  async () => ok(text(listMaterials().map((m) => `${m.name} (${m.pattern}): ${m.description}`).join("\n"))),
+  async () =>
+    ok(
+      text(
+        listMaterials().map((m) => `${m.name} (${m.pattern}): ${m.description}`).join("\n") +
+          "\n\nAlso: any RAL Classic colour as paint ('ral_9010', 'ral 7016') or as a colour; any '#rrggbb'; " +
+          "thousands of scanned CC0 PBR materials via search_assets → 'ambientcg:<Id>' / 'polyhaven:<id>' (usable anywhere a material is, and as a custom material base).",
+      ),
+    ),
 );
 
 server.registerTool(
@@ -254,7 +273,7 @@ server.registerTool(
 server.registerTool(
   "validate",
   { description: "Validate and build the plan; returns errors, warnings and stats.", inputSchema: { path: PathArg } },
-  guard(async ({ path }) => ok(text(summary(compile(await load(path)))))),
+  guard(async ({ path }) => ok(text(summary(await build(path, await load(path)))))),
 );
 
 server.registerTool(
@@ -275,7 +294,7 @@ server.registerTool(
     },
   },
   guard(async ({ path, level, sheet }) => {
-    const c = compile(await load(path));
+    const c = await build(path, await load(path));
     if (!c.root) return fail(summary(c));
     const png = await svgToPng(renderPlanSVG(c, level, { sheet }));
     return ok({ type: "image", data: png.toString("base64"), mimeType: "image/png" }, text(summary(c)));
@@ -312,7 +331,7 @@ server.registerTool(
     },
   },
   guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, width, height }) => {
-    const c = compile(await load(path));
+    const c = await build(path, await load(path));
     if (!c.root) return fail(summary(c));
     const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, width, height, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
     const modes = lighting === "both" ? (["day", "night"] as const) : ([lighting] as const);
@@ -345,7 +364,7 @@ server.registerTool(
     },
   },
   guard(async ({ path, output, textureSize, textureFormat, engine, merge, collision }) => {
-    const c = compile(await load(path));
+    const c = await build(path, await load(path));
     if (!c.root) return fail(summary(c));
     const out = abs(output);
     await mkdir(dirname(out), { recursive: true });
@@ -359,6 +378,162 @@ server.registerTool(
     if (extname(out) === ".gltf") await exportGLTF(c, out, opts);
     else await writeFile(out, await exportGLB(c, opts));
     return ok(text(`Wrote ${out}\n${summary(c)}`));
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// online assets, vendor products, shopping list
+
+server.registerTool(
+  "search_assets",
+  {
+    description:
+      "Search open CC0 libraries for photo-scanned PBR materials (ambientCG ~2000, Poly Haven ~900: woods, parquet, marble, tiles, plaster, fabrics, metals, concrete...) or furniture / decor models (Poly Haven; a local 3D-FUTURE copy when FUTURE3D_DIR is set). " +
+      "Use the returned id directly: materials anywhere a material name goes (floorMaterial, walls, slots, custom material base), models as furniture.model. Downloads happen automatically on the next validate / render / export and are cached.",
+    inputSchema: {
+      query: z.string().describe("e.g. 'oak herringbone', 'terrazzo', 'travertine', 'velvet', 'armchair'"),
+      kind: z.enum(["material", "model"]).default("material"),
+      source: z.enum(["all", "ambientcg", "polyhaven", "future3d"]).default("all"),
+      limit: z.number().int().min(1).max(50).default(15),
+    },
+  },
+  guard(async ({ query, kind, source, limit }) => {
+    const { searchAssets } = await import("../assets/online.js");
+    const hits = await searchAssets(query, { kind, source, limit });
+    if (!hits.length) return ok(text(`No ${kind}s found for '${query}'. Try broader words (e.g. 'wood floor', 'marble', 'chair').`));
+    return ok(text(hits.map((h) => `${h.id} — ${h.name}${h.category ? ` [${h.category}]` : ""}${h.size ? `, tile ${h.size} m` : ""} (${h.source}, ${h.license})`).join("\n")));
+  }),
+);
+
+server.registerTool(
+  "search_products",
+  {
+    description:
+      "Search a vendor catalogue for real products (currently IKEA, by market e.g. 'us/en', 'kw/en', 'ae/en', 'sa/en', 'gb/en'). " +
+      "For other shops (Homecentre, Amazon, Wayfair, West Elm, Home Box...) find the product page with your own web search, then call import_product with its URL.",
+    inputSchema: {
+      query: z.string(),
+      vendor: z.enum(["ikea"]).default("ikea"),
+      market: z.string().default("us/en"),
+      limit: z.number().int().min(1).max(24).default(10),
+    },
+  },
+  guard(async ({ query, market, limit }) => {
+    const { searchIkea } = await import("../assets/vendors.js");
+    const hits = await searchIkea(query, market, limit);
+    if (!hits.length) return ok(text(`IKEA ${market}: nothing found for '${query}'.`));
+    return ok(text(hits.map((h) => `${h.name}${h.size ? ` (${h.size})` : ""} — ${h.price ?? "?"} ${h.currency ?? ""}\n  ${h.url}`).join("\n")));
+  }),
+);
+
+server.registerTool(
+  "import_product",
+  {
+    description:
+      "Add a real product to a plan's products catalogue — from a vendor page URL (IKEA, Homecentre, Amazon, Wayfair...: name, SKU, price, size, photo colour and, when published, the vendor's 3D model) and/or fields you read yourself — and optionally place it. " +
+      "Without a 3D model the product is shown as the closest parametric furniture type, sized and tinted to match. Sizes are metres. " +
+      "Vendor models are for visualising designs (licence 'vendor'); check the vendor's terms before redistributing them in a game.",
+    inputSchema: {
+      path: PathArg,
+      url: z.string().optional().describe("Product page"),
+      id: z.string().optional().describe("Product id (default: from the name)"),
+      name: z.string().optional(),
+      vendor: z.string().optional(),
+      sku: z.string().optional(),
+      price: z.number().optional(),
+      currency: z.string().optional(),
+      type: z.string().optional().describe("Closest furniture type (list_furniture); guessed from the name when omitted"),
+      width: z.number().positive().optional(),
+      depth: z.number().positive().optional(),
+      height: z.number().positive().optional(),
+      model: z.string().optional().describe(".glb/.gltf/.obj URL or path, polyhaven:/sketchfab:/future3d: id"),
+      modelRotation: z.number().optional().describe("Degrees, when the model's front does not face the viewer / -y"),
+      image: z.string().optional(),
+      color: z.string().optional().describe("#hex or RAL for the stand-in (default: from the photo)"),
+      place: z
+        .object({
+          level: z.string().optional(),
+          position: z.tuple([z.number(), z.number()]),
+          facing: z.enum(["north", "south", "east", "west"]).optional(),
+          rotation: z.number().optional(),
+          id: z.string().optional(),
+          count: z.number().int().min(1).max(50).optional().describe("Place several in a row (e.g. dining chairs)"),
+          spacing: z.number().optional().describe("Row spacing along x (metres)"),
+        })
+        .optional(),
+    },
+  },
+  guard(async (a) => {
+    const { fetchProduct, guessFurnitureType, photoColor, vendorFromUrl } = await import("../assets/vendors.js");
+    const project = await load(a.path);
+    const notes: string[] = [];
+    let info: Awaited<ReturnType<typeof fetchProduct>> = { warnings: [] };
+    if (a.url) {
+      try {
+        info = await fetchProduct(a.url);
+      } catch (e) {
+        notes.push(`page not read: ${(e as Error).message}`);
+        info = { url: a.url, vendor: vendorFromUrl(a.url), warnings: [] };
+      }
+    }
+    const name = a.name ?? info.name;
+    if (!name) return fail("no product name: pass `name` (and size) when the page cannot be read");
+    const type = a.type ?? info.type ?? guessFurnitureType(name) ?? "box";
+    const image = a.image ?? info.image;
+    const model = a.model ?? info.model;
+    const color = a.color ?? (!model && image ? await photoColor(image) : undefined);
+    const products = ((project.products as Json[] | undefined) ??= []);
+    const { productId } = await import("../elements/products.js");
+    const slug = a.id ?? productId(name, a.sku ?? info.sku, products as never, a.url ?? info.url);
+    const existing = products.find((p) => p.id === slug);
+    const prod: Json = {
+      id: slug, name, vendor: a.vendor ?? info.vendor, url: a.url ?? info.url, sku: a.sku ?? info.sku, price: a.price ?? info.price, currency: a.currency ?? info.currency,
+      type, model, modelRotation: a.modelRotation, width: a.width ?? info.width, depth: a.depth ?? info.depth, height: a.height ?? info.height,
+      color, image, license: model && /ikea|vendor/i.test(`${info.vendor ?? a.vendor ?? ""}${model}`) ? "vendor" : undefined,
+    };
+    for (const k of Object.keys(prod)) if (prod[k] === undefined) delete prod[k];
+    if (existing) Object.assign(existing, prod);
+    else products.push(prod);
+    const placed: string[] = [];
+    if (a.place) {
+      const levels = project.levels as Json[];
+      const lv = a.place.level ? levels.find((l) => l.id === a.place!.level) : levels[0];
+      if (!lv) return fail(`level '${a.place.level}' not found`);
+      const furn = ((lv.furniture as Json[] | undefined) ??= []);
+      const n = a.place.count ?? 1;
+      for (let i = 0; i < n; i++) {
+        const id = a.place.id ? (n > 1 ? `${a.place.id}_${i + 1}` : a.place.id) : `${slug}_${furn.filter((f) => f.product === slug).length + 1}`;
+        const pos = [a.place.position[0] + i * (a.place.spacing ?? Number(prod.width ?? 0.6) + 0.1), a.place.position[1]];
+        furn.push({ id, product: slug, position: pos, ...(a.place.facing ? { facing: a.place.facing } : {}), ...(a.place.rotation !== undefined ? { rotation: a.place.rotation } : {}) });
+        placed.push(id);
+      }
+    }
+    const c = await save(a.path, project);
+    const size = [prod.width, prod.depth, prod.height].map((v) => (typeof v === "number" ? v.toFixed(2) : "?")).join(" × ");
+    const lines = [
+      `${existing ? "Updated" : "Added"} product '${slug}': ${name}${prod.vendor ? ` (${prod.vendor}${prod.sku ? ` ${prod.sku}` : ""})` : ""}`,
+      `type ${type}, ${size} m${prod.price !== undefined ? `, ${prod.price} ${prod.currency ?? ""}` : ""}`,
+      model ? `3D model: ${String(model).slice(0, 120)}` : `no 3D model published: shown as a parametric ${type}${color ? ` tinted ${color}` : ""}`,
+      ...(placed.length ? [`placed: ${placed.join(", ")}`] : [`place it with furniture { "product": "${slug}", "position": [x, y], "facing": ... }`]),
+      ...info.warnings,
+      ...notes,
+      summary(c),
+    ];
+    return ok(text(lines.join("\n")));
+  }),
+);
+
+server.registerTool(
+  "shopping_list",
+  { description: "Bill of materials for the products placed in a plan: quantities, unit prices and totals per vendor, with links.", inputSchema: { path: PathArg } },
+  guard(async ({ path }) => {
+    const { shoppingList } = await import("../elements/products.js");
+    const project = (await load(path)) as never;
+    const { lines, totals } = shoppingList(project);
+    if (!lines.length) return ok(text("No products placed (import_product, then furniture.product)."));
+    const out = lines.map((l) => `${l.quantity}× ${l.name} — ${l.vendor}${l.sku ? ` ${l.sku}` : ""}${l.unitPrice !== undefined ? ` @ ${l.unitPrice} ${l.currency ?? ""} = ${l.total} ${l.currency ?? ""}` : ""}${l.url ? `\n   ${l.url}` : ""}`);
+    out.push("", ...totals.map((t) => `${t.vendor}: ${t.items} item(s), ${t.total} ${t.currency}`));
+    return ok(text(out.join("\n")));
   }),
 );
 

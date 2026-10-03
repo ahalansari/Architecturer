@@ -4,8 +4,8 @@ import { dirname, extname } from "node:path";
 import { listFurniture } from "../elements/furniture.js";
 import { exportGLB, exportGLTF } from "../export/gltf.js";
 import { listMaterials } from "../materials/library.js";
-import { loadAndCompile } from "../io.js";
-import type { Compiled } from "../pipeline.js";
+import { loadAndCompile, readJson } from "../io.js";
+import { vendorNotice, type Compiled } from "../pipeline.js";
 import { PLAN_SHEETS, renderPlanSVG, svgToPng, type PlanSheet } from "../render/plan.js";
 import { LIGHTING_MODES, VIEW_PRESETS, type LightingMode, type ViewPreset } from "../render/raster.js";
 import { renderViewPNG } from "../render/view.js";
@@ -167,6 +167,12 @@ const COMMANDS: Record<string, Command> = {
         await exportGLTF(c, out, opts);
         console.log(`wrote ${out}`);
       } else await write(out, await exportGLB(c, opts));
+      if (c.credits.length) {
+        const lines = c.credits.map((s) => `- ${s.title ?? s.id} — ${s.id}${s.author ? `, by ${s.author}` : ""}${s.url ? ` <${s.url}>` : ""} — licence: ${s.license}`);
+        await write(`${out.replace(/\.(glb|gltf)$/i, "")}.credits.md`, `# Asset credits\n\n${lines.join("\n")}\n`);
+        const notice = vendorNotice(c);
+        if (notice) console.log(`note: ${notice}`);
+      }
       return c.ok ? 0 : 1;
     },
   },
@@ -195,6 +201,99 @@ const COMMANDS: Record<string, Command> = {
     flags: [],
     async run() {
       for (const m of listMaterials()) console.log(`${m.name.padEnd(22)} ${m.pattern.padEnd(12)} ${m.description}`);
+    },
+  },
+  assets: {
+    usage: 'arch assets "<query>" [--kind material|model] [--source ambientcg|polyhaven|future3d] [--limit 15]',
+    desc: "Search open CC0 libraries (ambientCG, Poly Haven) for scanned PBR materials or furniture models; use the ids as materials / furniture.model",
+    file: true,
+    flags: [
+      { name: "kind", arg: "material|model", desc: "default material" },
+      { name: "source", arg: "name", desc: "all (default), ambientcg, polyhaven, future3d" },
+      { name: "limit", arg: "n", desc: "results (default 15)" },
+    ],
+    async run(query, f) {
+      const { searchAssets } = await import("../assets/online.js");
+      const kind = ((f.kind as string) ?? "material") as "material" | "model";
+      const hits = await searchAssets(query, { kind, source: f.source as string | undefined, limit: f.limit ? num(f.limit, "limit") : 15 });
+      for (const h of hits) console.log(`${h.id.padEnd(40)} ${h.name}${h.category ? ` [${h.category}]` : ""}${h.size ? `  tile ${h.size} m` : ""}  (${h.license})`);
+      if (!hits.length) console.log(`no ${kind}s found for '${query}'`);
+    },
+  },
+  product: {
+    usage: "arch product <url> [--add plan.json [--level id] [--at x,y] [--facing dir] [--id id]] [--type t]",
+    desc: "Read a vendor product page (IKEA, Homecentre, Amazon, Wayfair...): name, price, size, colour, 3D model; --add puts it in a plan's products (and places it with --at)",
+    file: true,
+    flags: [
+      { name: "add", arg: "plan.json", desc: "add to this plan's products" },
+      { name: "level", arg: "id", desc: "level to place on (default: first)" },
+      { name: "at", arg: "x,y", desc: "place an instance here" },
+      { name: "facing", arg: "dir", desc: "north | south | east | west" },
+      { name: "id", arg: "id", desc: "product id (default: from the name)" },
+      { name: "type", arg: "type", desc: "furniture type override" },
+    ],
+    async run(url, f) {
+      const { fetchProduct, photoColor } = await import("../assets/vendors.js");
+      const info = await fetchProduct(url);
+      const color = !info.model && info.image ? await photoColor(info.image) : undefined;
+      const cm = (v?: number) => (v === undefined ? "?" : `${Math.round(v * 100)} cm`);
+      console.log(`${info.name}\n  vendor ${info.vendor ?? "?"}  sku ${info.sku ?? "?"}  price ${info.price ?? "?"} ${info.currency ?? ""}`);
+      console.log(`  size ${cm(info.width)} × ${cm(info.depth)} × ${cm(info.height)} (W × D × H)  type ${f.type ?? info.type ?? "?"}`);
+      console.log(`  3D model: ${info.model ?? "none published (a parametric stand-in will be used)"}${color ? `  colour ${color}` : ""}`);
+      for (const w of info.warnings) console.log(`  note: ${w}`);
+      if (!f.add) return;
+      const file = f.add as string;
+      const project = (await readJson(file)) as Record<string, unknown>;
+      const products = ((project.products as Record<string, unknown>[] | undefined) ??= []);
+      const { productId } = await import("../elements/products.js");
+      const id = (f.id as string) ?? productId(info.name ?? "product", info.sku, products as never, url);
+      const prod: Record<string, unknown> = { id, name: info.name, vendor: info.vendor, url, sku: info.sku, price: info.price, currency: info.currency, type: (f.type as string) ?? info.type ?? "box", model: info.model, width: info.width, depth: info.depth, height: info.height, color, image: info.image, ...(info.model && info.vendor === "IKEA" ? { license: "vendor" } : {}) };
+      for (const k of Object.keys(prod)) if (prod[k] === undefined) delete prod[k];
+      const i = products.findIndex((p) => p.id === id);
+      if (i >= 0) products[i] = prod;
+      else products.push(prod);
+      if (f.at) {
+        const [x, y] = String(f.at).split(",").map(Number);
+        const levels = project.levels as Record<string, unknown>[];
+        const lv = f.level ? levels.find((l) => l.id === f.level) : levels[0];
+        if (!lv) throw new Error(`level '${f.level}' not found`);
+        const furn = ((lv.furniture as Record<string, unknown>[] | undefined) ??= []);
+        furn.push({ id: `${id}_${furn.filter((g) => g.product === id).length + 1}`, product: id, position: [x, y], ...(f.facing ? { facing: f.facing } : {}) });
+      }
+      await write(file, JSON.stringify(project, null, 2) + "\n");
+    },
+  },
+  bom: {
+    usage: "arch bom <plan.json> [--csv]",
+    desc: "Shopping list of the placed products: quantities, prices and totals per vendor, with links",
+    file: true,
+    flags: [{ name: "csv", desc: "CSV instead of text" }],
+    async run(file, f) {
+      const { shoppingList } = await import("../elements/products.js");
+      const { lines, totals } = shoppingList((await readJson(file)) as never);
+      if (f.csv) {
+        const q = (v: unknown) => (v === undefined ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+        console.log("product,name,vendor,sku,quantity,unit_price,currency,total,url");
+        for (const l of lines) console.log([l.product, l.name, l.vendor, l.sku, l.quantity, l.unitPrice, l.currency, l.total, l.url].map(q).join(","));
+        return;
+      }
+      if (!lines.length) return void console.log("no products placed");
+      for (const l of lines) console.log(`${String(l.quantity).padStart(3)}× ${l.name} — ${l.vendor}${l.sku ? ` ${l.sku}` : ""}${l.unitPrice !== undefined ? `  ${l.unitPrice} ${l.currency ?? ""} → ${l.total} ${l.currency ?? ""}` : ""}`);
+      console.log("");
+      for (const t of totals) console.log(`${t.vendor}: ${t.items} item(s), ${t.total} ${t.currency}`);
+    },
+  },
+  fetch: {
+    usage: "arch fetch <plan.json>",
+    desc: "Download / import every online material and model the plan uses into the cache (then it builds offline)",
+    file: true,
+    flags: [],
+    async run(file) {
+      const c = await loadAndCompile(file);
+      report(c);
+      for (const s of c.credits) console.log(`${s.missing ? "MISSING " : ""}${s.id}  ${s.title ?? ""}  (${s.license}${s.author ? `, ${s.author}` : ""})`);
+      console.log(`${c.credits.length} external asset(s); cache: ${(await import("../assets/cache.js")).cacheRoot()}`);
+      return c.credits.some((s) => s.missing) ? 1 : 0;
     },
   },
   styles: {

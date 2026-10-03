@@ -13,6 +13,7 @@ import { StyleSchema } from "../elements/styles.js";
 import { FinishesSchema } from "../elements/finishes.js";
 import { LightSchema } from "../elements/lighting.js";
 import { ElectricalSchema, PlumbingSchema, ServicesSchema } from "../elements/services.js";
+import { ProductSchema } from "../elements/products.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 
@@ -20,9 +21,9 @@ export { Direction, Id, Mat, Point, Polygon, Vec3 };
 
 export const CustomMaterialSchema = z
   .object({
-    base: z.string().optional().describe("Library material or texture pattern to start from, e.g. 'brick_red' or 'plaster'"),
+    base: z.string().optional().describe("Library material, texture pattern, online material (ambientcg:<Id>, polyhaven:<id>) or RAL colour to start from, e.g. 'brick_red', 'plaster', 'polyhaven:herringbone_parquet', 'ral_7016'"),
     pattern: z.string().optional().describe("Texture pattern (brick, stone, plaster, concrete, wood_planks, wood_grain, tiles, marble, roof_tiles, shingles, metal, fabric, carpet, leather, grass, gravel, paving, siding, herringbone, chevron, parquet, terrazzo, hex_tiles, mosaic, zellige, wallpaper, fluted, microcement, grasscloth, none)"),
-    color: z.union([z.string(), z.tuple([z.number(), z.number(), z.number()])]).optional().describe("Tint multiplied with the pattern, '#rrggbb'"),
+    color: z.union([z.string(), z.tuple([z.number(), z.number(), z.number()])]).optional().describe("Tint multiplied with the pattern / photo: '#rrggbb' or a RAL Classic code like 'ral 7016'"),
     roughness: z.number().min(0).max(1).optional(),
     metalness: z.number().min(0).max(1).optional(),
     scale: z.number().positive().optional().describe("Meters covered by one texture tile"),
@@ -135,6 +136,12 @@ export const FurnitureSchema = z
     elevation: z.number().default(0).describe("Height above the floor (e.g. upper cabinets 1.5, ceiling lights)"),
     materials: z.record(z.string(), Mat).default({}).describe("Override material slots, e.g. {frame:'wood_walnut', fabric:'fabric_blue'}"),
     options: z.record(z.string(), z.unknown()).default({}).describe("Type-specific options, see list_furniture"),
+    product: Id.optional().describe("Id of an entry in project.products (vendor item): supplies type, model, size and price"),
+    model: z.string().optional().describe(
+      "Use a real 3D model instead of the parametric one: polyhaven:<Model_Id> (CC0), sketchfab:<uid>, future3d:<id>, a .glb/.gltf/.obj URL or a local path. The type still drives layout rules and services",
+    ),
+    modelRotation: z.number().default(0).describe("Extra yaw (degrees) applied to the model when its front does not face -y"),
+    fit: z.enum(["contain", "stretch", "none"]).default("contain").describe("Model sizing to width/depth/height: contain = uniform scale to fit, stretch = exact size, none = natural size"),
   })
   .describe("A furniture item or fixture. Exported as its own node with a pivot at its position.");
 
@@ -362,6 +369,7 @@ export const ProjectSchema = z
       })
       .prefault({}),
     materials: z.record(z.string(), CustomMaterialSchema).default({}).describe("Custom materials by name"),
+    products: z.array(ProductSchema).default([]).describe("Vendor / library items (import_product) placed with furniture.product; shopping_list totals them"),
     site: z
       .object({
         ground: z.boolean().default(true).describe("Add a ground plane around the building"),

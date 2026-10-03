@@ -14,6 +14,7 @@
  * maps v downward ("up" is the top of the image), so courses/boards run along u.
  */
 import type { MaterialDef, RGB, TexturePattern, TextureSet } from "./types.js";
+import { RAL } from "./ral.js";
 
 // ---------------------------------------------------------------------------
 // Hashing / RNG
@@ -72,6 +73,8 @@ export function parseColor(input: unknown): RGB | undefined {
   }
   if (typeof input !== "string") return undefined;
   const s = input.trim().toLowerCase();
+  const ral = /^ral[\s_-]?(\d{4})$/.exec(s);
+  if (ral) return RAL[ral[1]] ? parseColor(RAL[ral[1]][1]) : undefined;
   const rgbm = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(s);
   if (rgbm) return [clamp01(+rgbm[1] / 255), clamp01(+rgbm[2] / 255), clamp01(+rgbm[3] / 255)];
   let hex = s.startsWith("#") ? s.slice(1) : s;

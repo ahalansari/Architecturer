@@ -2,6 +2,8 @@
  * Built-in material library + name resolution (custom materials, library names, hex colors).
  */
 import { parseColor } from "./textures.js";
+import { externalMaterial } from "../assets/registry.js";
+import { RAL } from "./ral.js";
 import { TEXTURE_PATTERNS, type MaterialDef, type RGB, type TexturePattern } from "./types.js";
 
 /** User/AI-defined material, usually declared in a building plan's `materials` section. */
@@ -284,6 +286,113 @@ def("quartz_white", "marble", "White engineered quartz worktop with faint veinin
 def("quartz_gray", "marble", "Concrete-gray engineered quartz worktop", { roughness: 0.25, scale: 2.0, normalStrength: 0.2, params: { base: "#9a9893", vein: "#b6b4ae", veins: 0.3 } });
 def("quartz_black", "marble", "Black engineered quartz worktop with subtle veins", { roughness: 0.2, scale: 2.0, normalStrength: 0.2, params: { base: "#232325", vein: "#6c6c6e", veins: 0.4 } });
 
+// --- Extended palette: more species, stones, designer paints, metals, fabrics, tiles -------------------------
+const WOODS: [string, string, string, number?][] = [
+  ["ash", "Ash (pale, straight grain)", "#d9c3a0", 0.9],
+  ["maple", "Hard maple (creamy, fine grain)", "#e3cfaa", 0.6],
+  ["birch", "Birch / birch plywood faces", "#e6d4b3", 0.6],
+  ["cherry", "American cherry (reddish brown)", "#a3593a", 0.9],
+  ["mahogany", "Mahogany (deep red-brown)", "#7a3b26", 0.9],
+  ["sapele", "Sapele (striped red-brown)", "#8c4a2f", 1.2],
+  ["acacia", "Acacia (golden brown, lively grain)", "#a8723f", 1.3],
+  ["cedar", "Western red cedar (cladding, saunas)", "#b06c45", 1.0],
+  ["smoked_oak", "Smoked / fumed oak (dark brown-gray)", "#6e5442", 0.9],
+  ["whitewashed_oak", "Whitewashed / limed oak", "#d9cfc0", 0.5],
+  ["ebony", "Ebony / black-stained wood", "#2a211c", 0.6],
+  ["rosewood", "Rosewood (dark, purple-brown)", "#5a2f26", 1.1],
+  ["bamboo", "Bamboo (pale straw, nodes)", "#d7b87a", 0.8],
+];
+for (const [k, d, c, con] of WOODS) {
+  if (!LIB[`wood_${k}`]) def(`wood_${k}`, "wood_grain", `${d} wood grain`, { roughness: 0.55, scale: 0.8, params: { wood: c, contrast: con ?? 1 } });
+  if (!LIB[`wood_floor_${k}`]) def(`wood_floor_${k}`, "wood_planks", `${d} floor planks`, { roughness: 0.55, scale: 1.2, params: { wood: c, contrast: con ?? 1 } });
+}
+def("wood_herringbone_smoked", "herringbone", "Smoked oak herringbone parquet", { roughness: 0.5, scale: 1.27, params: { wood: "#6e5442" } });
+def("wood_herringbone_whitewashed", "herringbone", "Whitewashed oak herringbone parquet", { roughness: 0.55, scale: 1.27, params: { wood: "#d9cfc0", contrast: 0.5 } });
+def("wood_chevron_light", "chevron", "Pale oak chevron parquet", { roughness: 0.55, scale: 1.2, params: { wood: "#d6bc93", contrast: 0.7 } });
+def("vinyl_plank_gray", "wood_planks", "Gray luxury vinyl plank (LVT)", { roughness: 0.45, scale: 1.2, normalStrength: 0.4, params: { wood: "#a39d95", contrast: 0.5 } });
+def("cork", "gravel", "Natural cork (floors, pin boards)", { roughness: 0.9, scale: 0.3, normalStrength: 0.6, params: { stones: 400, base: "#b48a5e" } });
+
+def("travertine", "marble", "Beige travertine (honed, banded)", { roughness: 0.45, scale: 2.0, normalStrength: 0.6, params: { base: "#dccbad", vein: "#b9a17c", veins: 0.25 } });
+def("travertine_silver", "marble", "Silver / gray travertine", { roughness: 0.45, scale: 2.0, normalStrength: 0.6, params: { base: "#c9c4b9", vein: "#9b968c", veins: 0.25 } });
+def("marble_calacatta", "marble", "Calacatta marble: white with bold gray-gold veins", { roughness: 0.15, scale: 2.4, params: { base: "#f3f1ec", vein: "#a69477", veins: 0.8 } });
+def("marble_nero_marquina", "marble", "Nero Marquina: black marble with crisp white veins", { roughness: 0.12, scale: 2.0, params: { base: "#141416", vein: "#e9e9e6", veins: 0.6 } });
+def("marble_emperador", "marble", "Emperador marble: chocolate brown with cream veins", { roughness: 0.15, scale: 2.0, params: { base: "#5b3f2e", vein: "#c8ad8c", veins: 0.7 } });
+def("marble_verde", "marble", "Verde Guatemala: deep green marble with white veins", { roughness: 0.15, scale: 2.0, params: { base: "#1f3d32", vein: "#c9d6cc", veins: 0.7 } });
+def("marble_rosa", "marble", "Rosa Portogallo: pale pink marble", { roughness: 0.15, scale: 2.0, params: { base: "#e9cfc4", vein: "#c79f92", veins: 0.5 } });
+def("onyx_honey", "marble", "Honey onyx (translucent amber banding)", { roughness: 0.1, scale: 2.0, params: { base: "#e1a85c", vein: "#f6dfb1", veins: 0.9 } });
+def("granite_black", "gravel", "Black granite (Absolute Black) worktop", { roughness: 0.15, scale: 0.4, normalStrength: 0.05, params: { stones: 90, base: "#232325" } });
+def("granite_gray", "gravel", "Salt-and-pepper gray granite", { roughness: 0.2, scale: 0.4, normalStrength: 0.05, params: { stones: 120, base: "#a5a3a0" } });
+def("limestone", "plaster", "Honed limestone (pale, uniform)", { roughness: 0.6, scale: 1.5, normalStrength: 0.8, color: "#e3dccd" });
+def("slate_floor", "tiles", "Dark slate floor tiles, 40 cm", { roughness: 0.6, scale: 1.2, normalStrength: 1.5, params: { count: 3, tile: "#3e4246", grout: "#5c5f62", variation: 2 } });
+def("stone_limestone_blocks", "stone", "Limestone ashlar blocks (facades)", { roughness: 0.85, scale: 1.6, params: { stoneColor: "#e1d7c3", mortar: "#c9bfab" } });
+def("sandstone", "stone", "Red sandstone blocks", { roughness: 0.9, scale: 1.6, params: { stoneColor: "#b9785a", mortar: "#a99682" } });
+
+def("brick_whitewashed", "brick", "Whitewashed brick (lime-washed, some red showing)", { roughness: 0.85, params: { brickColor: "#e2d9cf", mortar: "#eeeae3", variation: 0.6 } });
+def("brick_black", "brick", "Black / charcoal glazed brick", { roughness: 0.6, params: { brickColor: "#2c2b2b", mortar: "#4d4b49" } });
+def("brick_reclaimed", "brick", "Reclaimed London stock brick (mixed tones)", { roughness: 0.9, params: { brickColor: "#b28a62", mortar: "#b8b0a2", variation: 1.6 } });
+
+def("tiles_subway_green", "tiles", "Glossy bottle-green subway tiles", { roughness: 0.1, scale: 0.6, params: { cols: 4, rows: 8, offset: 0.5, groutWidth: 0.005, tile: "#2f5c47", grout: "#d9d5cc" } });
+def("tiles_subway_navy", "tiles", "Glossy navy subway tiles", { roughness: 0.1, scale: 0.6, params: { cols: 4, rows: 8, offset: 0.5, groutWidth: 0.005, tile: "#26344d", grout: "#d9d5cc" } });
+def("tiles_subway_black", "tiles", "Black subway tiles, white grout", { roughness: 0.12, scale: 0.6, params: { cols: 4, rows: 8, offset: 0.5, groutWidth: 0.005, tile: "#1f2022", grout: "#d9d5cc" } });
+def("tiles_subway_cream", "tiles", "Crackle-glaze cream subway tiles", { roughness: 0.15, scale: 0.6, params: { cols: 4, rows: 8, offset: 0.5, groutWidth: 0.005, tile: "#ece2cc", grout: "#d9d2c3", variation: 1.4 } });
+def("tiles_square_sage", "tiles", "Sage green square tiles, 10 cm", { roughness: 0.2, scale: 0.8, params: { count: 8, tile: "#9db29a", grout: "#e3e0d6" } });
+def("tiles_porcelain_gray", "tiles", "Large-format gray porcelain, 60 × 60 cm", { roughness: 0.35, scale: 1.2, params: { count: 2, tile: "#8f8f8c", grout: "#7c7b78", groutWidth: 0.002 } });
+def("tiles_porcelain_white", "tiles", "Large-format white porcelain, 60 × 60 cm", { roughness: 0.3, scale: 1.2, params: { count: 2, tile: "#ebeae6", grout: "#d1cfca", groutWidth: 0.002 } });
+def("tiles_porcelain_concrete", "concrete", "Concrete-look porcelain slabs", { roughness: 0.45, scale: 1.2, params: { formLines: 0, pores: 600 } });
+def("tiles_zellige_terracotta", "zellige", "Terracotta zellige, handmade glossy tiles", { roughness: 0.15, scale: 0.8, params: { tile: "#b9653f", variation: 0.6 } });
+def("tiles_zellige_black", "zellige", "Black zellige, handmade glossy tiles", { roughness: 0.12, scale: 0.8, params: { tile: "#1f2023", grout: "#3a3a3a" } });
+def("tiles_hex_sage", "hex_tiles", "Sage green hexagon tiles, 15 cm", { roughness: 0.3, scale: 0.9, params: { tile: "#9bae97", grout: "#e3e0d6" } });
+def("terrazzo_black", "terrazzo", "Black terrazzo with white and gray chips", { roughness: 0.25, scale: 1.0, normalStrength: 0.5, params: { base: "#2a2a2c", palette: "#f2f0ea,#8f8d89,#bcb8b0,#5a5856" } });
+def("terrazzo_terracotta", "terrazzo", "Terracotta terrazzo with cream and rust chips", { roughness: 0.25, scale: 1.0, normalStrength: 0.5, params: { base: "#c7805f", palette: "#f2e6d6,#8e3b26,#e0b08f,#5b2a1e" } });
+def("quartz_calacatta", "marble", "Calacatta-look quartz worktop", { roughness: 0.15, scale: 2.4, normalStrength: 0.2, params: { base: "#f4f3ef", vein: "#a9987c", veins: 0.7 } });
+
+const PAINTS: [string, string, string][] = [
+  ["off_white", "Off-white (soft, warm)", "#f1ede4"], ["warm_white", "Warm white", "#f4efe3"], ["greige", "Greige (gray-beige)", "#c9c0b2"],
+  ["taupe", "Taupe", "#a39586"], ["sand", "Sand", "#dccbb0"], ["clay", "Clay pink-beige", "#c9a08a"], ["terracotta", "Terracotta", "#b8674a"],
+  ["ochre", "Ochre", "#c99a3e"], ["mustard", "Mustard", "#d4a73f"], ["sage", "Sage green", "#a4b49a"], ["olive", "Olive green", "#7c7f52"],
+  ["forest", "Forest green", "#2f4a3a"], ["mint", "Mint", "#c3dccd"], ["teal", "Teal", "#2f6b6b"], ["powder_blue", "Powder blue", "#b7cbdc"],
+  ["navy", "Navy", "#26324a"], ["slate_blue", "Slate blue", "#5f7386"], ["lavender", "Lavender", "#bdb2cf"], ["dusty_pink", "Dusty pink", "#d8b0a8"],
+  ["burgundy", "Burgundy / oxblood", "#5f2328"], ["charcoal", "Charcoal", "#3b3d40"], ["stone", "Stone gray", "#b3ada3"],
+];
+for (const [k, d, c] of PAINTS) if (!LIB[`paint_${k}`]) def(`paint_${k}`, "plaster", `Painted wall, ${d.toLowerCase()} (matt emulsion)`, { roughness: 0.78, scale: 2.0, normalStrength: 0.4, color: c });
+def("plaster_lime", "plaster", "Lime plaster, hand-trowelled (cloudy, matte)", { roughness: 0.95, scale: 1.5, normalStrength: 1.6, color: "#ece6da" });
+def("plaster_venetian", "microcement", "Polished Venetian plaster (stucco veneziano)", { roughness: 0.25, scale: 2.0, params: { base: "#e6ddd0", polish: 0.95, mottle: 1.1 } });
+def("rammed_earth", "concrete", "Rammed earth wall (layered ochre strata)", { roughness: 0.95, scale: 1.5, normalStrength: 1.4, color: "#c49a72", params: { formLines: 6, pores: 1200 } });
+def("concrete_board_formed", "concrete", "Board-formed concrete (timber shutter marks)", { roughness: 0.9, scale: 1.5, normalStrength: 1.8, params: { formLines: 10, pores: 900 } });
+
+const METALS: [string, string, string, number][] = [
+  ["antique_brass", "Antique / aged brass", "#a98a4f", 0.45], ["bronze", "Oil-rubbed bronze", "#5c4632", 0.45], ["gunmetal", "Gunmetal gray", "#4d5156", 0.35],
+  ["nickel", "Brushed nickel", "#b9b6ae", 0.3], ["rose_gold", "Rose gold", "#d9a28e", 0.25], ["zinc", "Zinc (matte gray cladding)", "#8d9399", 0.55],
+];
+for (const [k, d, c, r] of METALS) def(`metal_${k}`, "metal", d, { roughness: r, metalness: 1, scale: 0.5, color: c });
+def("metal_corten", "concrete", "Corten weathering steel (rust patina)", { roughness: 0.85, scale: 1.0, normalStrength: 0.8, color: "#8c4a26", params: { formLines: 0, pores: 2500 } });
+def("metal_white", "metal", "White powder-coated metal", { roughness: 0.45, metalness: 0.3, scale: 0.5, color: "#ecebe7", normalStrength: 0.2 });
+
+const FABRICS: [string, string, string][] = [
+  ["cream", "Cream", "#ece6d8"], ["charcoal", "Charcoal", "#3d3f43"], ["terracotta", "Terracotta", "#b56a4c"], ["olive", "Olive", "#77794e"],
+  ["mustard", "Mustard", "#c79a3a"], ["navy", "Navy", "#2a3550"], ["sage", "Sage", "#9fb09a"], ["rust", "Rust", "#9c4c2e"], ["blush", "Blush", "#dcb3a7"],
+];
+for (const [k, d, c] of FABRICS) if (!LIB[`fabric_${k}`]) def(`fabric_${k}`, "fabric", `${d} woven upholstery fabric`, { roughness: 0.95, scale: 0.3, color: c });
+for (const [k, d, c] of [["navy", "Navy", "#24304a"], ["mustard", "Mustard", "#c4962f"], ["olive", "Olive", "#5d6239"], ["gray", "Dove gray", "#9a9a98"], ["burgundy", "Burgundy", "#5e2229"], ["teal", "Teal", "#1f5559"]] as const)
+  def(`velvet_${k}`, "fabric", `${d} velvet`, { roughness: 0.65, scale: 0.3, color: c, normalStrength: 0.3, params: { threads: 160 } });
+def("linen_natural", "fabric", "Natural flax linen (oatmeal)", { roughness: 0.95, scale: 0.35, color: "#d8cdb9", normalStrength: 1.2, params: { threads: 70 } });
+def("linen_charcoal", "fabric", "Charcoal washed linen", { roughness: 0.95, scale: 0.35, color: "#4a4b4d", normalStrength: 1.2, params: { threads: 70 } });
+def("fabric_boucle_gray", "fabric", "Gray boucle", { roughness: 1, scale: 0.15, color: "#b3afa8", normalStrength: 4, params: { threads: 40 } });
+def("wool_felt_gray", "fabric", "Gray wool felt (acoustic panels, pinboards)", { roughness: 1, scale: 0.3, color: "#8d8e90", normalStrength: 0.5, params: { threads: 220 } });
+for (const [k, d, c] of [["cognac", "Cognac", "#8e4f26"], ["white", "Off-white", "#ebe6dc"], ["olive", "Olive", "#5f5f39"], ["burgundy", "Oxblood", "#4f1f22"], ["gray", "Gray", "#7b7a77"]] as const)
+  if (!LIB[`leather_${k}`]) def(`leather_${k}`, "leather", `${d} leather`, { roughness: 0.55, scale: 0.4, color: c });
+def("rattan_cane", "fabric", "Woven rattan cane webbing (chair seats, cabinet doors)", { roughness: 0.8, scale: 0.12, color: "#d7b583", normalStrength: 3, params: { threads: 24 } });
+def("jute", "carpet", "Natural jute / sisal (rugs)", { roughness: 1, scale: 0.4, color: "#bfa178", normalStrength: 2 });
+def("carpet_charcoal", "carpet", "Charcoal wall-to-wall carpet", { roughness: 1, scale: 0.5, color: "#55565a" });
+def("carpet_cream", "carpet", "Cream wool carpet", { roughness: 1, scale: 0.5, color: "#e5ddcc" });
+
+for (const [k, d, c, r] of [["black", "Satin black", "#202123", 0.35], ["terracotta", "Terracotta", "#b46a4f", 0.38], ["olive", "Olive", "#6f7150", 0.38], ["blue_gray", "Blue-gray", "#6f8292", 0.36], ["pink", "Dusty pink", "#d6aea4", 0.36], ["forest", "Forest green", "#2f4a3b", 0.36]] as const)
+  def(`lacquer_${k}`, "none", `${d} lacquered / painted cabinet fronts`, { roughness: r, color: c, normalStrength: 0 });
+def("glass_bronze", "none", "Bronze-tinted glass", { roughness: 0.05, opacity: 0.5, color: "#8d6a4a", doubleSided: true, normalStrength: 0 });
+def("glass_smoked", "none", "Smoked gray glass", { roughness: 0.05, opacity: 0.55, color: "#4a4c4f", doubleSided: true, normalStrength: 0 });
+def("glass_blue", "none", "Blue-green architectural glass", { roughness: 0.05, opacity: 0.35, color: "#7fa7a6", doubleSided: true, normalStrength: 0 });
+def("glass_fluted", "fluted", "Fluted / reeded glass (privacy screens, cabinet doors)", { roughness: 0.15, opacity: 0.55, scale: 0.4, color: "#e6eef0", doubleSided: true, params: { style: "reeds" } });
+
 export const MATERIAL_LIBRARY: Record<string, MaterialDef> = LIB;
 
 /** Representative library material for each raw pattern name (used when `base` is a pattern). */
@@ -334,6 +443,16 @@ function clone(m: MaterialDef, name: string): MaterialDef {
 const normName = (s: string) => s.trim().toLowerCase().replace(/[\s-]+/g, "_");
 const isPattern = (s: string): s is TexturePattern => (TEXTURE_PATTERNS as readonly string[]).includes(s);
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/** Online library references: ambientcg:<AssetId>, polyhaven:<asset_id>. */
+export const ONLINE_RE = /^(ambientcg|polyhaven):[\w.-]+$/i;
+
+/** RAL Classic paint: "ral_9010", "RAL 7016", "ral-3020". */
+function ralMaterial(name: string): MaterialDef | undefined {
+  const m = /^ral[\s_-]?(\d{4})$/i.exec(name.trim());
+  if (!m || !RAL[m[1]]) return undefined;
+  const [label, hex] = RAL[m[1]];
+  return { ...hexMaterial(`ral_${m[1]}`, parseColor(hex)!), roughness: 0.6, source: { id: `RAL ${m[1]}`, title: label, license: "colour reference" } };
+}
 
 /** Flat painted material for a bare hex color. */
 function hexMaterial(name: string, color: RGB): MaterialDef {
@@ -376,6 +495,11 @@ function resolveInner(raw: string, custom: Record<string, CustomMaterialSpec>, c
   const n = normName(name);
   if (LIB[n]) return clone(LIB[n], n);
   if (HEX_RE.test(name)) return hexMaterial(name, parseColor(name)!);
+  const ral = ralMaterial(name);
+  if (ral) return ral;
+  const ext = externalMaterial(name);
+  if (ext) return { ...ext, color: [...ext.color] as RGB, ...(ext.images ? { images: { ...ext.images } } : {}) };
+  if (ONLINE_RE.test(name)) throw new Error(`Online material "${name}" has not been fetched yet (it is downloaded automatically by the CLI / MCP tools; offline? see search_assets)`);
   if (isPattern(n)) return clone(LIB[PATTERN_DEFAULT[n]], n);
 
   throw new Error(unknownMessage(name, custom));
@@ -391,6 +515,11 @@ function applySpec(key: string, spec: CustomMaterialSpec, custom: Record<string,
     else if (LIB[normName(b)]) m = clone(LIB[normName(b)], key);
     else if (isPattern(normName(b))) m = clone(LIB[PATTERN_DEFAULT[normName(b) as TexturePattern]], key);
     else if (HEX_RE.test(b)) m = hexMaterial(key, parseColor(b)!);
+    else if (ralMaterial(b)) m = { ...ralMaterial(b)!, name: key };
+    else if (externalMaterial(b)) {
+      const e = externalMaterial(b)!;
+      m = { ...e, color: [...e.color] as RGB, ...(e.images ? { images: { ...e.images } } : {}), name: key };
+    } else if (parseColor(b)) m = hexMaterial(key, parseColor(b)!);
     else throw new Error(`Custom material "${key}": unknown base "${b}". ` + unknownMessage(b, custom));
   } else if (spec.pattern) {
     m = clone(LIB[PATTERN_DEFAULT[spec.pattern]] ?? LIB.plaster_white, key);

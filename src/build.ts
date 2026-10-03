@@ -8,6 +8,8 @@ import { buildShape, shapeFootprint } from "./elements/shapes.js";
 import { addLampLight, buildLights, checkUnlitRooms } from "./elements/lighting.js";
 import { buildRoomFinishes, prepareFinishes, type CeilingLayout } from "./elements/finishes.js";
 import { buildServices, type ServicesLayout } from "./elements/services.js";
+import { getModel } from "./assets/registry.js";
+import { fitModel } from "./assets/place.js";
 import type { ResolvedRun } from "./elements/casework/layout.js";
 import { buildCasework, levelCaseCtx } from "./elements/casework.js";
 import { buildWallSegment, expandWalls, resolveJoins, splitJunctions, type WallSegment } from "./elements/walls.js";
@@ -234,30 +236,38 @@ export function buildProject(project: Project): BuildOutput {
       const opts: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(type.options ?? {})) opts[k] = v.default;
       Object.assign(opts, f.options);
-      for (const slot of Object.keys(f.materials))
-        if (!(slot in type.slots)) warn(`furniture '${f.id ?? f.type + i}': unknown material slot '${slot}' (slots: ${Object.keys(type.slots).join(", ")})`);
-      try {
-        type.build(mb, {
-          width: f.width ?? type.defaults.width,
-          depth: f.depth ?? type.defaults.depth,
-          height: f.height ?? type.defaults.height,
-          materials: { ...type.slots, ...f.materials },
-          options: opts,
-        });
-      } catch (e) {
-        err(`furniture '${f.id ?? f.type + i}': ${(e as Error).message}`);
-        return;
+      // a real 3D model (vendor / open library) replaces the parametric geometry; the type keeps its semantics
+      const model = f.model ? getModel(f.model) : undefined;
+      if (f.model && !model) warn(`furniture '${f.id ?? f.type + i}': model '${f.model}' is not loaded (offline or failed to import); using the parametric ${f.type}`);
+      let modelMeshes: ReturnType<typeof mb.meshes> | undefined;
+      if (model) {
+        modelMeshes = fitModel(model, { width: f.width, depth: f.depth, height: f.height, rotationDeg: f.modelRotation, fit: f.fit, materials: f.materials });
+      } else {
+        for (const slot of Object.keys(f.materials))
+          if (!(slot in type.slots)) warn(`furniture '${f.id ?? f.type + i}': unknown material slot '${slot}' (slots: ${Object.keys(type.slots).join(", ")})`);
+        try {
+          type.build(mb, {
+            width: f.width ?? type.defaults.width,
+            depth: f.depth ?? type.defaults.depth,
+            height: f.height ?? type.defaults.height,
+            materials: { ...type.slots, ...f.materials },
+            options: opts,
+          });
+        } catch (e) {
+          err(`furniture '${f.id ?? f.type + i}': ${(e as Error).message}`);
+          return;
+        }
       }
       const rot = f.rotation ?? (f.facing ? FACING_ROT[f.facing] : 0);
       furnNode.children.push({
         name: f.id ?? `${f.type}_${i}`,
         kind: "furniture",
-        meshes: mb.meshes(),
+        meshes: modelMeshes ?? mb.meshes(),
         children: [],
         // stand on the room's floor finish, not the slab (thin items like rugs would z-fight with it)
         translation: [f.position[0], f.position[1], z + FLOOR_FINISH + f.elevation],
         rotationZ: deg2rad(rot),
-        extras: { id: f.id, type: f.type },
+        extras: { id: f.id, type: f.type, ...(f.product ? { product: f.product } : {}), ...(model ? { model: model.source.id, license: model.source.license } : {}) },
       });
       addLampLight(furnNode.children[furnNode.children.length - 1], f, type.defaults); // lamps get a warm light
     });

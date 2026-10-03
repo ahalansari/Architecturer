@@ -1,0 +1,50 @@
+{
+  "name": "Vendor Lounge",
+  "description": "Real products and open assets: IKEA models (POÄNG, UPPLAND) read from their product pages, a Poly Haven CC0 armchair, scanned CC0 floor and rug materials, RAL paint, and a Homecentre sideboard shown as a sized, tinted stand-in. Needs network on first build (cached after).",
+  "site": { "ground": false },
+  "materials": {
+    "sage_wall": { "base": "ral 6021" },
+    "rug_wool": { "base": "ambientcg:Fabric062", "color": "#e8e0d2" }
+  },
+  "products": [
+    {
+      "id": "poang_armchair", "name": "POÄNG Armchair - birch veneer/Knisa light beige", "vendor": "IKEA", "sku": "593.059.28", "price": 149, "currency": "USD",
+      "type": "armchair", "width": 0.679, "depth": 0.819, "height": 1,
+      "model": "https://web-api.ikea.com/dimma/assets/geomagical/39240787/PS01_S01_NV_01/simple/glb_draco/070459837c1a46be827ef83188323445-G-39240787-8d314f03c23df01bfbfbbf3f51ffe542d9fe9b77-simple.glb?cn=pip",
+      "url": "https://www.ikea.com/us/en/p/poaeng-armchair-birch-veneer-knisa-light-beige-s59305928/", "license": "vendor"
+    },
+    {
+      "id": "uppland_sofa", "name": "UPPLAND Sofa - Blekinge white", "vendor": "IKEA", "sku": "193.841.16", "price": 899, "currency": "USD",
+      "type": "sofa", "width": 2.242, "depth": 0.921, "height": 0.679,
+      "model": "https://web-api.ikea.com/dimma/assets/1.2/19384116/PS01_S01_NV01/isp3/glb_draco/19384116_PS01_S01_NV01_ISP3_2.0_d0e9b84105cb437f912058794571b78c.glb?cn=pip",
+      "url": "https://www.ikea.com/us/en/p/uppland-sofa-blekinge-white-s19384116/", "license": "vendor"
+    },
+    {
+      "id": "walnut_sideboard", "name": "Walnut finish sideboard, 3 doors", "vendor": "Homecentre", "price": 129, "currency": "KWD",
+      "type": "sideboard", "width": 1.6, "depth": 0.45, "height": 0.78, "color": "#6b4a33"
+    }
+  ],
+  "levels": [
+    {
+      "id": "g",
+      "height": 3,
+      "walls": [{ "id": "ext", "points": [[0, 0], [5, 0], [5, 4], [0, 4]], "closed": true, "material": "sage_wall" }],
+      "openings": [
+        { "id": "door", "type": "door", "at": [1, 0] },
+        { "id": "win", "type": "window", "at": [2.5, 4], "width": 1.6 }
+      ],
+      "rooms": [{ "id": "lounge", "name": "Lounge", "polygon": [[0, 0], [5, 0], [5, 4], [0, 4]], "floorMaterial": "polyhaven:herringbone_parquet" }],
+      "furniture": [
+        { "id": "sofa", "product": "uppland_sofa", "position": [2.5, 3.4], "facing": "south" },
+        { "id": "rug", "type": "rug", "position": [2.5, 2.1], "width": 2.4, "depth": 1.7, "materials": { "main": "rug_wool" } },
+        { "id": "table", "type": "coffee_table", "position": [2.5, 2.1] },
+        { "id": "chair1", "product": "poang_armchair", "position": [0.75, 2.6], "facing": "east" },
+        { "id": "chair2", "product": "poang_armchair", "position": [0.75, 1.55], "facing": "east" },
+        { "id": "lounge_chair", "type": "armchair", "model": "polyhaven:ArmChair_01", "position": [4.15, 1.4], "facing": "west" },
+        { "id": "sideboard", "product": "walnut_sideboard", "position": [4.67, 3.0], "facing": "west" },
+        { "id": "lamp", "type": "floor_lamp", "position": [4.4, 0.45] }
+      ],
+      "lights": [{ "id": "dl", "type": "downlight", "room": "Lounge", "spacing": 1.6, "margin": 0.8 }]
+    }
+  ]
+}

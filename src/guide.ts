@@ -109,6 +109,22 @@ Call get_schema for every field; this guide covers conventions and good practice
 ## Materials
 - Use library names (list below), a hex color "#a0b0c0" (painted), or define custom ones: "materials": {"my_brick": {"base":"brick_red","color":"#ffdddd","scale":1.2}}.
 - Every surface gets a seamless procedural PBR texture (base color, normal, roughness/AO) in the export.
+- RAL Classic colours: "ral_9010" (paint) or as a colour anywhere: {"base":"metal_steel","color":"ral 7016"}.
+- Scanned CC0 materials (photo textures, real-world tile size): search_assets "oak herringbone" / "travertine" /
+  "velvet" → use the id like any material: "floorMaterial":"polyhaven:herringbone_parquet", "ambientcg:Marble012",
+  or as a base to tint: {"base":"ambientcg:Fabric062","color":"#c9a08a"}. Fetched and cached automatically.
+
+## Real products and 3D models
+- Vendors: search_products (IKEA, any market e.g. "kw/en") or find a product page yourself (Homecentre, Amazon, Wayfair,
+  West Elm...), then import_product {path, url, place:{position,facing}}: name, price, size, colour and the vendor's 3D
+  model (IKEA publishes GLBs) go into project.products; furniture {"product":"<id>","position":[x,y]} places more.
+  When a page cannot be read, pass name / width / depth / height (m) / price / image / type yourself: the item is then
+  drawn as the closest parametric type, sized and tinted. shopping_list totals the placed products per vendor.
+- Open models: search_assets kind=model → furniture {"type":"armchair","model":"polyhaven:ArmChair_01",...}; also
+  sketchfab:<uid> (SKETCHFAB_API_TOKEN), future3d:<id> (FUTURE3D_DIR), any .glb/.gltf/.obj URL or local path.
+  The type still drives layout checks and services; size comes from the model unless width/depth/height are given
+  (fit contain|stretch|none); modelRotation fixes models whose front does not face -y.
+- Vendor models are for visualising designs (licence "vendor"); exports list every asset in <model>.credits.md.
 
 ## Lighting design (level.lights) and window treatments
 - Fixtures: pendant (shade dome|globe|cone|drum|cluster, hangHeight = bottom above the floor), chandelier, ceiling

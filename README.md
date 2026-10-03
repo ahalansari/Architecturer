@@ -44,6 +44,10 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch plan plan.json --level ground [--sheet lighting\|finishes\|rcp\|false_ceiling\|electrical\|plumbing] -o plan.png` | 2D floor plan (`.svg` or `.png`). `--sheet lighting`: fixture symbols, estimated lux per room and a fixture legend. `--sheet finishes`: floors drawn in their material pattern, wall finish and accent bands, and a per-room finish schedule. `--sheet rcp`: reflected ceiling plan. `--sheet false_ceiling`: false ceiling plan with every ceiling level tagged above FFL. `--sheet electrical` / `plumbing`: services layouts |
 | `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
 | `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png\|ktx2]` | Export; `.gltf` writes separate image files |
+| `arch assets "oak herringbone" [--kind model]` | Search CC0 scanned materials / models (ambientCG, Poly Haven) |
+| `arch product <url> --add plan.json --at x,y` | Import a vendor product (IKEA, Wayfair...) with its 3D model, price and size |
+| `arch bom plan.json [--csv]` | Shopping list of placed products |
+| `arch fetch plan.json` | Download all online assets into the cache (then builds work offline) |
 | `arch serve plan.json` | Live viewer that reloads whenever the file is saved, with a first-person **walk mode** and 2D plan, lighting and finishes sheets (pan/zoom, per level, SVG download) |
 | `arch schema` / `materials` / `furniture` | Reference |
 
@@ -76,6 +80,7 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 | `add_elements`, `update_element`, `remove_elements` | Incremental edits by id. Every edit returns validation results. |
 | `validate` | Errors and warnings |
 | `render_plan`, `render_view` | Return PNG images so the model can see its work |
+| `search_assets`, `search_products`, `import_product`, `shopping_list` | Scanned CC0 materials / models, IKEA catalogue search, vendor product import with 3D models, bill of materials |
 | `export_model` | `.glb` / `.gltf` for game engines |
 
 ## Plan format in 30 seconds
@@ -125,6 +130,11 @@ Examples:
   - **Window treatments:** curtains, sheers, Roman and roller blinds, venetians and shutters.
 - **117 furniture and decor types,** including wall art, gallery walls, plants, mirrors, vases, cushions, throws, lounge chairs, sideboards, beds, bathroom and kitchen accessories.
 - **Style presets** (`project.style`, `room.style`): scandinavian, japandi, modern_minimal, industrial, mid_century, classic, coastal, luxury, boho and farmhouse. A style fills every unset material by role (floors, walls, wood, upholstery, metal, stone, cabinetry...). Explicit choices always win.
+- **Materials, products and models** ([docs/ASSET_SOURCES.md](docs/ASSET_SOURCES.md)):
+  - **About 330 procedural materials and all 217 RAL Classic colours** built in, covering wood species, parquet, natural stones, terrazzo, zellige, designer paints, metals, velvets, linens and leathers.
+  - **Thousands of scanned CC0 materials and models** from ambientCG and Poly Haven, used by id (`ambientcg:WoodFloor051`, `polyhaven:ArmChair_01`). Find them with `arch assets "travertine"` or MCP `search_assets`.
+  - **Real products from vendor pages:** `import_product` / `arch product <url>` reads IKEA, Wayfair, West Elm and other pages for name, price, size, colour and the vendor's 3D model (IKEA publishes GLBs, including Draco-compressed ones). Pages that cannot be read (Homecentre, Amazon) still work with fields the AI passes in, using a sized and tinted parametric stand-in. `arch bom` / `shopping_list` gives the bill of materials.
+  - **Your own files:** `.glb` / `.gltf` / `.obj` models, and 3D-FUTURE (Alibaba) furniture. FBX and similar convert via `scripts/convert_to_glb.py`. Builds write `<model>.credits.md` with every asset's licence.
 - **Electrical and plumbing** (`level.electrical`, `level.plumbing`, `level.services`):
   - **Generated from the design:** switches at door latch sides, wired to the light groups (2-way at further doors and double-bed bedsides), sockets for beds, desks, TV walls, sofas and lamps, worktop sockets clear of the sink and hob, appliance spurs, a cooker unit, shaver sockets, extract fans, smoke and heat detectors, the distribution board, a doorbell and a circuit schedule.
   - **Plumbing:** fixtures from furniture and casework get cold and hot supplies and waste or soil drains run along the walls to a stack in the room corner, plus floor drains, a water heater per wet room and the main stop valve.

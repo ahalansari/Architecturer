@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { compile, type Compiled } from "./pipeline.js";
+import { dirname, resolve } from "node:path";
+import { compileWithAssets, type Compiled } from "./pipeline.js";
 
 export async function readJson(path: string): Promise<unknown> {
   let text: string;
@@ -16,5 +17,5 @@ export async function readJson(path: string): Promise<unknown> {
 }
 
 export async function loadAndCompile(path: string): Promise<Compiled> {
-  return compile(await readJson(path));
+  return compileWithAssets(await readJson(path), { baseDir: dirname(resolve(path)) });
 }
