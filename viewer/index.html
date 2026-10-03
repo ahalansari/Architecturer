@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Architecturer Viewer</title>
-    <link rel="stylesheet" href="/viewer/viewer.css" />
+    <link rel="stylesheet" href="viewer/viewer.css" />
     <script type="importmap">
-      { "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/", "three-mesh-bvh": "/vendor/three-mesh-bvh/build/index.module.js" } }
+      { "imports": { "three": "./three/build/three.module.js", "three/addons/": "./three/examples/jsm/", "three-mesh-bvh": "./vendor/three-mesh-bvh/build/index.module.js" } }
     </script>
   </head>
   <body>
@@ -40,7 +40,7 @@
           <button data-view="east">East</button>
           <button id="walkBtn" title="First-person walk (or double-click a floor)">🚶 Walk</button>
         </div>
-        <a id="download" href="/model.glb" download="model.glb" class="button">Download GLB</a>
+        <a id="download" href="model.glb" download="model.glb" class="button">Download GLB</a>
       </section>
       <section>
         <h2>Plans</h2>
@@ -57,8 +57,8 @@
       <section>
         <h2>Cost</h2>
         <div class="buttons">
-          <a class="button" href="/estimate.html" target="_blank" title="Bill of quantities measured from the model (updates with every save)">💰 Cost estimate</a>
-          <a class="button" href="/estimate.csv" title="The bill as a spreadsheet">CSV</a>
+          <a class="button" href="estimate.html" target="_blank" title="Bill of quantities measured from the model (updates with every save)">💰 Cost estimate</a>
+          <a class="button" href="estimate.csv" title="The bill as a spreadsheet">CSV</a>
         </div>
       </section>
       <section id="picked" hidden>
@@ -105,6 +105,6 @@
       <button id="walkResume">Click to look around</button>
       <button id="walkExit">Exit walk</button>
     </div>
-    <script type="module" src="/viewer/viewer.js"></script>
+    <script type="module" src="viewer/viewer.js"></script>
   </body>
 </html>

@@ -187,6 +187,146 @@ const COMMANDS: Record<string, Command> = {
       return -1; // keep running
     },
   },
+  mcp: {
+    usage: "arch mcp [--http] [--port 5178] [--public-url https://...] [--workdir dir]",
+    desc: "MCP server: over stdio for local clients (default), or --http for remote clients (OAuth, personal tokens, live viewer, download links)",
+    flags: [
+      { name: "http", desc: "remote server over Streamable HTTP (settings: see the README, 'Remote MCP server')" },
+      { name: "port", arg: "n", desc: "HTTP port (default $PORT or 5178)" },
+      { name: "public-url", arg: "url", desc: "public origin clients reach, e.g. https://arch.example.com (default $ARCHITECTURER_PUBLIC_URL)" },
+      { name: "workdir", arg: "dir", desc: "project folder (default $ARCHITECTURER_WORKDIR or the current folder)" },
+    ],
+    async run(_file, f) {
+      if (!f.http) {
+        if (f.port || f["public-url"]) throw new Error("--port and --public-url need --http");
+        if (typeof f.workdir === "string") process.env.ARCHITECTURER_WORKDIR = f.workdir;
+        await import("../mcp/server.js");
+        return -1;
+      }
+      const { main } = await import("../mcp/http.js");
+      await main({
+        port: f.port ? num(f.port, "port") : undefined,
+        publicUrl: typeof f["public-url"] === "string" ? f["public-url"] : undefined,
+        workdir: typeof f.workdir === "string" ? f.workdir : undefined,
+      });
+      return -1;
+    },
+  },
+  user: {
+    usage: "arch user <add|passwd|reset-2fa|delete|list> [--name n] [--password-stdin]",
+    desc: "Accounts that log in to the remote MCP server's pages (setup, recovery when locked out); asks for the password unless --password-stdin",
+    flags: [
+      { name: "name", arg: "n", desc: "the username" },
+      { name: "password-stdin", desc: "read the password from standard input instead of asking" },
+    ],
+    async run(action, f) {
+      const { AuthStore } = await import("../mcp/remote/store.js");
+      const { hashPassword, passwordProblem } = await import("../mcp/remote/crypto.js");
+      const store = new AuthStore();
+      if (action === "list") {
+        const users = store.users();
+        if (!users.length) console.error(`no accounts (state: ${store.file})`);
+        for (const u of users) console.log(`${u.username.padEnd(24)} two-factor ${u.totp ? "on " : "off"}  password changed ${new Date(u.passwordChangedAt * 1000).toISOString().slice(0, 16).replace("T", " ")}`);
+        return 0;
+      }
+      if (typeof f.name !== "string") throw new Error(`arch user ${action ?? "<action>"} needs --name <n>`);
+      const name = f.name;
+      const existing = store.getUser(name);
+      const askPassword = async (): Promise<string> => {
+        if (f["password-stdin"]) {
+          let s = "";
+          for await (const chunk of process.stdin) s += chunk;
+          return s.replace(/\r?\n$/, "");
+        }
+        if (!process.stdin.isTTY) throw new Error("no terminal to ask for the password: use --password-stdin (docker exec needs -it to ask)");
+        const ask = (q: string) =>
+          new Promise<string>((ok) => {
+            process.stderr.write(q);
+            let s = "";
+            const stdin = process.stdin;
+            stdin.setRawMode(true);
+            stdin.resume();
+            const on = (d: Buffer) => {
+              for (const ch of d.toString("utf8")) {
+                if (ch === "\r" || ch === "\n") {
+                  stdin.setRawMode(false);
+                  stdin.pause();
+                  stdin.off("data", on);
+                  process.stderr.write("\n");
+                  return ok(s);
+                }
+                if (ch === "\u0003") process.exit(130);
+                if (ch === "\u007f") s = s.slice(0, -1);
+                else s += ch;
+              }
+            };
+            stdin.on("data", on);
+          });
+        const a = await ask("Password: ");
+        if (a !== (await ask("Repeat: "))) throw new Error("the passwords don't match");
+        return a;
+      };
+      if (action === "add" || action === "passwd") {
+        if (action === "add" && existing) throw new Error(`'${name}' exists; use 'arch user passwd --name ${name}'`);
+        if (action === "passwd" && !existing) throw new Error(`no account '${name}' (arch user list)`);
+        if (!/^[A-Za-z0-9._-]{1,40}$/.test(name)) throw new Error("username: letters, digits, '.', '_' or '-'");
+        const pw = await askPassword();
+        const problem = passwordProblem(pw, name);
+        if (problem) throw new Error(`password: ${problem}`);
+        store.putUser(existing?.username ?? name, await hashPassword(pw), { keepTotp: true });
+        console.error(action === "add" ? `created '${name}'` : `password changed for '${name}'; its browser sessions are logged out`);
+        return 0;
+      }
+      if (action === "reset-2fa") {
+        if (!existing) throw new Error(`no account '${name}' (arch user list)`);
+        store.updateUser(name, (u) => {
+          delete u.totp;
+          delete u.totpStep;
+        });
+        console.error(`two-factor login turned off for '${name}'`);
+        return 0;
+      }
+      if (action === "delete") {
+        if (!store.deleteUser(name)) throw new Error(`no account '${name}' (arch user list)`);
+        console.error(`deleted '${name}'`);
+        return 0;
+      }
+      throw new Error("usage: arch user <add|passwd|reset-2fa|delete|list> [--name n]");
+    },
+  },
+  token: {
+    usage: "arch token <create|list|revoke> [--name n] [--id grant]",
+    desc: "Personal access tokens for the remote MCP server (clients configured with an Authorization header); also lists / revokes connected OAuth apps",
+    flags: [
+      { name: "name", arg: "n", desc: "create: a name to recognise the token by (e.g. lmstudio)" },
+      { name: "id", arg: "grant", desc: "revoke: the id shown by 'arch token list'" },
+    ],
+    async run(action, f) {
+      const { AuthStore } = await import("../mcp/remote/store.js");
+      const store = new AuthStore();
+      if (action === "create") {
+        if (typeof f.name !== "string") throw new Error("arch token create needs --name <n>");
+        const { token } = store.createPat(f.name);
+        console.error(`created token '${f.name}' (state: ${store.file}); it is not shown again:`);
+        console.log(token);
+        return 0;
+      }
+      if (action === "list") {
+        const when = (t?: number) => (t ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") : "never");
+        const grants = store.grants();
+        if (!grants.length) console.error(`nothing connected (state: ${store.file})`);
+        for (const g of grants) console.log(`${g.id}  ${(g.clientId === "pat" ? "token" : "oauth").padEnd(5)}  ${g.name.padEnd(28)}  created ${when(g.createdAt)}  last used ${when(g.lastUsed)}`);
+        return 0;
+      }
+      if (action === "revoke") {
+        if (typeof f.id !== "string") throw new Error("arch token revoke needs --id <grant> (see arch token list)");
+        if (!store.revokeGrant(f.id)) throw new Error(`no grant '${f.id}' (see arch token list)`);
+        console.error(`revoked ${f.id}`);
+        return 0;
+      }
+      throw new Error("usage: arch token <create|list|revoke> [--name n] [--id grant]");
+    },
+  },
   schema: {
     usage: "arch schema",
     desc: "Print the plan JSON Schema (every field, with descriptions and defaults)",

@@ -9,6 +9,7 @@
 import { readFile } from "node:fs/promises";
 import { FURNITURE } from "../elements/furniture.js";
 import { download, fetchCached, fetchJson, fetchText } from "./cache.js";
+import { checkLocalPath } from "../sandbox.js";
 import { decodeImage, dominantColor } from "./images.js";
 
 export interface ProductInfo {
@@ -245,7 +246,7 @@ export async function fetchProduct(url: string): Promise<ProductInfo> {
 /** Dominant colour of a product photo (studio background ignored). */
 export async function photoColor(imageUrl: string): Promise<string | undefined> {
   try {
-    const p = /^https?:/i.test(imageUrl) ? await fetchCached(imageUrl, { sub: "product-img" }) : imageUrl;
+    const p = /^https?:/i.test(imageUrl) ? await fetchCached(imageUrl, { sub: "product-img" }) : checkLocalPath(imageUrl, "image");
     return dominantColor(decodeImage(new Uint8Array(await readFile(p)), p.toLowerCase()));
   } catch {
     return undefined;
