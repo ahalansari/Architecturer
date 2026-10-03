@@ -30,9 +30,11 @@ const near = (a: number, b: number, w: number) => Math.abs(((a - b + 540) % 360)
 const DISC_TILE = 3.2; // m per texture tile (8 x 8 discs, ~0.4 m spacing)
 const uvR = (radius: number) => r2((Math.round((2 * Math.PI * radius) / DISC_TILE) * DISC_TILE) / (2 * Math.PI));
 
+// Tower feet relative to the main tower, x east / y north, from the OpenStreetMap nodes of the three towers
+// (main tower ~29.3897 N 48.0032 E). The photo-measured layout used before came out mirrored north-south.
 const MAIN: P = [0, 0];
-const SECOND: P = [-42, -4];
-const THIRD: P = [-21, 14];
+const SECOND: P = [-45.3, 6.5];
+const THIRD: P = [-31.7, -24.6];
 
 // ---- main tower geometry (heights in meters above the plaza) ----
 const LOWER = { c: 82.5, r: 19.4 }; // restaurant / water sphere

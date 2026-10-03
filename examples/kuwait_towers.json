@@ -1055,8 +1055,8 @@
      "id": "second_shaft",
      "name": "Second tower shaft (147 m)",
      "position": [
-      -42,
-      -4
+      -45.3,
+      6.5
      ],
      "material": "kt_white",
      "segments": 48,
@@ -1143,8 +1143,8 @@
      "id": "second_sphere",
      "name": "Second tower sphere (water tank)",
      "center": [
-      -42,
-      -4,
+      -45.3,
+      6.5,
       72.5
      ],
      "radius": 14,
@@ -1158,8 +1158,8 @@
      "id": "third_tower",
      "name": "Third tower (floodlights)",
      "position": [
-      -21,
-      14
+      -31.7,
+      -24.6
      ],
      "material": "kt_white",
      "segments": 32,
