@@ -7,7 +7,7 @@
  *
  *   /mcp, /mcp/core          MCP endpoint (core = a small tool set for local models); bearer token
  *   /.well-known/*, /register, /token, /revoke     OAuth discovery and token endpoints
- *   /authorize, /login, /admin, /view/<project>/   human pages: need a login (Cloudflare Access or password)
+ *   /setup, /login, /authorize, /admin, /view/<project>/   human pages: built-in login (remote/login.ts)
  *   /files/...               signed links;  /healthz  health check
  */
 import { mcpAuthRouter, createOAuthMetadata } from "@modelcontextprotocol/sdk/server/auth/router.js";
@@ -15,6 +15,7 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { hostHeaderValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import cors from "cors";
+import QRCode from "qrcode";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import { createReadStream, existsSync, statSync } from "node:fs";
@@ -31,7 +32,8 @@ import { loadConfig, type RemoteConfig } from "./remote/config.js";
 import { Files } from "./remote/files.js";
 import { Login, type Identity } from "./remote/login.js";
 import { ArchOAuthProvider, SCOPES } from "./remote/oauth.js";
-import { adminPage, esc, loginPage, messagePage, page } from "./remote/pages.js";
+import { adminPage, esc, loginPage, messagePage, page, setupPage } from "./remote/pages.js";
+import { hashPassword, newTotpSecret, otpauthUri, passwordProblem, totpMatch, verifyPassword } from "./remote/crypto.js";
 import { AuthStore } from "./remote/store.js";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -46,6 +48,8 @@ const CONTENT_TYPES: Record<string, string> = {
 export interface RemoteServer {
   url: string;
   store: AuthStore;
+  /** One-time code for /setup while no account exists. */
+  setupCode(): string | undefined;
   close(): Promise<void>;
 }
 
@@ -63,9 +67,8 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
   const ws = new Workspace(cfg.workdir, true);
   const pool = new WorkerPool(cfg.workers && cfg.workers > 0 ? cfg.workers : WorkerPool.defaultSize(), { sandbox });
   const files = new Files(ws, cfg.publicUrl, cfg.stateDir, () => store.secret);
-  const login = new Login(cfg, () => store.secret);
+  const login = new Login(store);
   const provider = new ArchOAuthProvider(store, login, (next) => `/login?next=${encodeURIComponent(next)}`);
-  const oauth = login.methods.length > 0;
   const at = (p: string) => new URL(p, cfg.publicUrl).href;
 
   const remote: RemoteHooks = {
@@ -106,32 +109,74 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
 
   // ---- human login ----
 
+  const html = (res: Response, body: string, status = 200) =>
+    void res
+      .status(status)
+      .set("cache-control", "no-store")
+      .set("x-frame-options", "DENY")
+      .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; frame-ancestors 'none'")
+      .type("html")
+      .send(body);
+  /** The logged-in user, or a redirect to log in (or to set up the first account). */
   const human = async (req: Request, res: Response): Promise<Identity | undefined> => {
     const who = await login.identify(req);
     if (who) return who;
-    if (login.methods.includes("password")) res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl)}`);
-    else if (login.methods.includes("access")) res.status(403).type("html").send(messagePage("Not logged in", "This page must be reached through Cloudflare Access."));
-    else res.status(403).type("html").send(messagePage("No login configured", "Set ARCHITECTURER_ADMIN_PASSWORD or Cloudflare Access (CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD) to use this page."));
+    res.redirect(302, store.hasUsers() ? `/login?next=${encodeURIComponent(req.originalUrl)}` : "/setup");
     return undefined;
   };
-  const loginLimit = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+  const loginLimit = rateLimit({ windowMs: 15 * 60_000, limit: cfg.loginAttempts, standardHeaders: true, legacyHeaders: false });
   const form = express.urlencoded({ extended: false, limit: "16kb" });
+  const field = (req: Request, k: string) => String((req.body as Record<string, unknown> | undefined)?.[k] ?? "");
 
-  if (login.methods.includes("password")) {
-    app.get("/login", (req, res) => void res.type("html").send(loginPage(safeNext(req.query.next))));
-    app.post("/login", loginLimit, form, (req, res) => {
-      const next = safeNext(req.body?.next);
-      if (!login.checkPassword(String(req.body?.password ?? ""))) return void res.status(401).type("html").send(loginPage(next, "Wrong password."));
-      res.set("set-cookie", login.sessionCookie(req.secure)).redirect(303, next);
-    });
-    app.get("/logout", (_req, res) => void res.set("set-cookie", login.clearCookie()).type("html").send(messagePage("Logged out", "You are logged out.")));
-  }
+  app.get("/setup", (_req, res) => {
+    if (store.hasUsers()) return void res.redirect(302, "/login");
+    html(res, setupPage({}));
+  });
+  app.post("/setup", loginLimit, form, async (req, res) => {
+    if (store.hasUsers()) return void res.redirect(303, "/login");
+    const username = field(req, "username").trim();
+    const again = (error: string, status = 400) => html(res, setupPage({ error, username }), status);
+    if (!login.checkSetupCode(field(req, "code"))) return again("Wrong setup code. It is in the server log.", 403);
+    if (!/^[A-Za-z0-9._-]{1,40}$/.test(username)) return again("Username: letters, digits, '.', '_' or '-'.");
+    const password = field(req, "password");
+    if (password !== field(req, "confirm")) return again("The passwords don't match.");
+    const problem = passwordProblem(password, username);
+    if (problem) return again(`Password: ${problem}.`);
+    const user = store.putUser(username, await hashPassword(password));
+    console.error(`architecturer: account '${username}' created; setup is closed`);
+    res.set("set-cookie", login.startSession(user, req)).redirect(303, "/admin");
+  });
+
+  app.get("/login", (req, res) => {
+    if (!store.hasUsers()) return void res.redirect(302, "/setup");
+    html(res, loginPage({ next: safeNext(req.query.next) }));
+  });
+  app.post("/login", loginLimit, form, async (req, res) => {
+    const next = safeNext(field(req, "next"));
+    const username = field(req, "username");
+    const r = await login.password(username, field(req, "password"));
+    if (!r.ok) return html(res, loginPage({ next, username, error: r.error }), 401);
+    if (r.user.totp) return html(res, loginPage({ next, secondStep: login.secondStepToken(r.user) }));
+    res.set("set-cookie", login.startSession(r.user, req)).redirect(303, next);
+  });
+  app.post("/login/code", loginLimit, form, async (req, res) => {
+    const next = safeNext(field(req, "next"));
+    const token = field(req, "token");
+    const r = await login.secondStep(token, field(req, "code"));
+    if (!r.ok) return html(res, /expired/.test(r.error) ? loginPage({ next, error: r.error }) : loginPage({ next, secondStep: token, error: r.error }), 401);
+    res.set("set-cookie", login.startSession(r.user, req)).redirect(303, next);
+  });
+  app.post("/logout", form, async (req, res) => {
+    const who = await login.identify(req);
+    if (who && login.checkCsrf(who, "admin", field(req, "csrf"))) res.set("set-cookie", login.endSession(who));
+    html(res, messagePage("Logged out", "You are logged out."));
+  });
 
   // ---- OAuth ----
 
   const prm = (resource: string) => ({
     resource: at(resource),
-    authorization_servers: oauth ? [cfg.publicUrl.href] : [],
+    authorization_servers: [cfg.publicUrl.href],
     scopes_supported: SCOPES,
     bearer_methods_supported: ["header"],
     resource_name: "Architecturer",
@@ -139,7 +184,7 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
   // some clients look for the resource metadata at the root, some at the endpoint's path
   for (const [path, resource] of [["/.well-known/oauth-protected-resource", "/mcp"], ["/.well-known/oauth-protected-resource/mcp/core", "/mcp/core"]])
     app.get(path, cors(), (_req, res) => void res.json(prm(resource)));
-  if (oauth) {
+  {
     const meta = { ...createOAuthMetadata({ provider, issuerUrl: cfg.publicUrl, scopesSupported: SCOPES }), client_id_metadata_document_supported: true };
     app.get("/.well-known/oauth-authorization-server", cors(), (_req, res) => void res.json(meta));
     app.post("/authorize/decision", loginLimit, form, (req, res, next) => void provider.decide(req, res).catch(next));
@@ -269,29 +314,98 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
   // ---- admin ----
 
   const status = () => `${pool.size} render worker${pool.size === 1 ? "" : "s"}, ${pool.busy} busy, ${pool.pending} queued`;
-  const admin = (who: Identity, res: Response, newToken?: { name: string; token: string }) =>
-    void res
-      .set("cache-control", "no-store")
-      .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
-      .type("html")
-      .send(adminPage({ email: who.email, grants: store.grants(), csrf: login.csrf(who, "admin"), publicUrl: cfg.publicUrl.origin, newToken, status: status(), canLogout: who.via === "password" }));
+  /** Two-factor enrolments in progress: session → secret (only saved once a code confirms it). */
+  const enrolling = new Map<string, string>();
+  const admin = async (who: Identity, res: Response, extra: Partial<Parameters<typeof adminPage>[0]> = {}) => {
+    const user = store.getUser(who.username)!;
+    const secret = enrolling.get(who.sessionKey);
+    const enrol = secret ? { secret, qr: await QRCode.toString(otpauthUri(secret, user.username, `Architecturer (${cfg.publicUrl.host})`), { type: "svg", margin: 1 }) } : undefined;
+    html(
+      res,
+      adminPage({
+        username: user.username,
+        grants: store.grants(),
+        sessions: store.sessions(user.username).map(({ key, session }) => ({ key, ...session, current: key === who.sessionKey })),
+        csrf: login.csrf(who, "admin"),
+        publicUrl: cfg.publicUrl.origin,
+        twoFactor: !!user.totp,
+        enrol,
+        status: status(),
+        ...extra,
+      }),
+      extra.error ? 400 : 200,
+    );
+  };
+  /** Logged in, and the form carries this session's token. */
+  const adminPost = async (req: Request, res: Response): Promise<Identity | undefined> => {
+    const who = await human(req, res);
+    if (!who) return undefined;
+    if (!login.checkCsrf(who, "admin", field(req, "csrf"))) return void res.status(403).send("bad form token; reload the page");
+    return who;
+  };
   app.get("/admin", async (req, res) => {
     const who = await human(req, res);
-    if (who) admin(who, res);
+    if (who) await admin(who, res);
   });
   app.post("/admin/tokens", form, async (req, res) => {
-    const who = await human(req, res);
+    const who = await adminPost(req, res);
     if (!who) return;
-    if (!login.checkCsrf(who, "admin", req.body?.csrf)) return void res.status(403).send("bad form token; reload the page");
-    const name = String(req.body?.name ?? "").trim().slice(0, 60) || "token";
-    admin(who, res, { name, token: store.createPat(name).token });
+    const name = field(req, "name").trim().slice(0, 60) || "token";
+    await admin(who, res, { newToken: { name, token: store.createPat(name).token } });
   });
   app.post("/admin/revoke", form, async (req, res) => {
-    const who = await human(req, res);
-    if (!who) return;
-    if (!login.checkCsrf(who, "admin", req.body?.csrf)) return void res.status(403).send("bad form token; reload the page");
-    store.revokeGrant(String(req.body?.grant ?? ""));
+    if (!(await adminPost(req, res))) return;
+    store.revokeGrant(field(req, "grant"));
     res.redirect(303, "/admin");
+  });
+  app.post("/admin/session/revoke", form, async (req, res) => {
+    const who = await adminPost(req, res);
+    if (!who) return;
+    const key = field(req, "session");
+    if (store.sessions(who.username).some((s) => s.key === key)) store.deleteSession(key);
+    res.redirect(303, "/admin");
+  });
+  app.post("/admin/password", loginLimit, form, async (req, res) => {
+    const who = await adminPost(req, res);
+    if (!who) return;
+    const user = store.getUser(who.username)!;
+    if (!(await verifyPassword(field(req, "current"), user.password))) return admin(who, res, { error: "The current password is wrong." });
+    const password = field(req, "password");
+    if (password !== field(req, "confirm")) return admin(who, res, { error: "The new passwords don't match." });
+    const problem = passwordProblem(password, user.username);
+    if (problem) return admin(who, res, { error: `New password: ${problem}.` });
+    // every existing session (this one too) ends; continue in a fresh one
+    const fresh = store.putUser(user.username, await hashPassword(password), { keepTotp: true });
+    store.deleteSession(who.sessionKey);
+    res.set("set-cookie", login.startSession(fresh, req)).redirect(303, "/admin");
+  });
+  app.post("/admin/2fa/start", form, async (req, res) => {
+    const who = await adminPost(req, res);
+    if (!who) return;
+    enrolling.set(who.sessionKey, newTotpSecret());
+    res.redirect(303, "/admin");
+  });
+  app.post("/admin/2fa/confirm", loginLimit, form, async (req, res) => {
+    const who = await adminPost(req, res);
+    if (!who) return;
+    const secret = enrolling.get(who.sessionKey);
+    if (!secret) return admin(who, res, { error: "Start the setup again." });
+    const step = totpMatch(secret, field(req, "code"));
+    if (step === undefined) return admin(who, res, { error: "That code doesn't match. Check the time on your phone and try the next code." });
+    enrolling.delete(who.sessionKey);
+    store.updateUser(who.username, (u) => Object.assign(u, { totp: secret, totpStep: step }));
+    await admin(who, res, { notice: "Two-factor login is on. You'll need a code from the app at every login." });
+  });
+  app.post("/admin/2fa/disable", loginLimit, form, async (req, res) => {
+    const who = await adminPost(req, res);
+    if (!who) return;
+    const user = store.getUser(who.username)!;
+    if (!user.totp || totpMatch(user.totp, field(req, "code"), user.totpStep) === undefined) return admin(who, res, { error: "Wrong code; two-factor login is still on." });
+    store.updateUser(who.username, (u) => {
+      delete u.totp;
+      delete u.totpStep;
+    });
+    await admin(who, res, { notice: "Two-factor login is off." });
   });
 
   app.get("/", (_req, res) =>
@@ -323,6 +437,7 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
   return {
     url: `http://localhost:${port}`,
     store,
+    setupCode: () => login.pendingSetupCode(),
     async close() {
       clearInterval(prune);
       for (const v of viewers.values()) v.viewer.close();
@@ -337,12 +452,11 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
 export async function main(overrides: Parameters<typeof loadConfig>[1] = {}) {
   const cfg = loadConfig(process.env, overrides);
   const srv = await startRemoteServer(cfg);
-  const methods = [cfg.access && "Cloudflare Access", cfg.adminPassword && "password"].filter(Boolean);
   console.error(`Architecturer MCP server on ${cfg.host}:${cfg.port}, public URL ${cfg.publicUrl.origin}`);
   console.error(`  MCP endpoint ${new URL("/mcp", cfg.publicUrl).href} (small tool set: /mcp/core); projects in ${cfg.workdir}; state in ${cfg.stateDir}`);
-  if (methods.length) console.error(`  OAuth login with ${methods.join(" or ")}; admin page ${new URL("/admin", cfg.publicUrl).href}`);
-  else console.error("  no login configured (ARCHITECTURER_ADMIN_PASSWORD or CF_ACCESS_*): OAuth is off, only personal tokens work (arch token create <name>)");
-  if (cfg.access && !cfg.allowedEmails.length) console.error("  note: ARCHITECTURER_ALLOWED_EMAILS is empty, so anyone your Cloudflare Access policy admits can approve apps");
+  const code = srv.setupCode();
+  if (code) console.error(`\n  No account yet. Open ${new URL("/setup", cfg.publicUrl).href} and enter the setup code ${code}\n  (or run: arch user add --name <you>)\n`);
+  else console.error(`  admin page ${new URL("/admin", cfg.publicUrl).href}`);
   const stop = async () => {
     await srv.close();
     process.exit(0);

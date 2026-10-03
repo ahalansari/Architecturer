@@ -1,97 +1,159 @@
 /**
- * Who is at the browser: the human pages (OAuth consent, admin, 3D viewer) need you logged in. Two ways:
- * - Cloudflare Access in front of those paths: Access adds a signed JWT header, verified here against the
- *   team's public keys (so a request that bypassed Access can't fake it).
- * - A password (ARCHITECTURER_ADMIN_PASSWORD): a login form and a signed session cookie.
- * Machine endpoints (/mcp, /token, /register) never use this; they take OAuth / personal tokens.
+ * Built-in login for the human pages (OAuth consent, admin, 3D viewer): user accounts with scrypt
+ * passwords, optional TOTP two-factor codes, server-side sessions in an HttpOnly cookie, and lockout
+ * after repeated failures. Machine endpoints (/mcp, /token, /register) never use this; they take OAuth /
+ * personal tokens.
+ *
+ * The first account is created on /setup with a one-time code printed in the server log, so whoever
+ * reaches a fresh server first can't claim it. `arch user` (CLI) manages accounts too.
  */
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import type { RemoteConfig } from "./config.js";
+import { dummyHash, totpMatch, verifyPassword } from "./crypto.js";
+import type { AuthStore, User } from "./store.js";
+import { SESSION_TTL } from "./store.js";
 
 export interface Identity {
-  email: string;
-  via: "access" | "password";
+  username: string;
+  /** Hash of the session id: ties form tokens to this session. */
+  sessionKey: string;
 }
 
-const SESSION_COOKIE = "arch_session";
-const SESSION_TTL = 12 * 3600;
+const COOKIE = "arch_session";
+const MAX_FAILURES = 5;
+const LOCK_MS = 15 * 60_000;
+const SECOND_STEP_TTL = 5 * 60;
 
-const sameText = (a: string, b: string) => {
-  const ha = createHash("sha256").update(a).digest();
-  const hb = createHash("sha256").update(b).digest();
-  return timingSafeEqual(ha, hb);
+const same = (a: string, b: string) => {
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
 };
 
 function cookies(req: IncomingMessage): Record<string, string> {
   const out: Record<string, string> = {};
   for (const part of (req.headers.cookie ?? "").split(";")) {
     const i = part.indexOf("=");
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i > 0) {
+      try {
+        out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+      } catch {
+        // malformed cookie: ignore
+      }
+    }
   }
   return out;
 }
 
+export type LoginResult = { ok: true; user: User } | { ok: false; error: string };
+
 export class Login {
-  private jwks?: ReturnType<typeof createRemoteJWKSet>;
+  private failures = new Map<string, { count: number; until?: number }>();
+  /** One-time code for creating the first account (while there is none). */
+  private setupCode?: string;
 
-  constructor(
-    private cfg: RemoteConfig,
-    private secret: () => string,
-  ) {
-    if (cfg.access) this.jwks = createRemoteJWKSet(new URL(`https://${cfg.access.teamDomain}/cdn-cgi/access/certs`));
-  }
-
-  get methods(): ("access" | "password")[] {
-    return [...(this.cfg.access ? (["access"] as const) : []), ...(this.cfg.adminPassword ? (["password"] as const) : [])];
-  }
+  constructor(private store: AuthStore) {}
 
   private hmac(s: string) {
-    return createHmac("sha256", this.secret()).update(s).digest("base64url");
+    return createHmac("sha256", this.store.secret).update(s).digest("base64url");
+  }
+
+  /** The current setup code, creating one if the server has no account yet. */
+  pendingSetupCode(): string | undefined {
+    if (this.store.hasUsers()) return (this.setupCode = undefined);
+    return (this.setupCode ??= `${randomBytes(3).toString("hex")}-${randomBytes(3).toString("hex")}`.toUpperCase());
+  }
+
+  checkSetupCode(code: string): boolean {
+    const want = this.pendingSetupCode();
+    return !!want && same(code.trim().toUpperCase(), want);
   }
 
   async identify(req: IncomingMessage): Promise<Identity | undefined> {
-    const jwt = req.headers["cf-access-jwt-assertion"];
-    if (this.jwks && typeof jwt === "string") {
-      try {
-        const { payload } = await jwtVerify(jwt, this.jwks, { issuer: `https://${this.cfg.access!.teamDomain}`, audience: this.cfg.access!.aud });
-        const email = typeof payload.email === "string" ? payload.email.toLowerCase() : undefined;
-        // service tokens have no email: they are for machines, not for approving apps
-        if (email && (!this.cfg.allowedEmails.length || this.cfg.allowedEmails.includes(email))) return { email, via: "access" };
-      } catch {
-        // invalid / expired: fall through to the session cookie
-      }
-    }
-    if (this.cfg.adminPassword) {
-      const v = cookies(req)[SESSION_COOKIE];
-      const m = v && /^v1\.(\d+)\.([\w-]+)$/.exec(v);
-      if (m && Number(m[1]) > Date.now() / 1000 && sameText(m[2], this.hmac(`session:${m[1]}`))) return { email: "admin", via: "password" };
-    }
+    const id = cookies(req)[COOKIE];
+    if (!id) return undefined;
+    const s = this.store.session(id);
+    return s && { username: s.user.username, sessionKey: s.key };
+  }
+
+  private locked(key: string): number | undefined {
+    const f = this.failures.get(key);
+    if (f?.until && f.until > Date.now()) return Math.ceil((f.until - Date.now()) / 60_000);
     return undefined;
   }
 
-  checkPassword(pw: string): boolean {
-    return !!this.cfg.adminPassword && sameText(pw, this.cfg.adminPassword);
+  private failed(key: string) {
+    const f = this.failures.get(key) ?? { count: 0 };
+    if (f.until && f.until <= Date.now()) Object.assign(f, { count: 0, until: undefined });
+    f.count++;
+    if (f.count >= MAX_FAILURES) f.until = Date.now() + LOCK_MS;
+    this.failures.set(key, f);
   }
 
-  /** Set-Cookie value for a new password session (Secure when the browser came over https, e.g. via the tunnel). */
-  sessionCookie(https: boolean): string {
-    const exp = Math.floor(Date.now() / 1000) + SESSION_TTL;
-    const secure = https ? "; Secure" : "";
-    return `${SESSION_COOKIE}=v1.${exp}.${this.hmac(`session:${exp}`)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${secure}`;
+  /** Step 1: username + password. */
+  async password(username: string, password: string): Promise<LoginResult> {
+    const key = username.trim().toLowerCase();
+    const mins = this.locked(key);
+    if (mins) return { ok: false, error: `Too many failed attempts. Try again in ${mins} min.` };
+    const user = key ? this.store.getUser(key) : undefined;
+    // hash even for unknown users, so response time doesn't reveal which usernames exist
+    const good = await verifyPassword(password, user?.password ?? (await dummyHash()));
+    if (!user || !good) {
+      this.failed(key);
+      return { ok: false, error: "Wrong username or password." };
+    }
+    this.failures.delete(key);
+    return { ok: true, user };
   }
 
-  clearCookie(): string {
-    return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  /** Signed, short-lived proof that step 1 passed, carried to the two-factor form. */
+  secondStepToken(user: User): string {
+    const exp = Math.floor(Date.now() / 1000) + SECOND_STEP_TTL;
+    const u = Buffer.from(user.username).toString("base64url");
+    return `${u}.${exp}.${this.hmac(`2fa:${user.username}:${user.passwordChangedAt}:${exp}`)}`;
   }
 
-  /** Token for forms, tied to the user and purpose (a cross-site form post can't produce it). */
+  /** Step 2: the TOTP code, with the token from step 1. */
+  async secondStep(token: string, code: string): Promise<LoginResult> {
+    const [u, exp, sig] = token.split(".");
+    let username = "";
+    try {
+      username = Buffer.from(u ?? "", "base64url").toString("utf8");
+    } catch {
+      // bad token
+    }
+    const user = username ? this.store.getUser(username) : undefined;
+    if (!user?.totp || !sig || Number(exp) < Date.now() / 1000 || !same(sig, this.hmac(`2fa:${user.username}:${user.passwordChangedAt}:${exp}`)))
+      return { ok: false, error: "The login expired. Start again." };
+    const key = `2fa:${user.username.toLowerCase()}`;
+    const mins = this.locked(key);
+    if (mins) return { ok: false, error: `Too many wrong codes. Try again in ${mins} min.` };
+    const step = totpMatch(user.totp, code, user.totpStep);
+    if (step === undefined) {
+      this.failed(key);
+      return { ok: false, error: "Wrong code." };
+    }
+    this.failures.delete(key);
+    this.store.updateUser(user.username, (x) => (x.totpStep = step));
+    return { ok: true, user };
+  }
+
+  /** Start a session; returns the Set-Cookie value. */
+  startSession(user: User, req: IncomingMessage & { ip?: string; secure?: boolean }): string {
+    const id = this.store.createSession(user.username, { agent: req.headers["user-agent"], ip: req.ip });
+    return `${COOKIE}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}${req.secure ? "; Secure" : ""}`;
+  }
+
+  endSession(who: Identity): string {
+    this.store.deleteSession(who.sessionKey);
+    return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  }
+
+  /** Token for forms, tied to the session and purpose (a cross-site form post can't produce it). */
   csrf(who: Identity, purpose: string): string {
-    return this.hmac(`csrf:${who.email}:${purpose}`);
+    return this.hmac(`csrf:${who.sessionKey}:${purpose}`);
   }
 
   checkCsrf(who: Identity, purpose: string, token: unknown): boolean {
-    return typeof token === "string" && sameText(token, this.csrf(who, purpose));
+    return typeof token === "string" && same(token, this.csrf(who, purpose));
   }
 }

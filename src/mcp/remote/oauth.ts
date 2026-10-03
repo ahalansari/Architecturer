@@ -118,10 +118,6 @@ export class ArchOAuthProvider implements OAuthServerProvider {
     res.setHeader("cache-control", "no-store");
     const who = await this.login.identify(req);
     if (!who) {
-      if (!this.login.methods.includes("password")) {
-        res.status(403).type("html").send(messagePage("Not logged in", "This page must be reached through Cloudflare Access (check that the Access application covers /authorize)."));
-        return;
-      }
       const q = new URLSearchParams(req.method === "POST" ? (req.body as Record<string, string>) : (req.query as Record<string, string>));
       res.redirect(302, this.loginUrl(`/authorize?${q}`));
       return;
@@ -133,7 +129,7 @@ export class ArchOAuthProvider implements OAuthServerProvider {
       .type("html")
       .set("x-frame-options", "DENY")
       .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
-      .send(consentPage({ id, clientName: client.client_name || hostOf(params.redirectUri), redirectHost: hostOf(params.redirectUri), email: who.email, csrf: this.login.csrf(who, `consent:${id}`) }));
+      .send(consentPage({ id, clientName: client.client_name || hostOf(params.redirectUri), redirectHost: hostOf(params.redirectUri), username: who.username, csrf: this.login.csrf(who, `consent:${id}`) }));
   }
 
   /** Step 2 (POST /authorize/decision): the consent form's answer; redirects back to the client. */

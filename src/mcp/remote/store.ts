@@ -1,10 +1,11 @@
 /**
- * Persistent auth state for the remote server: OAuth clients (dynamic registration), grants (one per
- * connected app or personal token) and their tokens. Single user, a handful of clients: one JSON file,
- * written atomically. Tokens are stored as SHA-256 hashes; the plaintext is only ever shown once.
+ * Persistent auth state for the remote server: user accounts and their browser sessions, OAuth clients
+ * (dynamic registration), grants (one per connected app or personal token) and their tokens. A handful of
+ * users and clients: one JSON file, written atomically. Passwords are scrypt hashes; session ids and tokens
+ * are stored as SHA-256 hashes, and the plaintext is only ever shown once.
  *
- * The CLI (`arch token create`) writes the same file while the server runs, so every access reloads the
- * file when it changed on disk.
+ * The CLI (`arch user`, `arch token`) writes the same file while the server runs, so every access reloads
+ * the file when it changed on disk.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
@@ -39,14 +40,40 @@ export interface StoredClient extends OAuthClientInformationFull {
   approvedAt?: number;
 }
 
+export interface User {
+  username: string;
+  /** scrypt$N$r$p$salt$key */
+  password: string;
+  /** Base32 TOTP secret once two-factor login is on. */
+  totp?: string;
+  /** Last accepted TOTP time step (a code can't be used twice). */
+  totpStep?: number;
+  createdAt: number;
+  passwordChangedAt: number;
+}
+
+export interface Session {
+  username: string;
+  createdAt: number;
+  expiresAt: number;
+  /** Browser and address at login, to tell sessions apart on the admin page. */
+  agent?: string;
+  ip?: string;
+}
+
 interface State {
   version: 1;
-  /** Key for signed links and session cookies. */
+  /** Key for signed links and form tokens. */
   secret: string;
+  users: Record<string, User>;
+  /** By SHA-256 of the session id. */
+  sessions: Record<string, Session>;
   clients: Record<string, StoredClient>;
   grants: Record<string, Grant>;
   tokens: Record<string, TokenRecord>;
 }
+
+export const SESSION_TTL = 14 * 24 * 3600;
 
 export const ACCESS_TTL = 3600;
 export const REFRESH_TTL = 30 * 24 * 3600;
@@ -77,7 +104,7 @@ export class AuthStore {
   private reload(force = false) {
     if (!existsSync(this.file)) {
       if (force || !this.state) {
-        this.state = { version: 1, secret: randomBytes(32).toString("base64url"), clients: {}, grants: {}, tokens: {} };
+        this.state = { version: 1, secret: randomBytes(32).toString("base64url"), users: {}, sessions: {}, clients: {}, grants: {}, tokens: {} };
         this.write();
       }
       return;
@@ -85,6 +112,8 @@ export class AuthStore {
     const m = statSync(this.file).mtimeMs;
     if (!force && m === this.mtime) return;
     this.state = JSON.parse(readFileSync(this.file, "utf8")) as State;
+    this.state.users ??= {};
+    this.state.sessions ??= {};
     this.mtime = m;
     for (const [id, t] of this.used) if (this.state.grants[id]) this.state.grants[id].lastUsed = t;
   }
@@ -119,6 +148,92 @@ export class AuthStore {
   get secret(): string {
     this.reload();
     return this.state.secret;
+  }
+
+  // ---- users ----
+
+  hasUsers(): boolean {
+    this.reload();
+    return Object.keys(this.state.users).length > 0;
+  }
+
+  users(): User[] {
+    this.reload();
+    return Object.values(this.state.users);
+  }
+
+  getUser(username: string): User | undefined {
+    this.reload();
+    return this.state.users[username.toLowerCase()];
+  }
+
+  /** Create or replace a user (password = an already computed hash). */
+  putUser(username: string, passwordHash: string, opts: { keepTotp?: boolean } = {}): User {
+    return this.mutate((s) => {
+      const key = username.toLowerCase();
+      const old = s.users[key];
+      const t = now();
+      const u: User = { username, password: passwordHash, createdAt: old?.createdAt ?? t, passwordChangedAt: t };
+      if (opts.keepTotp && old?.totp) Object.assign(u, { totp: old.totp, totpStep: old.totpStep });
+      s.users[key] = u;
+      // a new password ends every browser session of the account
+      for (const [k, v] of Object.entries(s.sessions)) if (v.username.toLowerCase() === key) delete s.sessions[k];
+      return u;
+    });
+  }
+
+  updateUser(username: string, fn: (u: User) => void) {
+    this.mutate((s) => {
+      const u = s.users[username.toLowerCase()];
+      if (u) fn(u);
+    });
+  }
+
+  deleteUser(username: string): boolean {
+    return this.mutate((s) => {
+      const key = username.toLowerCase();
+      if (!s.users[key]) return false;
+      delete s.users[key];
+      for (const [k, v] of Object.entries(s.sessions)) if (v.username.toLowerCase() === key) delete s.sessions[k];
+      return true;
+    });
+  }
+
+  // ---- browser sessions ----
+
+  /** New session; returns the id for the cookie (only its hash is stored). */
+  createSession(username: string, info: { agent?: string; ip?: string } = {}): string {
+    return this.mutate((s) => {
+      const id = randomBytes(32).toString("base64url");
+      s.sessions[hashToken(id)] = { username: s.users[username.toLowerCase()]?.username ?? username, createdAt: now(), expiresAt: now() + SESSION_TTL, agent: info.agent?.slice(0, 160), ip: info.ip };
+      return id;
+    });
+  }
+
+  /** The live session for a cookie value (and its user), or undefined. */
+  session(id: string): { key: string; session: Session; user: User } | undefined {
+    this.reload();
+    const key = hashToken(id);
+    const session = this.state.sessions[key];
+    if (!session || session.expiresAt < now()) return undefined;
+    const user = this.state.users[session.username.toLowerCase()];
+    // sessions started before the last password change are void
+    if (!user || session.createdAt < user.passwordChangedAt) return undefined;
+    return { key, session, user };
+  }
+
+  /** Sessions of a user, newest first, keyed by their hash (what the admin page revokes). */
+  sessions(username: string): { key: string; session: Session }[] {
+    this.reload();
+    const t = now();
+    return Object.entries(this.state.sessions)
+      .filter(([, v]) => v.username.toLowerCase() === username.toLowerCase() && v.expiresAt > t)
+      .map(([key, session]) => ({ key, session }))
+      .sort((a, b) => b.session.createdAt - a.session.createdAt);
+  }
+
+  deleteSession(key: string) {
+    this.mutate((s) => void delete s.sessions[key]);
   }
 
   // ---- clients ----
@@ -235,6 +350,7 @@ export class AuthStore {
       const live = new Set(Object.values(s.tokens).map((r) => r.grant));
       for (const id of Object.keys(s.grants)) if (!live.has(id)) delete s.grants[id];
       for (const [id, c] of Object.entries(s.clients)) if (!c.approvedAt && (c.client_id_issued_at ?? 0) < t - 86400) delete s.clients[id];
+      for (const [k, v] of Object.entries(s.sessions)) if (v.expiresAt < t) delete s.sessions[k];
     });
   }
 }

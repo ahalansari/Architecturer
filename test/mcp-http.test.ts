@@ -30,10 +30,11 @@ before(async () => {
   work = join(root, "plans");
   const port = await freePort();
   const cfg = loadConfig(
-    { ARCHITECTURER_STATE: join(root, "state"), ARCHITECTURER_ADMIN_PASSWORD: "pw-for-tests", ARCHITECTURER_WORKERS: "1" },
+    { ARCHITECTURER_STATE: join(root, "state"), ARCHITECTURER_WORKERS: "1" },
     { port, workdir: work, publicUrl: `http://localhost:${port}` },
   );
   cfg.host = "127.0.0.1";
+  cfg.loginAttempts = 1000;
   srv = await startRemoteServer(cfg);
   base = `http://localhost:${port}`;
 });
@@ -43,6 +44,38 @@ after(async () => {
 });
 
 const b64url = (b: Buffer) => b.toString("base64url");
+const USER = "ahmad";
+const PASSWORD = "correct horse battery staple";
+const cookieOf = (r: Response) => r.headers.get("set-cookie")!.split(";")[0];
+const post = (path: string, body: Record<string, string>, cookie?: string) =>
+  fetch(`${base}${path}`, { method: "POST", redirect: "manual", headers: cookie ? { cookie } : {}, body: new URLSearchParams(body) });
+async function logIn(next = "/admin"): Promise<string> {
+  const r = await post("/login", { username: USER, password: PASSWORD, next });
+  assert.equal(r.status, 303);
+  return cookieOf(r);
+}
+const csrfOf = async (cookie: string) => /name="csrf" value="([^"]+)"/.exec(await (await fetch(`${base}/admin`, { headers: { cookie } })).text())![1];
+
+test("first account: setup needs the code from the log", async () => {
+  let r = await fetch(`${base}/admin`, { redirect: "manual" });
+  assert.equal(r.headers.get("location"), "/setup");
+  const code = srv.setupCode()!;
+  assert.match(code, /^[0-9A-F]{6}-[0-9A-F]{6}$/);
+  r = await post("/setup", { code: "000000-000000", username: USER, password: PASSWORD, confirm: PASSWORD });
+  assert.equal(r.status, 403);
+  r = await post("/setup", { code, username: USER, password: "short", confirm: "short" });
+  assert.equal(r.status, 400);
+  r = await post("/setup", { code: code.toLowerCase(), username: USER, password: PASSWORD, confirm: PASSWORD });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get("location"), "/admin");
+  r = await fetch(`${base}/admin`, { headers: { cookie: cookieOf(r) } });
+  assert.match(await r.text(), /Logged in as ahmad/);
+  // setup is closed once an account exists
+  assert.equal(srv.setupCode(), undefined);
+  r = await post("/setup", { code, username: "intruder", password: PASSWORD, confirm: PASSWORD });
+  assert.equal(r.headers.get("location"), "/login");
+  assert.equal(srv.store.users().length, 1);
+});
 
 /** Register, log in, approve and exchange the code, like Claude / ChatGPT do. */
 async function oauthLogin(): Promise<{ access: string; refresh: string; clientId: string }> {
@@ -63,11 +96,9 @@ async function oauthLogin(): Promise<{ access: string; refresh: string; clientId
   assert.equal(r.status, 302);
   assert.match(r.headers.get("location")!, /^\/login\?next=/);
 
-  r = await fetch(`${base}/login`, { method: "POST", redirect: "manual", body: new URLSearchParams({ password: "wrong", next: "/admin" }) });
+  r = await post("/login", { username: USER, password: "wrong password!", next: "/admin" });
   assert.equal(r.status, 401);
-  r = await fetch(`${base}/login`, { method: "POST", redirect: "manual", body: new URLSearchParams({ password: "pw-for-tests", next: `/authorize?${q}` }) });
-  assert.equal(r.status, 303);
-  const cookie = r.headers.get("set-cookie")!.split(";")[0];
+  const cookie = await logIn(`/authorize?${q}`);
 
   r = await fetch(`${base}/authorize?${q}`, { headers: { cookie } });
   const html = await r.text();
@@ -217,8 +248,7 @@ test("personal token on the core tool set; viewer needs a login", async () => {
   }
   let r = await fetch(`${base}/view/house/info`, { redirect: "manual" });
   assert.equal(r.status, 302);
-  r = await fetch(`${base}/login`, { method: "POST", redirect: "manual", body: new URLSearchParams({ password: "pw-for-tests", next: "/view/house/" }) });
-  const cookie = r.headers.get("set-cookie")!.split(";")[0];
+  const cookie = await logIn("/view/house/");
   r = await fetch(`${base}/view/house/info`, { headers: { cookie } });
   assert.equal(r.status, 200);
   const info = (await r.json()) as { file: string; levels: unknown[] };
@@ -228,4 +258,62 @@ test("personal token on the core tool set; viewer needs a login", async () => {
   assert.match(await r.text(), /src="viewer\/viewer\.js"/);
   r = await fetch(`${base}/admin`, { headers: { cookie } });
   assert.match(await r.text(), /lmstudio/);
+});
+
+test("password change logs out other sessions; lockout after failures", async () => {
+  const a = await logIn();
+  const b = await logIn();
+  const csrf = await csrfOf(a);
+  const next = "a different long passphrase";
+  let r = await post("/admin/password", { csrf, current: "not it at all", password: next, confirm: next }, a);
+  assert.equal(r.status, 400);
+  r = await post("/admin/password", { csrf, current: PASSWORD, password: next, confirm: next }, a);
+  assert.equal(r.status, 303);
+  const a2 = cookieOf(r);
+  assert.equal((await fetch(`${base}/admin`, { redirect: "manual", headers: { cookie: b } })).status, 302, "other session ended");
+  assert.equal((await fetch(`${base}/admin`, { redirect: "manual", headers: { cookie: a } })).status, 302, "old cookie ended");
+  assert.equal((await fetch(`${base}/admin`, { headers: { cookie: a2 } })).status, 200);
+  // back to the shared test password
+  r = await post("/admin/password", { csrf: await csrfOf(a2), current: next, password: PASSWORD, confirm: PASSWORD }, a2);
+  assert.equal(r.status, 303);
+
+  const { hashPassword } = await import("../src/mcp/remote/crypto.js");
+  srv.store.putUser("guest", await hashPassword(PASSWORD));
+  for (let i = 0; i < 5; i++) assert.equal((await post("/login", { username: "guest", password: `wrong ${i} attempt`, next: "/admin" })).status, 401);
+  r = await post("/login", { username: "guest", password: PASSWORD, next: "/admin" });
+  assert.equal(r.status, 401);
+  assert.match(await r.text(), /Too many failed attempts/);
+  srv.store.deleteUser("guest");
+});
+
+test("two-factor login", async () => {
+  const { totpCode } = await import("../src/mcp/remote/crypto.js");
+  const cookie = await logIn();
+  const csrf = await csrfOf(cookie);
+  let r = await post("/admin/2fa/start", { csrf }, cookie);
+  assert.equal(r.headers.get("location"), "/admin");
+  const html = await (await fetch(`${base}/admin`, { headers: { cookie } })).text();
+  assert.match(html, /<svg/);
+  const secret = /enter the key by hand: <code>([A-Z2-7 ]+)<\/code>/.exec(html)![1].replace(/ /g, "");
+  r = await post("/admin/2fa/confirm", { csrf, code: "000000" }, cookie);
+  assert.equal(r.status, 400);
+  const step = Math.floor(Date.now() / 30_000);
+  r = await post("/admin/2fa/confirm", { csrf, code: totpCode(secret, step) }, cookie);
+  assert.match(await r.text(), /Two-factor login is on/);
+
+  // password alone no longer logs in: a second step asks for the code
+  r = await post("/login", { username: USER, password: PASSWORD, next: "/admin" });
+  assert.equal(r.status, 200);
+  const page = await r.text();
+  assert.match(page, /6-digit code/);
+  assert.equal(r.headers.get("set-cookie"), null);
+  const token = /name="token" value="([^"]+)"/.exec(page)![1];
+  r = await post("/login/code", { token, code: "000000", next: "/admin" });
+  assert.equal(r.status, 401);
+  // the code used to turn it on can't be replayed; the next one works
+  r = await post("/login/code", { token, code: totpCode(secret, step), next: "/admin" });
+  assert.equal(r.status, 401);
+  r = await post("/login/code", { token, code: totpCode(secret, step + 1), next: "/admin" });
+  assert.equal(r.status, 303);
+  assert.equal((await fetch(`${base}/admin`, { headers: { cookie: cookieOf(r) } })).status, 200);
 });

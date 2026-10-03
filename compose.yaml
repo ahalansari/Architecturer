@@ -1,9 +1,9 @@
 # Architecturer behind a Cloudflare Tunnel (e.g. on Unraid with the Compose Manager plugin).
 # 1. Copy .env.example to .env and fill it in.
-# 2. In Cloudflare Zero Trust: create the tunnel (token → CLOUDFLARE_TUNNEL_TOKEN), add a public hostname
-#    arch.<domain> → http://architecturer:5178, and an Access application on that hostname for the paths
-#    /authorize, /admin, /view and /login only (README, "Remote MCP server").
-# 3. docker compose up -d --build
+# 2. In Cloudflare Zero Trust: create the tunnel (token → CLOUDFLARE_TUNNEL_TOKEN) and add a public hostname
+#    arch.<domain> → http://architecturer:5178. No Cloudflare Access: the server has its own login.
+# 3. docker compose up -d, then open https://arch.<domain>/setup with the setup code from
+#    `docker compose logs architecturer` to create your account (docs/REMOTE_MCP.md).
 services:
   architecturer:
     build: .

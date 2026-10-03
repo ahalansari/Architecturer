@@ -14,7 +14,7 @@ button,.button{font:inherit;border:1px solid var(--line);background:var(--card);
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}button.danger{color:var(--danger)}
 input{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);width:100%;max-width:320px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500}
-code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:2px 5px;word-break:break-all}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:2px 5px;overflow-wrap:anywhere}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}.err{color:var(--danger)}
 .scroll{overflow-x:auto}`;
 
@@ -23,21 +23,40 @@ export function page(title: string, body: string): string {
 <title>${esc(title)}</title><style>${CSS}</style></head><body><main>${body}</main></body></html>`;
 }
 
-export function loginPage(next: string, error?: string): string {
+export function loginPage(o: { next: string; error?: string; username?: string; secondStep?: string }): string {
+  const hidden = `<input type="hidden" name="next" value="${esc(o.next)}">`;
+  const body = o.secondStep
+    ? `<p class="muted">Enter the 6-digit code from your authenticator app.</p>
+<form method="post" action="/login/code">${hidden}<input type="hidden" name="token" value="${esc(o.secondStep)}">
+<p><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" placeholder="123456" autofocus required aria-label="Code"></p>
+${o.error ? `<p class="err">${esc(o.error)}</p>` : ""}<div class="row"><button class="primary">Verify</button></div></form>`
+    : `<p class="muted">Log in to continue.</p>
+<form method="post" action="/login">${hidden}
+<p><input name="username" placeholder="Username" autocomplete="username" value="${esc(o.username ?? "")}" ${o.username ? "" : "autofocus"} required aria-label="Username"></p>
+<p><input type="password" name="password" placeholder="Password" autocomplete="current-password" ${o.username ? "autofocus" : ""} required aria-label="Password"></p>
+${o.error ? `<p class="err">${esc(o.error)}</p>` : ""}<div class="row"><button class="primary">Log in</button></div></form>`;
+  return page("Architecturer login", `<div class="card"><h1>Architecturer</h1>${body}</div>`);
+}
+
+export function setupPage(o: { error?: string; username?: string }): string {
   return page(
-    "Architecturer login",
-    `<div class="card"><h1>Architecturer</h1><p class="muted">Log in to continue.</p>
-<form method="post" action="/login"><input type="hidden" name="next" value="${esc(next)}">
-<p><input type="password" name="password" placeholder="Password" autofocus autocomplete="current-password" aria-label="Password"></p>
-${error ? `<p class="err">${esc(error)}</p>` : ""}<div class="row"><button class="primary">Log in</button></div></form></div>`,
+    "Set up Architecturer",
+    `<div class="card"><h1>Set up Architecturer</h1>
+<p>Create the account that logs in to this server. The setup code is in the server log (<code>docker logs architecturer</code>, or the container's log in Unraid).</p>
+<form method="post" action="/setup">
+<p><input name="code" placeholder="Setup code" autocomplete="off" required autofocus aria-label="Setup code"></p>
+<p><input name="username" placeholder="Username" autocomplete="username" value="${esc(o.username ?? "")}" required maxlength="40" pattern="[A-Za-z0-9._-]+" aria-label="Username"></p>
+<p><input type="password" name="password" placeholder="Password (12+ characters)" autocomplete="new-password" required minlength="12" aria-label="Password"></p>
+<p><input type="password" name="confirm" placeholder="Repeat password" autocomplete="new-password" required minlength="12" aria-label="Repeat password"></p>
+${o.error ? `<p class="err">${esc(o.error)}</p>` : ""}<div class="row"><button class="primary">Create account</button></div></form></div>`,
   );
 }
 
-export function consentPage(o: { id: string; clientName: string; redirectHost: string; email: string; csrf: string }): string {
+export function consentPage(o: { id: string; clientName: string; redirectHost: string; username: string; csrf: string }): string {
   return page(
     "Allow access?",
     `<div class="card"><h1>Allow ${esc(o.clientName)}?</h1>
-<p><strong>${esc(o.clientName)}</strong> wants to use Architecturer as <strong>${esc(o.email)}</strong>: read, create and change your projects, render them and export models.</p>
+<p><strong>${esc(o.clientName)}</strong> wants to use Architecturer as <strong>${esc(o.username)}</strong>: read, create and change your projects, render them and export models.</p>
 <p class="muted">After you allow it, you'll be sent back to <code>${esc(o.redirectHost)}</code>. You can revoke access at any time on the <a href="/admin">admin page</a>.</p>
 <form method="post" action="/authorize/decision"><input type="hidden" name="id" value="${esc(o.id)}"><input type="hidden" name="csrf" value="${esc(o.csrf)}">
 <div class="row"><button class="primary" name="decision" value="allow">Allow</button><button name="decision" value="deny">Deny</button></div></form></div>`,
@@ -50,34 +69,71 @@ export function messagePage(title: string, message: string): string {
 
 const when = (t?: number) => (t ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "never");
 
+export interface SessionRow {
+  key: string;
+  createdAt: number;
+  expiresAt: number;
+  agent?: string;
+  ip?: string;
+  current: boolean;
+}
+
 export function adminPage(o: {
-  email: string;
+  username: string;
   grants: Grant[];
+  sessions: SessionRow[];
   csrf: string;
   publicUrl: string;
+  twoFactor: boolean;
+  /** Two-factor enrolment in progress: QR code (SVG markup) and the secret for manual entry. */
+  enrol?: { qr: string; secret: string };
   newToken?: { name: string; token: string };
+  notice?: string;
+  error?: string;
   status: string;
-  canLogout: boolean;
 }): string {
+  const csrf = `<input type="hidden" name="csrf" value="${esc(o.csrf)}">`;
   const rows = o.grants
     .map(
       (g) => `<tr><td>${esc(g.name)}${g.redirectHost ? `<br><span class="muted">${esc(g.redirectHost)}</span>` : ""}</td><td>${g.clientId === "pat" ? "personal token" : "OAuth app"}</td>
 <td>${when(g.createdAt)}</td><td>${when(g.lastUsed)}</td>
-<td><form method="post" action="/admin/revoke"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><input type="hidden" name="grant" value="${esc(g.id)}"><button class="danger">Revoke</button></form></td></tr>`,
+<td><form method="post" action="/admin/revoke">${csrf}<input type="hidden" name="grant" value="${esc(g.id)}"><button class="danger">Revoke</button></form></td></tr>`,
+    )
+    .join("");
+  const sessions = o.sessions
+    .map(
+      (s) => `<tr><td>${esc(s.agent ?? "unknown browser")}${s.current ? ` <strong>(this one)</strong>` : ""}<br><span class="muted">${esc(s.ip ?? "")}</span></td><td>${when(s.createdAt)}</td><td>${when(s.expiresAt)}</td>
+<td>${s.current ? "" : `<form method="post" action="/admin/session/revoke">${csrf}<input type="hidden" name="session" value="${esc(s.key)}"><button class="danger">Log out</button></form>`}</td></tr>`,
     )
     .join("");
   const created = o.newToken
     ? `<div class="card" style="margin-top:16px"><h2 style="margin-top:0">Token '${esc(o.newToken.name)}' created</h2><p>Copy it now; it is not shown again.</p><p><code>${esc(o.newToken.token)}</code></p>
 <p class="muted">Use it as the header <code>Authorization: Bearer &lt;token&gt;</code> with <code>${esc(o.publicUrl)}/mcp</code> (or <code>/mcp/core</code> for small local models).</p></div>`
     : "";
+  const twoFactor = o.enrol
+    ? `<p>Scan this with an authenticator app (1Password, Google Authenticator, Aegis...), then enter the code it shows.</p>
+<div style="max-width:220px;background:#fff;padding:8px;border-radius:8px">${o.enrol.qr}</div>
+<p class="muted">Or enter the key by hand: <code>${esc(o.enrol.secret.replace(/(.{4})/g, "$1 ").trim())}</code></p>
+<form method="post" action="/admin/2fa/confirm">${csrf}<div class="row"><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" required aria-label="Code"><button class="primary">Turn on</button></div></form>`
+    : o.twoFactor
+      ? `<p>Two-factor login is <strong>on</strong>.</p><form method="post" action="/admin/2fa/disable">${csrf}<div class="row"><input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Current code" required aria-label="Current code"><button class="danger">Turn off</button></div></form>`
+      : `<p>Two-factor login is <strong>off</strong>. Recommended: this server is on the internet.</p><form method="post" action="/admin/2fa/start">${csrf}<div class="row"><button class="primary">Set up</button></div></form>`;
   return page(
     "Architecturer admin",
-    `<h1>Architecturer</h1><p class="muted">Logged in as ${esc(o.email)}${o.canLogout ? ` · <a href="/logout">log out</a>` : ""} · ${esc(o.status)}</p>${created}
+    `<h1>Architecturer</h1><p class="muted">Logged in as ${esc(o.username)} · <a href="/view/">projects</a> · <form method="post" action="/logout" style="display:inline">${csrf}<button style="padding:0 6px;border:0;background:none;color:inherit;text-decoration:underline">log out</button></form> · ${esc(o.status)}</p>
+${o.notice ? `<p><strong>${esc(o.notice)}</strong></p>` : ""}${o.error ? `<p class="err">${esc(o.error)}</p>` : ""}${created}
 <h2>Connected apps and tokens</h2><div class="card scroll">${
       o.grants.length ? `<table><thead><tr><th>Name</th><th>Kind</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : `<p class="muted">Nothing connected yet.</p>`
     }</div>
 <h2>New personal token</h2><div class="card"><p class="muted">For clients configured with a header instead of OAuth (LM Studio, Claude Code, scripts).</p>
-<form method="post" action="/admin/tokens"><input type="hidden" name="csrf" value="${esc(o.csrf)}"><div class="row"><input name="name" placeholder="Name, e.g. lmstudio" required maxlength="60" aria-label="Token name"><button class="primary">Create</button></div></form></div>
+<form method="post" action="/admin/tokens">${csrf}<div class="row"><input name="name" placeholder="Name, e.g. lmstudio" required maxlength="60" aria-label="Token name"><button class="primary">Create</button></div></form></div>
+<h2>Two-factor login</h2><div class="card">${twoFactor}</div>
+<h2>Password</h2><div class="card"><form method="post" action="/admin/password">${csrf}
+<p><input type="password" name="current" placeholder="Current password" autocomplete="current-password" required aria-label="Current password"></p>
+<p><input type="password" name="password" placeholder="New password (12+ characters)" autocomplete="new-password" required minlength="12" aria-label="New password"></p>
+<p><input type="password" name="confirm" placeholder="Repeat new password" autocomplete="new-password" required minlength="12" aria-label="Repeat new password"></p>
+<p class="muted">Changing it logs out every other browser.</p><div class="row"><button class="primary">Change password</button></div></form></div>
+<h2>Browser sessions</h2><div class="card scroll"><table><thead><tr><th>Browser</th><th>Logged in</th><th>Expires</th><th></th></tr></thead><tbody>${sessions}</tbody></table></div>
 <h2>Connect a client</h2><div class="card"><p>MCP server URL: <code>${esc(o.publicUrl)}/mcp</code></p>
 <p class="muted">Claude (web, desktop, mobile) and ChatGPT: add it as a custom connector; they log in through this server. Small local models: <code>${esc(o.publicUrl)}/mcp/core</code> has fewer tools.</p></div>`,
   );
