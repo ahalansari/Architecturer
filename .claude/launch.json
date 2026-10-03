@@ -26,6 +26,32 @@
         "5178"
       ],
       "port": 5178
+    },
+    {
+      "name": "viewer-lighting",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "tsx",
+        "src/cli/main.ts",
+        "serve",
+        "examples/lighting_showcase.json",
+        "--port",
+        "5190"
+      ],
+      "port": 5190
+    },
+    {
+      "name": "viewer-apartment",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "tsx",
+        "src/cli/main.ts",
+        "serve",
+        "examples/showcase_apartment.json",
+        "--port",
+        "5179"
+      ],
+      "port": 5179
     }
   ]
 }

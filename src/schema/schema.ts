@@ -9,13 +9,18 @@ import { z } from "zod";
  */
 
 import { Direction, Id, Mat, Point, Polygon, Vec3 } from "./common.js";
+import { StyleSchema } from "../elements/styles.js";
+import { FinishesSchema } from "../elements/finishes.js";
+import { LightSchema } from "../elements/lighting.js";
+import { TreatmentSchema } from "../elements/treatments.js";
+import { CaseworkSchema } from "../elements/casework/schema.js";
 
 export { Direction, Id, Mat, Point, Polygon, Vec3 };
 
 export const CustomMaterialSchema = z
   .object({
     base: z.string().optional().describe("Library material or texture pattern to start from, e.g. 'brick_red' or 'plaster'"),
-    pattern: z.string().optional().describe("Texture pattern (brick, stone, plaster, concrete, wood_planks, wood_grain, tiles, marble, roof_tiles, shingles, metal, fabric, carpet, leather, grass, gravel, paving, siding, none)"),
+    pattern: z.string().optional().describe("Texture pattern (brick, stone, plaster, concrete, wood_planks, wood_grain, tiles, marble, roof_tiles, shingles, metal, fabric, carpet, leather, grass, gravel, paving, siding, herringbone, chevron, parquet, terrazzo, hex_tiles, mosaic, zellige, wallpaper, fluted, microcement, grasscloth, none)"),
     color: z.union([z.string(), z.tuple([z.number(), z.number(), z.number()])]).optional().describe("Tint multiplied with the pattern, '#rrggbb'"),
     roughness: z.number().min(0).max(1).optional(),
     metalness: z.number().min(0).max(1).optional(),
@@ -65,6 +70,7 @@ export const OpeningSchema = z
     frameMaterial: Mat.optional(),
     panelMaterial: Mat.optional().describe("Door leaf material"),
     glassMaterial: Mat.optional(),
+    treatment: TreatmentSchema.optional().describe("Windows / glazed doors: curtains, sheers, blinds or shutters on the interior side"),
   })
   .describe("Door, window or empty opening cut into a wall");
 
@@ -76,6 +82,8 @@ export const RoomSchema = z
     floorMaterial: Mat.optional().describe("Default: wood_floor_oak"),
     ceilingMaterial: z.union([Mat, z.literal(false)]).optional().describe("Default: plaster_white. false = no ceiling"),
     ceilingHeight: z.number().positive().optional().describe("Default: level.ceilingHeight"),
+    style: StyleSchema.optional().describe("Interior style for this room (overrides the project style): fills its floor, walls, ceiling and the furniture standing in it"),
+    finishes: FinishesSchema.optional(),
   })
   .describe("A room: generates a floor finish and a ceiling (visible from below only), and tags the space with a name");
 
@@ -309,6 +317,8 @@ export const LevelSchema = z
     terraces: z.array(TerraceSchema).default([]),
     shapes: z.array(ShapeSchema).default([]),
     roofs: z.array(RoofSchema).default([]),
+    casework: z.array(CaseworkSchema).default([]).describe("Built-in cabinetry runs: kitchens (with islands), wardrobes, vanities, media walls, shelving, desks, benches"),
+    lights: z.array(LightSchema).default([]).describe("Light fixtures (pendants, downlight grids, sconces, LED strips...) with real light sources"),
   })
   .describe("One storey of the building");
 
@@ -332,6 +342,7 @@ export const ProjectSchema = z
     version: z.literal(1).default(1),
     name: z.string().default("Untitled"),
     description: z.string().optional(),
+    style: StyleSchema.optional(),
     defaults: z
       .object({
         wallThickness: z.number().positive().default(0.2),
@@ -377,7 +388,7 @@ export type Band = z.output<typeof BandSchema>;
 export type Elevator = z.output<typeof ElevatorSchema>;
 
 /** Element collections on a level, in a fixed order (used by editing tools). */
-export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs"] as const;
+export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework"] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 export function directionToDegrees(d: number | "north" | "south" | "east" | "west"): number {

@@ -5,6 +5,9 @@ import { buildRoof } from "./elements/roofs.js";
 import { buildStair, COLLIDER, type StairResult } from "./elements/stairs.js";
 import { buildTerrace } from "./elements/terraces.js";
 import { buildShape, shapeFootprint } from "./elements/shapes.js";
+import { addLampLight, buildLights, checkUnlitRooms } from "./elements/lighting.js";
+import { buildRoomFinishes, prepareFinishes } from "./elements/finishes.js";
+import { buildCasework, levelCaseCtx } from "./elements/casework.js";
 import { buildWallSegment, expandWalls, resolveJoins, splitJunctions, type WallSegment } from "./elements/walls.js";
 import { deg2rad, ensureCCW, offsetPolygon, polygonArea, type Vec2 } from "./geometry/math.js";
 import { MeshBuilder } from "./geometry/mesh.js";
@@ -132,6 +135,8 @@ export function buildProject(project: Project): BuildOutput {
       }
     });
     checkOverlaps(placed, warnings);
+    // room finishes paint wall faces per room side, so they must run before the walls are emitted
+    const finishPlan = prepareFinishes(lv.rooms, segs, placed, z, z + FLOOR_FINISH, warn);
     const wallsNode = node("walls", "group");
     const byWall = new Map<string, MeshBuilder>();
     for (const s of segs) {
@@ -141,7 +146,9 @@ export function buildProject(project: Project): BuildOutput {
     }
     for (const [id, mb] of byWall) wallsNode.children.push(node(id, "wall", mb, { id }));
     const openingsNode = node("openings", "group");
-    for (const p of placed) openingsNode.children.push(buildOpening(p, project));
+    // ceiling height for curtain tracks / blinds (window treatments)
+    const treatCeil = z + (lv.ceilingHeight ?? lv.height - (li + 1 < project.levels.length ? slabT(project.levels[li + 1]) : slabT(lv)));
+    for (const p of placed) openingsNode.children.push(buildOpening(p, project, { ceilingZ: treatCeil }));
 
     // ---- slabs ----
     const slabsNode = node("slabs", "group");
@@ -179,8 +186,17 @@ export function buildProject(project: Project): BuildOutput {
       const poly = r.polygon as Vec2[];
       const roomHoles = holes.filter((h) => h.every((p) => insideLoose(p, poly)));
       // stairwells only cut the room floor if they're on this level's slab (arriving stairs)
-      mb.flat(r.floorMaterial ?? D.floorMaterial, poly, z + FLOOR_FINISH, false, roomHoles);
-      if (r.ceilingMaterial !== false) {
+      if (r.finishes) {
+        const ch = r.ceilingHeight ?? ceilingH;
+        buildRoomFinishes(mb, finishPlan, i, {
+          floorMaterial: r.floorMaterial ?? D.floorMaterial,
+          ceilingMaterial: r.ceilingMaterial === false ? false : r.ceilingMaterial ?? D.ceilingMaterial,
+          ceilingZ: z + ch - 0.01,
+          floorHoles: roomHoles,
+          ceilingHoles: stairOutlines.filter((h) => h.every((p) => insideLoose(p, poly))),
+        });
+      } else mb.flat(r.floorMaterial ?? D.floorMaterial, poly, z + FLOOR_FINISH, false, roomHoles);
+      if (r.ceilingMaterial !== false && !r.finishes) {
         const ch = r.ceilingHeight ?? ceilingH;
         // stairs going up from this room need a hole in the ceiling too
         const up = stairOutlines.filter((h) => h.every((p) => insideLoose(p, poly)));
@@ -226,7 +242,21 @@ export function buildProject(project: Project): BuildOutput {
         rotationZ: deg2rad(rot),
         extras: { id: f.id, type: f.type },
       });
+      addLampLight(furnNode.children[furnNode.children.length - 1], f, type.defaults); // lamps get a warm light
     });
+
+    // ---- casework (kitchens, wardrobes, vanities, built-ins): stands on the floor finish like furniture ----
+    const caseNode = node("casework", "group");
+    const caseCtx = levelCaseCtx(project, lv, segs, placed, z, ceilingH);
+    lv.casework.forEach((cw, i) => {
+      const b = buildCasework(cw, i, { ...caseCtx, floorZ: z + FLOOR_FINISH });
+      b.resolved.errors.forEach((m) => err(m));
+      b.resolved.warnings.forEach((m) => warn(m));
+      if (b.node) caseNode.children.push(b.node);
+    });
+
+    // ---- lights (fixtures with punctual lights) ----
+    const lightsNode = buildLights(lv, { project, levelIndex: li, z, ceilingH, segments: segs, warn, err });
 
     // ---- columns, railings ----
     const miscMb = new MeshBuilder(), miscCol = new MeshBuilder();
@@ -279,7 +309,7 @@ export function buildProject(project: Project): BuildOutput {
     for (const h of holes) if (!usedHoles.has(h)) warn("a stairwell arriving at this level is not inside any slab");
 
     levelNode.children.push(
-      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, shapesNode, stairsNode, furnNode, structNode, roofsNode].filter(
+      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, shapesNode, stairsNode, furnNode, caseNode, lightsNode, structNode, roofsNode].filter(
         (n) => n.meshes.length || n.children.length,
       ),
     );
@@ -313,6 +343,7 @@ export function buildProject(project: Project): BuildOutput {
     }
   }
 
+  warnings.push(...checkUnlitRooms(project));
   return { root, levels: infos, errors, warnings };
 }
 

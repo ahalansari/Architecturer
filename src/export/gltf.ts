@@ -1,7 +1,8 @@
 import { Document, NodeIO, type Material, type Node as GNode, type Texture } from "@gltf-transform/core";
 import { dedup, tangents, unweld, weld } from "@gltf-transform/functions";
 import { createHash } from "node:crypto";
-import { KHRTextureBasisu } from "@gltf-transform/extensions";
+import { KHRLightsPunctual, KHRTextureBasisu } from "@gltf-transform/extensions";
+import { attachGltfLight } from "../elements/lighting.js";
 import { encode as encodeJPEG } from "jpeg-js";
 import { generateTangents } from "mikktspace";
 import { PNG } from "pngjs";
@@ -126,6 +127,7 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
     else g.setExtras({ kind: n.kind });
     if (n.translation) g.setTranslation([s * n.translation[0], n.translation[2], -s * n.translation[1]]);
     if (n.rotationZ) g.setRotation([0, Math.sin(n.rotationZ / 2), 0, Math.cos(n.rotationZ / 2)]);
+    if (n.kind === "light") attachGltfLight(doc, g, n, s); // KHR_lights_punctual
     if (n.meshes.length) {
       const mesh = doc.createMesh(n.name);
       for (const md of n.meshes) {
@@ -207,7 +209,7 @@ async function finalDocument(c: Compiled, opts: ExportOptions): Promise<Document
 }
 
 /** Writers must know every extension the document may use, or they silently drop it. */
-const io = () => new NodeIO().registerExtensions([KHRTextureBasisu]);
+const io = () => new NodeIO().registerExtensions([KHRTextureBasisu, KHRLightsPunctual]);
 
 export async function exportGLB(c: Compiled, opts: ExportOptions = {}): Promise<Uint8Array> {
   return io().writeBinary(await finalDocument(c, opts));

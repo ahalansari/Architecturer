@@ -136,6 +136,7 @@ def("fabric_beige", "fabric", "Beige woven fabric", { roughness: 0.95, scale: 0.
 def("fabric_red", "fabric", "Red woven fabric", { roughness: 0.95, scale: 0.3, color: "#a83a35" });
 def("fabric_green", "fabric", "Green woven fabric", { roughness: 0.95, scale: 0.3, color: "#5e7f55" });
 def("fabric_white", "fabric", "White woven fabric (bedding, curtains)", { roughness: 0.95, scale: 0.3 });
+def("sheer_white", "fabric", "Translucent white sheer / voile curtain fabric", { roughness: 0.95, scale: 0.2, color: "#f7f5f0", opacity: 0.55, doubleSided: true, params: { threads: 120 }, normalStrength: 0.3 });
 def("linen_white", "fabric", "Fine white linen (bedding, tablecloths)", { roughness: 0.95, scale: 0.25, color: "#f4f1ea", params: { threads: 96 }, normalStrength: 0.6 });
 def("leather_brown", "leather", "Brown pebble-grain leather", { roughness: 0.55, scale: 0.4 });
 def("leather_black", "leather", "Black leather", { roughness: 0.5, scale: 0.4, params: { base: "#232224" } });
@@ -190,6 +191,99 @@ def("wicker_gray", "fabric", "Gray synthetic rattan weave", { roughness: 0.8, sc
 def("bark", "wood_grain", "Tree bark (dark, rough)", { roughness: 0.95, scale: 0.5, normalStrength: 2.5, params: { wood: "#4b3a2b", contrast: 1.6 } });
 def("plant_dark_green", "grass", "Dark green needles / dense foliage (conifers, hedges)", { roughness: 0.85, scale: 0.4, doubleSided: true, params: { base: "#2c5a2e", blades: 9000 } });
 
+// --- Interior decor: art paints, ceramics, soft goods, food -------------------------------------
+def("art_cream", "none", "Warm cream art paper / canvas ground", { roughness: 0.9, color: "#f1e9d8", normalStrength: 0 });
+def("art_terracotta", "none", "Flat terracotta art paint", { roughness: 0.85, color: "#c4643f", normalStrength: 0 });
+def("art_navy", "none", "Flat navy art paint", { roughness: 0.85, color: "#203651", normalStrength: 0 });
+def("art_mustard", "none", "Flat mustard art paint", { roughness: 0.85, color: "#d8a23a", normalStrength: 0 });
+def("art_sage", "none", "Flat sage green art paint", { roughness: 0.85, color: "#9aae8c", normalStrength: 0 });
+def("art_blush", "none", "Flat blush pink art paint", { roughness: 0.85, color: "#e6b9a8", normalStrength: 0 });
+def("art_charcoal", "none", "Flat charcoal art paint", { roughness: 0.85, color: "#34373b", normalStrength: 0 });
+def("art_sky", "none", "Flat pale sky blue art paint", { roughness: 0.85, color: "#a8c6db", normalStrength: 0 });
+def("ceramic_black", "none", "Matte black ceramic (vases, pots)", { roughness: 0.45, color: "#232325", normalStrength: 0 });
+def("ceramic_sage", "none", "Satin sage green ceramic", { roughness: 0.35, color: "#a3b49a", normalStrength: 0 });
+def("ceramic_blush", "none", "Satin blush pink ceramic", { roughness: 0.35, color: "#e2b8aa", normalStrength: 0 });
+def("terracotta", "concrete", "Unglazed terracotta (plant pots)", { roughness: 0.9, scale: 0.6, color: "#c06a43", normalStrength: 0.6, params: { formLines: 0, pores: 1500 } });
+def("glass_amber", "none", "Amber bottle glass", { roughness: 0.08, opacity: 0.6, color: "#a8641e", doubleSided: true, normalStrength: 0 });
+def("glass_green", "none", "Green bottle glass", { roughness: 0.08, opacity: 0.6, color: "#3e6e4a", doubleSided: true, normalStrength: 0 });
+def("wax", "none", "Candle wax (ivory)", { roughness: 0.6, color: "#f2ebdc", normalStrength: 0 });
+def("paper_white", "none", "Paper (book pages, toilet roll)", { roughness: 0.95, color: "#f4f1e8", normalStrength: 0 });
+def("fabric_boucle", "fabric", "Cream boucle (nubby looped upholstery)", { roughness: 1, scale: 0.15, color: "#ece5d8", normalStrength: 4, params: { threads: 40 } });
+def("knit_cream", "fabric", "Chunky cream knit (throws, poufs)", { roughness: 1, scale: 0.3, color: "#e9e1d0", normalStrength: 3.5, params: { threads: 14 } });
+def("velvet_emerald", "fabric", "Emerald green velvet", { roughness: 0.65, scale: 0.3, color: "#1f5a48", normalStrength: 0.3, params: { threads: 160 } });
+def("velvet_rust", "fabric", "Rust / burnt orange velvet", { roughness: 0.65, scale: 0.3, color: "#a24f2c", normalStrength: 0.3, params: { threads: 160 } });
+def("velvet_blush", "fabric", "Blush pink velvet", { roughness: 0.65, scale: 0.3, color: "#d9a79a", normalStrength: 0.3, params: { threads: 160 } });
+def("towel_white", "fabric", "Fluffy white terry towel", { roughness: 1, scale: 0.2, color: "#f3f2ee", normalStrength: 3, params: { threads: 48 } });
+def("towel_gray", "fabric", "Gray terry towel", { roughness: 1, scale: 0.2, color: "#a3a5a6", normalStrength: 3, params: { threads: 48 } });
+def("plant_olive", "grass", "Silvery olive / eucalyptus foliage", { roughness: 0.8, scale: 0.4, doubleSided: true, params: { base: "#7f8f68", blades: 9000 } });
+def("petal_pink", "none", "Pink flower petals", { roughness: 0.6, color: "#e8a1b0", normalStrength: 0 });
+def("petal_white", "none", "White flower petals", { roughness: 0.6, color: "#f6f2ea", normalStrength: 0 });
+def("pampas", "fabric", "Fluffy beige pampas grass plumes", { roughness: 1, scale: 0.15, color: "#e2d3b5", normalStrength: 3, params: { threads: 30 } });
+def("fruit_red", "none", "Red apple skin", { roughness: 0.35, color: "#b3262a", normalStrength: 0 });
+def("fruit_orange", "none", "Orange peel", { roughness: 0.55, color: "#ec8a1e", normalStrength: 0 });
+def("fruit_yellow", "none", "Lemon / banana yellow", { roughness: 0.5, color: "#f1d23f", normalStrength: 0 });
+def("fruit_green", "none", "Green apple / lime", { roughness: 0.4, color: "#8dbb3c", normalStrength: 0 });
+
+// --- Interior finishes: parquet, terrazzo, decorative tiles, wallcoverings ------------------------
+def("wood_herringbone_oak", "herringbone", "Oak herringbone parquet, 90 × 450 mm blocks", { roughness: 0.5, scale: 1.27 });
+def("wood_herringbone_walnut", "herringbone", "Walnut herringbone parquet, 90 × 450 mm blocks", { roughness: 0.45, scale: 1.27, params: { wood: "#6e4a33" } });
+def("wood_herringbone_light", "herringbone", "Pale white-oak herringbone (Scandinavian), 70 × 420 mm blocks", { roughness: 0.55, scale: 1.19, params: { wood: "#d8bf98", contrast: 0.7, ratio: 6 } });
+def("wood_chevron_walnut", "chevron", "Walnut chevron parquet (45° mitred blocks)", { roughness: 0.45, scale: 1.2, params: { wood: "#6b4530" } });
+def("wood_chevron_oak", "chevron", "Oak chevron parquet (45° mitred blocks)", { roughness: 0.5, scale: 1.2, params: { wood: "#b58b5c" } });
+def("wood_parquet_oak", "parquet", "Oak basketweave parquet, 25 cm squares of three strips", { roughness: 0.5, scale: 1.0 });
+def("terrazzo_white", "terrazzo", "Polished white terrazzo with gray, black and ochre chips", { roughness: 0.25, scale: 1.0, normalStrength: 0.5 });
+def("terrazzo_pink", "terrazzo", "Polished blush terrazzo with burgundy, white and rose chips", {
+  roughness: 0.25, scale: 1.0, normalStrength: 0.5, params: { base: "#e7c4b6", palette: "#f6efe8,#c97d6c,#8e3b33,#d9a593,#ffffff,#6d6a68,#e2a48f" },
+});
+def("terrazzo_green", "terrazzo", "Polished pale terrazzo with green and white chips", {
+  roughness: 0.25, scale: 1.0, normalStrength: 0.5, params: { base: "#dfe2d8", palette: "#f4f4ef,#4f7a62,#2f4f3f,#9fb9a2,#c9c5bc" },
+});
+def("tiles_hex_white", "hex_tiles", "White matte hexagon floor tiles, 15 cm", { roughness: 0.35, scale: 0.9 });
+def("tiles_hex_terracotta", "hex_tiles", "Terracotta hexagon floor tiles, 20 cm", { roughness: 0.75, scale: 1.2, params: { tile: "#b5623d", grout: "#cbbfae", variation: 3 } });
+def("tiles_hex_black", "hex_tiles", "Black hexagon tiles with light grout, 15 cm", { roughness: 0.3, scale: 0.9, params: { tile: "#26272a", grout: "#bdb9b1" } });
+def("tiles_penny_white", "hex_tiles", "White penny-round mosaic, 19 mm", { roughness: 0.15, scale: 0.6, params: { style: "penny", cols: 32, groutWidth: 0.003 } });
+def("tiles_mosaic_blue", "mosaic", "Blue blend glass mosaic, 25 mm (pools, showers)", { roughness: 0.1, scale: 0.8 });
+def("tiles_mosaic_green", "mosaic", "Green blend glass mosaic, 25 mm", { roughness: 0.1, scale: 0.8, params: { palette: "#2f6b55,#3f8a6c,#5aa486,#24533f,#7fbea0" } });
+def("tiles_zellige_green", "zellige", "Moroccan zellige, deep green handmade glossy tiles, 10 cm", { roughness: 0.12, scale: 0.8 });
+def("tiles_zellige_white", "zellige", "Moroccan zellige, white handmade glossy tiles, 10 cm", { roughness: 0.12, scale: 0.8, params: { tile: "#ece7dc", grout: "#dcd6ca", variation: 0.5 } });
+def("tiles_zellige_blue", "zellige", "Moroccan zellige, indigo handmade glossy tiles, 10 cm", { roughness: 0.12, scale: 0.8, params: { tile: "#2f5d86" } });
+def("tiles_zellige_pink", "zellige", "Moroccan zellige, dusty pink handmade glossy tiles, 10 cm", { roughness: 0.12, scale: 0.8, params: { tile: "#d8a294", variation: 0.7 } });
+def("wallpaper_stripes_sage", "wallpaper", "Regency stripe wallpaper, sage on cream", { roughness: 0.6, scale: 0.9, params: { style: "stripes", base: "#ece7d9", ink: "#9fae90", accent: "#f8f5ec" } });
+def("wallpaper_stripes_navy", "wallpaper", "Regency stripe wallpaper, navy on ivory", { roughness: 0.6, scale: 0.9, params: { style: "stripes", base: "#efeadf", ink: "#2c3b58", accent: "#c4a467" } });
+def("wallpaper_damask_gold", "wallpaper", "Damask wallpaper, metallic gold ornament on cream, 53 cm repeat", {
+  roughness: 0.55, scale: 1.06, params: { style: "damask", base: "#ebe1c9", ink: "#c09a55", accent: "#c9ab6e", metallic: 0.6 },
+});
+def("wallpaper_damask_green", "wallpaper", "Damask wallpaper, tone-on-tone deep green", { roughness: 0.6, scale: 1.06, params: { style: "damask", base: "#2e4237", ink: "#425a4c" } });
+def("wallpaper_artdeco_navy", "wallpaper", "Art-deco fan wallpaper, gold scallops on navy", {
+  roughness: 0.55, scale: 0.9, params: { style: "artdeco", base: "#1c2944", ink: "#c7a35d", accent: "#c7a35d", metallic: 0.6, repeats: 4 },
+});
+def("wallpaper_botanical", "wallpaper", "Botanical leaf-print wallpaper, greens on cream", { roughness: 0.65, scale: 1.06, params: { style: "botanical", base: "#efeadc", ink: "#4d6c48", accent: "#8ea67c" } });
+def("wallpaper_trellis_blue", "wallpaper", "Ogee trellis wallpaper, blue-gray on white", { roughness: 0.6, scale: 1.06, params: { style: "trellis", base: "#eef0ec", ink: "#7591a8", accent: "#7591a8" } });
+def("slats_oak", "fluted", "Oak acoustic slat wall panel on black felt (27 mm slats, 40 mm pitch)", { roughness: 0.6, scale: 0.8, normalStrength: 1.2 });
+def("slats_walnut", "fluted", "Walnut acoustic slat wall panel on black felt", { roughness: 0.55, scale: 0.8, normalStrength: 1.2, params: { wood: "#6b4530" } });
+def("fluted_white", "fluted", "Fluted (concave channel) wall panelling, painted white, 50 mm", { roughness: 0.7, scale: 0.8, params: { style: "flutes" } });
+def("reeded_oak", "fluted", "Reeded oak (convex half-rounds), 50 mm — fronts, bar panels", { roughness: 0.55, scale: 0.8, params: { style: "reeds", wood: "#b58a5d", contrast: 0.8, variation: 0.5 } });
+def("beadboard_white", "fluted", "Painted tongue-and-groove beadboard, 10 cm boards (wainscoting)", { roughness: 0.55, scale: 0.8, params: { style: "beadboard" } });
+def("microcement_gray", "microcement", "Gray microcement: seamless trowelled walls and floors", { roughness: 0.55, scale: 2.5 });
+def("microcement_sand", "microcement", "Warm sand microcement", { roughness: 0.55, scale: 2.5, params: { base: "#cfc2ac" } });
+def("microcement_white", "microcement", "Off-white microcement", { roughness: 0.55, scale: 2.5, params: { base: "#e4e0d8", mottle: 0.6 } });
+def("tadelakt_terracotta", "microcement", "Burnished terracotta tadelakt lime plaster (bathrooms, hammams)", { roughness: 0.45, scale: 2.0, params: { base: "#b9724f", polish: 0.85, mottle: 1.4 } });
+def("grasscloth_natural", "grasscloth", "Natural grasscloth wallcovering, 45 cm paper panels", { roughness: 0.85, scale: 0.9 });
+def("grasscloth_blue", "grasscloth", "Indigo-dyed grasscloth wallcovering", { roughness: 0.85, scale: 0.9, params: { base: "#6f8aa3", backing: "#435263" } });
+def("linen_wallcovering", "fabric", "Fine linen wallcovering (oatmeal)", { roughness: 0.9, scale: 0.4, color: "#ddd2c0", normalStrength: 0.7, params: { threads: 140 } });
+
+// --- Cabinetry: lacquered / painted fronts, carcass board, engineered stone worktops --------------
+def("lacquer_white", "none", "Satin white lacquered cabinet fronts", { roughness: 0.32, color: "#f1efea", normalStrength: 0 });
+def("lacquer_cream", "none", "Satin cream / ivory painted cabinet fronts", { roughness: 0.35, color: "#ece4d3", normalStrength: 0 });
+def("lacquer_greige", "none", "Satin greige (warm gray-beige) cabinet fronts", { roughness: 0.35, color: "#c4bbad", normalStrength: 0 });
+def("lacquer_sage", "none", "Satin sage green painted cabinet fronts", { roughness: 0.38, color: "#8e9e88", normalStrength: 0 });
+def("lacquer_navy", "none", "Satin navy painted cabinet fronts", { roughness: 0.35, color: "#2b3a52", normalStrength: 0 });
+def("lacquer_charcoal", "none", "Matte charcoal / anthracite cabinet fronts", { roughness: 0.5, color: "#3a3c3f", normalStrength: 0 });
+def("melamine_white", "none", "White melamine board (cabinet carcasses, shelves)", { roughness: 0.5, color: "#ebe9e4", normalStrength: 0 });
+def("quartz_white", "marble", "White engineered quartz worktop with faint veining", { roughness: 0.18, scale: 2.0, normalStrength: 0.2, params: { base: "#f1f0ec", vein: "#c9c8c4", veins: 0.45 } });
+def("quartz_gray", "marble", "Concrete-gray engineered quartz worktop", { roughness: 0.25, scale: 2.0, normalStrength: 0.2, params: { base: "#9a9893", vein: "#b6b4ae", veins: 0.3 } });
+def("quartz_black", "marble", "Black engineered quartz worktop with subtle veins", { roughness: 0.2, scale: 2.0, normalStrength: 0.2, params: { base: "#232325", vein: "#6c6c6e", veins: 0.4 } });
+
 export const MATERIAL_LIBRARY: Record<string, MaterialDef> = LIB;
 
 /** Representative library material for each raw pattern name (used when `base` is a pattern). */
@@ -214,6 +308,17 @@ const PATTERN_DEFAULT: Record<TexturePattern, string> = {
   paving: "paving_stone",
   siding: "siding_white",
   disks: "enamel_discs",
+  herringbone: "wood_herringbone_oak",
+  chevron: "wood_chevron_oak",
+  parquet: "wood_parquet_oak",
+  terrazzo: "terrazzo_white",
+  hex_tiles: "tiles_hex_white",
+  mosaic: "tiles_mosaic_blue",
+  zellige: "tiles_zellige_white",
+  wallpaper: "wallpaper_stripes_sage",
+  fluted: "slats_oak",
+  microcement: "microcement_gray",
+  grasscloth: "grasscloth_natural",
 };
 
 function clone(m: MaterialDef, name: string): MaterialDef {

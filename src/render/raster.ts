@@ -14,6 +14,7 @@ import { m4, type Mat4, type Vec3 } from "../geometry/math.js";
 import type { MeshData } from "../geometry/mesh.js";
 import { walkMeshes, type SceneNode } from "../geometry/scene.js";
 import type { MaterialDef, TextureSet } from "../materials/types.js";
+import { collectLights, NIGHT_EXPOSURE, type WorldLight } from "../elements/lighting.js";
 
 // ---------------------------------------------------------------- public API
 
@@ -41,6 +42,25 @@ export interface RenderOptions {
   clipZ?: number;
   /** Section-cap colour for `clipZ` cutaways (sRGB 0..1). Default dark charcoal. */
   capColor?: [number, number, number];
+  /**
+   * "day" (default): sun + sky, artificial lights off. "night": dark sky, the scene's punctual lights
+   * (light nodes) with inverse-square falloff, wall occlusion and tone mapping. "dusk": low warm sun + lights.
+   */
+  lighting?: LightingMode;
+  /** Lights to use (default: every node of kind "light" in the scene). */
+  lights?: WorldLight[];
+  /** Walls per level that block artificial light (no light leaks into neighbouring rooms). */
+  occluders?: LightOccluderLevel[];
+}
+
+export type LightingMode = "day" | "night" | "dusk";
+export const LIGHTING_MODES: readonly LightingMode[] = ["day", "night", "dusk"];
+
+/** Walls of one level, for light occlusion: light from a lamp on this level stays between z0 and z1. */
+export interface LightOccluderLevel {
+  z0: number;
+  z1: number;
+  walls: { a: [number, number]; b: [number, number]; z0: number; z1: number; holes: { u0: number; u1: number; z0: number; z1: number }[] }[];
 }
 
 export interface MaterialLookup {
@@ -113,12 +133,47 @@ function nrm(x: number, y: number, z: number): Vec3 {
   const l = Math.hypot(x, y, z);
   return [x / l, y / l, z / l];
 }
-const SUN = nrm(0.45, -0.75, 1.1); // from upper south-east
-const SUN_C: Vec3 = [1.0, 0.96, 0.88];
+let SUN = nrm(0.45, -0.75, 1.1); // from upper south-east
+let SUN_C: Vec3 = [1.0, 0.96, 0.88];
 const FILL = nrm(-0.7, 0.35, 0.3); // weak bounce from west-north-west
-const FILL_C: Vec3 = [0.1, 0.11, 0.13];
-const SKY_C: Vec3 = [0.4, 0.45, 0.55];
-const GROUND_C: Vec3 = [0.22, 0.2, 0.18];
+let FILL_C: Vec3 = [0.1, 0.11, 0.13];
+let SKY_C: Vec3 = [0.4, 0.45, 0.55];
+let GROUND_C: Vec3 = [0.22, 0.2, 0.18];
+/**
+ * Interior bounce: light reflected off floors and walls. Downward-facing surfaces (ceilings, soffits)
+ * get the most, walls a little, so white ceilings read white instead of ground-coloured grey.
+ */
+let BOUNCE_C: Vec3 = [0.3, 0.295, 0.285];
+
+interface LightingPreset {
+  sun: Vec3; sunC: Vec3; fillC: Vec3; skyC: Vec3; groundC: Vec3; bounceC: Vec3;
+  /** sRGB sky gradient top / bottom */
+  bgTop: Vec3; bgBot: Vec3;
+  /** artificial lights on */
+  lights: boolean;
+  /** multiplier for emissive materials (bulbs read as light sources at night) */
+  emissive: number;
+}
+
+const PRESETS: Record<LightingMode, LightingPreset> = {
+  day: {
+    sun: nrm(0.45, -0.75, 1.1), sunC: [1.0, 0.96, 0.88], fillC: [0.1, 0.11, 0.13], skyC: [0.4, 0.45, 0.55], groundC: [0.23, 0.22, 0.21],
+    bounceC: [0.44, 0.435, 0.42], bgTop: [0.47, 0.63, 0.84], bgBot: [0.86, 0.9, 0.94], lights: false, emissive: 1,
+  },
+  dusk: {
+    sun: nrm(-0.9, -0.35, 0.16), sunC: [0.55, 0.3, 0.14], fillC: [0.03, 0.035, 0.05], skyC: [0.07, 0.075, 0.11], groundC: [0.03, 0.026, 0.024],
+    bounceC: [0.03, 0.028, 0.026], bgTop: [0.13, 0.17, 0.33], bgBot: [0.93, 0.58, 0.36], lights: true, emissive: 2.5,
+  },
+  night: {
+    sun: nrm(-0.3, 0.4, 1.0), sunC: [0.012, 0.016, 0.03], fillC: [0, 0, 0], skyC: [0.012, 0.015, 0.026], groundC: [0.004, 0.004, 0.005],
+    bounceC: [0.004, 0.004, 0.005], bgTop: [0.015, 0.02, 0.05], bgBot: [0.06, 0.07, 0.12], lights: true, emissive: 3,
+  },
+};
+
+/** ACES filmic approximation (Narkowicz) for night/dusk renders with bright light sources. */
+function aces(x: number): number {
+  return x <= 0 ? 0 : Math.min(1, (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
+}
 
 // ---------------------------------------------------------------- textures (mip chains)
 
@@ -232,6 +287,8 @@ interface Mat {
   opacity: number;
   doubleSided: boolean;
   transparent: boolean;
+  /** Thin fabric (lamp shades, curtains): artificial light also shows through from behind. */
+  translucent: boolean;
   tex: MipTex | null;
 }
 
@@ -258,6 +315,244 @@ let eyeX = 0, eyeY = 0, eyeZ = 0;
 let Rx = 1, Ry = 0, Rz = 0, Ux = 0, Uy = 0, Uz = 1, Fx = 0, Fy = 1, Fz = 0;
 let clipOn = false, clipZv = 0;
 let capR = 0, capG = 0, capB = 0;
+
+// ---------------------------------------------------------------- artificial lights (night / dusk)
+
+/** Per-pixel albedo (linear) and flags (0 = none/cap, 1 = opaque, 2 = translucent fabric) for the light pass. */
+let albedoBuf = new Float32Array(0);
+let flagBuf = new Uint8Array(0);
+let plCount = 0;
+let wX = 0, wY = 0, wZ = 0;
+let pR = 0, pG = 0, pB = 0;
+
+/** Walls around one light, binned by angle as seen from the light (exact segment tests per bin). */
+interface Occ {
+  n: number;
+  start: Int32Array;
+  list: Int32Array;
+  /** per wall: ax, ay, ex, ey, z0, z1, length */
+  seg: Float64Array;
+  /** per wall: holes as [u0, u1, z0, z1]* (u in meters from a) or null */
+  holes: (Float64Array | null)[];
+}
+
+interface PLight {
+  x: number; y: number; z: number;
+  /** color * candela * exposure / π */
+  r: number; g: number; b: number; maxc: number;
+  /** omnidirectional "bounce" intensity relative to the direct candela */
+  fill: number;
+  spot: boolean;
+  dx: number; dy: number; dz: number;
+  cosO: number; cosI: number;
+  range2: number; invR4: number;
+  /** z band the light reaches (its storey) */
+  z0: number; z1: number;
+  occ: Occ | null;
+}
+let PL: PLight[] = [];
+
+/** World position of a pixel centre at view depth d (sets wX, wY, wZ). */
+function worldAt(xc: number, yc: number, d: number) {
+  if (persp) {
+    const xn = (xc - cxs) / focal, yn = (cys - yc) / focal;
+    wX = eyeX + d * (Fx + Rx * xn + Ux * yn);
+    wY = eyeY + d * (Fy + Ry * xn + Uy * yn);
+    wZ = eyeZ + d * (Fz + Rz * xn + Uz * yn);
+  } else {
+    const ox = (xc - cxs) / focal, oy = (cys - yc) / focal;
+    wX = eyeX + Rx * ox + Ux * oy + Fx * d;
+    wY = eyeY + Ry * ox + Uy * oy + Fy * d;
+    wZ = eyeZ + Rz * ox + Uz * oy + Fz * d;
+  }
+}
+
+function occluded(L: PLight, px: number, py: number, pz: number): boolean {
+  const o = L.occ!;
+  const dx = px - L.x, dy = py - L.y;
+  if (dx * dx + dy * dy < 1e-8) return false;
+  let bin = (((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI)) * o.n) | 0;
+  if (bin >= o.n) bin = o.n - 1;
+  const S = o.seg;
+  for (let k = o.start[bin], e = o.start[bin + 1]; k < e; k++) {
+    const w = o.list[k], q = w * 7;
+    const ax = S[q], ay = S[q + 1], ex = S[q + 2], ey = S[q + 3];
+    const den = dx * ey - dy * ex;
+    if (den > -1e-12 && den < 1e-12) continue;
+    const qx = ax - L.x, qy = ay - L.y;
+    const t = (qx * ey - qy * ex) / den;
+    if (t <= 0 || t >= 1) continue;
+    const u = (qx * dy - qy * dx) / den;
+    if (u < 0 || u > 1) continue;
+    const z = L.z + (pz - L.z) * t;
+    if (z < S[q + 4] || z > S[q + 5]) continue;
+    const hs = o.holes[w];
+    if (hs) {
+      const um = u * S[q + 6];
+      let through = false;
+      for (let h = 0; h < hs.length; h += 4)
+        if (um >= hs[h] && um <= hs[h + 1] && z >= hs[h + 2] && z <= hs[h + 3]) {
+          through = true;
+          break;
+        }
+      if (through) continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Artificial light arriving at a point (sets pR, pG, pB; multiply by albedo).
+ * mode 0 = one-sided, 1 = two-sided (sheers, glass), 2 = translucent fabric (glows when lit from inside a shade).
+ */
+function punctual(px: number, py: number, pz: number, nx: number, ny: number, nz: number, mode: number) {
+  let r = 0, g = 0, b = 0;
+  for (let i = 0; i < plCount; i++) {
+    const L = PL[i];
+    if (pz < L.z0 || pz > L.z1) continue;
+    const dx = L.x - px, dy = L.y - py, dz = L.z - pz;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 >= L.range2) continue;
+    const inv = 1 / Math.sqrt(Math.max(d2, 1e-6));
+    const lx = dx * inv, ly = dy * inv, lz = dz * inv;
+    let ndl = nx * lx + ny * ly + nz * lz;
+    if (ndl < 0) ndl = mode === 1 ? -ndl : mode === 2 && d2 < 0.36 ? -ndl * 0.7 : 0;
+    let att = 1;
+    if (L.spot) {
+      const c = -(lx * L.dx + ly * L.dy + lz * L.dz);
+      if (c <= L.cosO) att = 0;
+      else if (c < L.cosI) {
+        const t = (c - L.cosO) / (L.cosI - L.cosO);
+        att = t * t * (3 - 2 * t);
+      }
+    }
+    const q = d2 * d2 * L.invR4;
+    if (q >= 1) continue;
+    const win = (1 - q) * (1 - q);
+    const e = ((ndl * att) / Math.max(d2, 0.01) + L.fill / Math.max(d2, 2.25)) * win;
+    if (e * L.maxc < 2e-5) continue;
+    if (L.occ && occluded(L, px, py, pz)) continue;
+    r += e * L.r; g += e * L.g; b += e * L.b;
+  }
+  pR = r; pG = g; pB = b;
+}
+
+function buildOcc(lx: number, ly: number, walls: LightOccluderLevel["walls"]): Occ | null {
+  if (!walls.length) return null;
+  const n = 720;
+  const seg = new Float64Array(walls.length * 7);
+  const holes: (Float64Array | null)[] = [];
+  const ranges: [number, number, number][] = []; // wall, first bin, bin count
+  walls.forEach((w, i) => {
+    const ex = w.b[0] - w.a[0], ey = w.b[1] - w.a[1];
+    const len = Math.hypot(ex, ey);
+    seg.set([w.a[0], w.a[1], ex, ey, w.z0, w.z1, len], i * 7);
+    holes.push(w.holes.length ? Float64Array.from(w.holes.flatMap((h) => [h.u0, h.u1, h.z0, h.z1])) : null);
+    if (len < 1e-6) return;
+    // light (almost) on the wall line: skip (a sconce sits on a face, never on the centerline)
+    const cross = Math.abs((lx - w.a[0]) * ey - (ly - w.a[1]) * ex) / len;
+    if (cross < 1e-4) return;
+    const a0 = Math.atan2(w.a[1] - ly, w.a[0] - lx), a1 = Math.atan2(w.b[1] - ly, w.b[0] - lx);
+    let diff = a1 - a0;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff <= -Math.PI) diff += 2 * Math.PI;
+    const start = diff >= 0 ? a0 : a1;
+    const b0 = Math.floor(((start + Math.PI) / (2 * Math.PI)) * n) - 1;
+    const b1 = Math.floor(((start + Math.abs(diff) + Math.PI) / (2 * Math.PI)) * n) + 1;
+    ranges.push([i, b0, Math.min(n, b1 - b0 + 1)]);
+  });
+  const counts = new Int32Array(n + 1);
+  for (const [, b0, c] of ranges) for (let k = 0; k < c; k++) counts[(((b0 + k) % n) + n) % n]++;
+  const start = new Int32Array(n + 1);
+  for (let k = 0; k < n; k++) start[k + 1] = start[k] + counts[k];
+  const fillAt = start.slice(0, n);
+  const list = new Int32Array(start[n]);
+  for (const [w, b0, c] of ranges) for (let k = 0; k < c; k++) list[fillAt[(((b0 + k) % n) + n) % n]++] = w;
+  return { n, start, list, seg, holes };
+}
+
+function setupLights(lights: WorldLight[], occ: LightOccluderLevel[] | undefined) {
+  PL = [];
+  for (const l of lights) {
+    if (!(l.intensity > 0)) continue;
+    const [x, y, z] = l.position;
+    const lev = occ?.filter((o) => z >= o.z0 - 0.05 && z < o.z1 + 0.05).pop();
+    const range = l.range && l.range > 0 ? l.range : Math.sqrt(l.intensity / 0.01);
+    const k = (l.intensity * NIGHT_EXPOSURE) / Math.PI;
+    const spot = l.type === "spot";
+    const pointCd = l.lumens / (4 * Math.PI);
+    PL.push({
+      x, y, z,
+      r: l.color[0] * k, g: l.color[1] * k, b: l.color[2] * k, maxc: Math.max(...l.color) * k,
+      // ~20% of the flux comes back as diffuse inter-reflection (no cosine, soft falloff)
+      fill: (0.2 * pointCd) / l.intensity,
+      spot,
+      dx: l.worldDirection[0], dy: l.worldDirection[1], dz: l.worldDirection[2],
+      cosO: Math.cos(l.outerConeAngle ?? Math.PI / 4), cosI: Math.cos(l.innerConeAngle ?? 0),
+      range2: range * range, invR4: 1 / range ** 4,
+      z0: lev ? lev.z0 - 0.12 : -Infinity,
+      z1: lev ? lev.z1 - 0.005 : Infinity,
+      occ: lev ? buildOcc(x, y, lev.walls) : null,
+    });
+  }
+  plCount = PL.length;
+}
+
+/** Add artificial light to every opaque pixel (deferred: one evaluation per visible sample). */
+function applyPunctual() {
+  const w = W, n = W * H;
+  for (let idx = 0; idx < n; idx++) {
+    const f = flagBuf[idx];
+    if (!f) continue;
+    const k = depthBuf[idx];
+    if (k === -Infinity) continue;
+    const py = (idx / w) | 0, px = idx - py * w;
+    worldAt(px + 0.5, py + 0.5, persp ? 1 / k : -k);
+    const o = idx * 3;
+    let nx = normalBuf[o], ny = normalBuf[o + 1], nz = normalBuf[o + 2];
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl; ny /= nl; nz /= nl;
+    punctual(wX + nx * 0.03, wY + ny * 0.03, wZ + nz * 0.03, nx, ny, nz, f === 2 ? 2 : 0);
+    colorBuf[o] += albedoBuf[o] * pR;
+    colorBuf[o + 1] += albedoBuf[o + 1] * pG;
+    colorBuf[o + 2] += albedoBuf[o + 2] * pB;
+  }
+}
+
+/** Soft glow around very bright pixels (light sources at night). In place on a linear RGB image. */
+function bloom(img: Float32Array, w: number, h: number) {
+  const r = Math.max(2, Math.round(h / 140));
+  const bright = new Float32Array(w * h * 3);
+  for (let i = 0; i < w * h; i++) {
+    const o = i * 3;
+    const l = 0.2126 * img[o] + 0.7152 * img[o + 1] + 0.0722 * img[o + 2];
+    if (l > 1) {
+      const f = (l - 1) / l;
+      bright[o] = img[o] * f; bright[o + 1] = img[o + 1] * f; bright[o + 2] = img[o + 2] * f;
+    }
+  }
+  const tmp = new Float32Array(w * h * 3);
+  const blur = (src: Float32Array, dst: Float32Array, horiz: boolean) => {
+    const n = horiz ? w : h, m = horiz ? h : w;
+    const inv = 1 / (2 * r + 1);
+    for (let j = 0; j < m; j++)
+      for (let c = 0; c < 3; c++) {
+        let acc = 0;
+        const at = (i: number) => (horiz ? (j * w + Math.min(n - 1, Math.max(0, i))) : (Math.min(n - 1, Math.max(0, i)) * w + j)) * 3 + c;
+        for (let i = -r; i <= r; i++) acc += src[at(i)];
+        for (let i = 0; i < n; i++) {
+          dst[at(i)] = acc * inv;
+          acc += src[at(i + r + 1)] - src[at(i - r)];
+        }
+      }
+  };
+  for (let pass = 0; pass < 2; pass++) {
+    blur(bright, tmp, true);
+    blur(tmp, bright, false);
+  }
+  for (let i = 0; i < img.length; i++) img[i] += bright[i] * 0.6;
+}
 
 // clip vertex: vx, vy, d, wz, u, v, nx, ny, nz
 const CS = 9;
@@ -372,6 +667,7 @@ function rasterTri(ia: number, ib: number, ic: number, mode: number, mat: Mat, g
       const o = idx * 3;
       if (mode === 1) {
         depth[idx] = k;
+        if (plCount) flagBuf[idx] = 0;
         color[o] = capR; color[o + 1] = capG; color[o + 2] = capB;
         normal[o] = cnx; normal[o + 1] = cny; normal[o + 2] = cnz;
         continue;
@@ -401,14 +697,27 @@ function rasterTri(ia: number, ib: number, ic: number, mode: number, mat: Mat, g
       const ndf = nx * FILL[0] + ny * FILL[1] + nz * FILL[2];
       const sun = ndl > 0 ? ndl : 0, fill = ndf > 0 ? ndf : 0;
       const hemi = 0.5 + 0.5 * nz;
-      const lr = SUN_C[0] * sun + FILL_C[0] * fill + GROUND_C[0] + (SKY_C[0] - GROUND_C[0]) * hemi;
-      const lg = SUN_C[1] * sun + FILL_C[1] * fill + GROUND_C[1] + (SKY_C[1] - GROUND_C[1]) * hemi;
-      const lb = SUN_C[2] * sun + FILL_C[2] * fill + GROUND_C[2] + (SKY_C[2] - GROUND_C[2]) * hemi;
+      // bounce: 1 for ceilings, ~0.35 for walls, 0 for floors
+      const bnc = nz < 0.3 ? 0.35 - 0.65 * Math.min(0, nz) - 1.16 * Math.max(0, nz) : 0;
+      let lr = SUN_C[0] * sun + FILL_C[0] * fill + GROUND_C[0] + (SKY_C[0] - GROUND_C[0]) * hemi + BOUNCE_C[0] * bnc;
+      let lg = SUN_C[1] * sun + FILL_C[1] * fill + GROUND_C[1] + (SKY_C[1] - GROUND_C[1]) * hemi + BOUNCE_C[1] * bnc;
+      let lb = SUN_C[2] * sun + FILL_C[2] * fill + GROUND_C[2] + (SKY_C[2] - GROUND_C[2]) * hemi + BOUNCE_C[2] * bnc;
+      if (mode === 2 && plCount) {
+        // transparent surfaces (sheers, glass) take artificial light right away, from both sides
+        const kk = isPersp ? 1 / k : -k;
+        worldAt(xc, yc, kk);
+        punctual(wX + nx * 0.02, wY + ny * 0.02, wZ + nz * 0.02, nx, ny, nz, 1);
+        lr += pR; lg += pG; lb += pB;
+      }
       const cr = ar * lr + er, cg = ag * lg + eg, cb = ab * lb + eb;
       if (mode === 0) {
         depth[idx] = k;
         color[o] = cr; color[o + 1] = cg; color[o + 2] = cb;
         normal[o] = Math.round(nx * 127); normal[o + 1] = Math.round(ny * 127); normal[o + 2] = Math.round(nz * 127);
+        if (plCount) {
+          albedoBuf[o] = ar; albedoBuf[o + 1] = ag; albedoBuf[o + 2] = ab;
+          flagBuf[idx] = mat.translucent ? 2 : 1;
+        }
       } else {
         color[o] = color[o] * ialpha + cr * alpha;
         color[o + 1] = color[o + 1] * ialpha + cg * alpha;
@@ -481,10 +790,10 @@ function drawTriangle(m: RMesh, t: number, blendPass: boolean) {
       clipA[o + 7] = gny;
       clipA[o + 8] = gnz;
     }
-    if (persp && d < NEAR) anyNear = true;
+    if (d < NEAR) anyNear = true; // near plane applies to orthographic views too (wall elevations stand inside rooms)
     if (clipOn && pos[p3 + 2] > clipZv) anyAbove = true;
   }
-  if (persp && clipA[2] < NEAR && clipA[CS + 2] < NEAR && clipA[2 * CS + 2] < NEAR) return;
+  if (clipA[2] < NEAR && clipA[CS + 2] < NEAR && clipA[2 * CS + 2] < NEAR) return;
 
   let poly = clipA, n = 3;
   if (anyNear) {
@@ -690,6 +999,7 @@ function fillCaps(rawSegs: number[]) {
       depthBuf[idx] = key;
       const o = idx * 3;
       colorBuf[o] = capR; colorBuf[o + 1] = capG; colorBuf[o + 2] = capB;
+      if (plCount) flagBuf[idx] = 0;
       normalBuf[o] = 0; normalBuf[o + 1] = 0; normalBuf[o + 2] = cnz;
     }
   }
@@ -811,6 +1121,9 @@ export function renderScene(
   camera: Camera,
   opts: RenderOptions = {},
 ): RenderedImage {
+  const mode: LightingMode = opts.lighting ?? "day";
+  const preset = PRESETS[mode] ?? PRESETS.day;
+  SUN = preset.sun; SUN_C = preset.sunC; FILL_C = preset.fillC; SKY_C = preset.skyC; GROUND_C = preset.groundC; BOUNCE_C = preset.bounceC;
   const outW = Math.max(1, Math.round(opts.width ?? 1280));
   const outH = Math.max(1, Math.round(opts.height ?? 800));
   const ss = Math.max(1, Math.min(4, Math.round(opts.supersample ?? 2)));
@@ -847,14 +1160,22 @@ export function renderScene(
   depthBuf = new Float64Array(npx).fill(-Infinity);
   colorBuf = new Float32Array(npx * 3);
   normalBuf = new Int8Array(npx * 3);
+  plCount = 0;
+  if (preset.lights) {
+    setupLights(opts.lights ?? collectLights(root), opts.occluders);
+    if (plCount) {
+      albedoBuf = new Float32Array(npx * 3);
+      flagBuf = new Uint8Array(npx);
+    }
+  }
   if (opts.background) {
     const br = srgb2lin(opts.background[0]), bg = srgb2lin(opts.background[1]), bb = srgb2lin(opts.background[2]);
     for (let i = 0; i < npx; i++) {
       colorBuf[i * 3] = br; colorBuf[i * 3 + 1] = bg; colorBuf[i * 3 + 2] = bb;
     }
   } else {
-    const top = [srgb2lin(0.47), srgb2lin(0.63), srgb2lin(0.84)];
-    const bot = [srgb2lin(0.86), srgb2lin(0.9), srgb2lin(0.94)];
+    const top = preset.bgTop.map(srgb2lin);
+    const bot = preset.bgBot.map(srgb2lin);
     for (let y = 0; y < H; y++) {
       const t = Math.pow(y / Math.max(1, H - 1), 0.8);
       const cr = top[0] + (bot[0] - top[0]) * t, cg = top[1] + (bot[1] - top[1]) * t, cb = top[2] + (bot[2] - top[2]) * t;
@@ -878,14 +1199,15 @@ export function renderScene(
       def = undefined;
     }
     const c = def?.color ?? [0.7, 0.7, 0.7];
-    const e = def?.emissive ?? [0, 0, 0];
+    const e = (def?.emissive ?? [0, 0, 0]).map((v) => Math.min(1, v)) as Vec3;
     const opacity = Math.max(0, Math.min(1, def?.opacity ?? 1));
     m = {
       r: srgb2lin(c[0]), g: srgb2lin(c[1]), b: srgb2lin(c[2]),
-      er: srgb2lin(e[0]), eg: srgb2lin(e[1]), eb: srgb2lin(e[2]),
+      er: srgb2lin(e[0]) * preset.emissive, eg: srgb2lin(e[1]) * preset.emissive, eb: srgb2lin(e[2]) * preset.emissive,
       opacity,
       doubleSided: !!def?.doubleSided,
       transparent: opacity < 0.999,
+      translucent: def?.pattern === "fabric" && (def?.metalness ?? 0) < 0.5,
       tex: tex ? getMips(tex) : null,
     };
     matCache.set(name, m);
@@ -921,6 +1243,7 @@ export function renderScene(
     }
   }
   if (clipOn) fillCaps(segs);
+  if (plCount) applyPunctual();
   if (opts.edges !== false) applyEdges(ss);
 
   // transparent pass, back to front
@@ -937,6 +1260,7 @@ export function renderScene(
   // downsample (box filter) + tone + sRGB encode
   const rgba = new Uint8Array(outW * outH * 4);
   const inv = 1 / (ss * ss);
+  const lin = new Float32Array(outW * outH * 3);
   for (let y = 0; y < outH; y++)
     for (let x = 0; x < outW; x++) {
       let r0 = 0, g0 = 0, b0 = 0;
@@ -946,16 +1270,27 @@ export function renderScene(
           r0 += colorBuf[o]; g0 += colorBuf[o + 1]; b0 += colorBuf[o + 2];
         }
       }
-      const o = (y * outW + x) * 4;
-      rgba[o] = lin2srgb8(tone(r0 * inv));
-      rgba[o + 1] = lin2srgb8(tone(g0 * inv));
-      rgba[o + 2] = lin2srgb8(tone(b0 * inv));
-      rgba[o + 3] = 255;
+      const o = (y * outW + x) * 3;
+      lin[o] = r0 * inv; lin[o + 1] = g0 * inv; lin[o + 2] = b0 * inv;
     }
+  // night / dusk: glow around light sources and a filmic curve for the bright pools of light
+  const filmic = preset.lights;
+  if (filmic) bloom(lin, outW, outH);
+  const tm = filmic ? (v: number) => aces(v * 1.6) : tone;
+  for (let i = 0, n = outW * outH; i < n; i++) {
+    rgba[i * 4] = lin2srgb8(tm(lin[i * 3]));
+    rgba[i * 4 + 1] = lin2srgb8(tm(lin[i * 3 + 1]));
+    rgba[i * 4 + 2] = lin2srgb8(tm(lin[i * 3 + 2]));
+    rgba[i * 4 + 3] = 255;
+  }
   // release big buffers
   depthBuf = new Float64Array(0);
   colorBuf = new Float32Array(0);
   normalBuf = new Int8Array(0);
+  albedoBuf = new Float32Array(0);
+  flagBuf = new Uint8Array(0);
+  PL = [];
+  plCount = 0;
   return { width: outW, height: outH, rgba };
 }
 

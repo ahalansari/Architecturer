@@ -3,6 +3,7 @@ import { segDir } from "../elements/walls.js";
 import { FURNITURE } from "../elements/furniture.js";
 import { terraceGuards } from "../elements/terraces.js";
 import { shapeFootprint } from "../elements/shapes.js";
+import { caseworkPlan, resolveLevelCasework } from "../elements/casework.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
@@ -230,6 +231,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   for (const r of lv.railings) pts.push(...(r.points as Vec2[]));
   for (const t of lv.terraces) pts.push(...(t.polygon as Vec2[]));
   for (const f of lv.furniture) pts.push(f.position as Vec2);
+  for (const cw of lv.casework) pts.push(...((cw.path ?? (cw.position ? [cw.position] : [])) as Vec2[]));
   for (const h of info.stairOutlines) pts.push(...h);
   for (const a of arriving) pts.push(...a.plan.hole);
   if (!pts.length) pts.push([0, 0], [10, 10]);
@@ -385,6 +387,30 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       cands.push({ x: cx, y: b.y0 - size * 0.7, cost: 60 }, { x: cx, y: b.y1 + size * 0.7, cost: 60 });
       cands.push({ x: b.x1 + tw / 2 + 3, y: cy, cost: 80 }, { x: b.x0 - tw / 2 - 3, y: cy, cost: 80 });
       L.push({ lines: [{ text: f.id ?? f.type, size, color: flat ? "#6a7f99" : "#2b4f80" }], prio: flat ? 3.5 : 3, cands });
+    }
+  }
+
+  // casework runs: worktops, base/tall units solid (tall ones crossed), wall cabinets dashed, sink/hob symbols
+  for (const cp of resolveLevelCasework(project, li, info).filter((r) => r.legs.length).map(caseworkPlan)) {
+    for (const it of cp.items.filter((i) => i.row === "worktop")) out.push(`<polygon points="${poly(it.poly)}" fill="#f3efe7" stroke="#7d7466" stroke-width="1"/>`);
+    for (const it of cp.items.filter((i) => i.row === "base" || i.row === "tall")) {
+      out.push(`<polygon points="${poly(it.poly)}" fill="${it.row === "tall" ? "#e6e2da" : "none"}" stroke="#5b5348" stroke-width="1.2"/>`);
+      if (it.row === "tall") out.push(line(it.poly[0], it.poly[2], `stroke="#9b9284" stroke-width="0.8"`), line(it.poly[1], it.poly[3], `stroke="#9b9284" stroke-width="0.8"`));
+      if (it.front && !["filler", "end_panel"].includes(it.kind)) out.push(line(it.front[0], it.front[1], `stroke="#3d352b" stroke-width="2"`));
+      furnSoft.push(pxBox(it.poly));
+    }
+    for (const sy of cp.symbols) {
+      out.push(`<polygon points="${poly(sy.poly)}" fill="#ffffff" stroke="#5b5348" stroke-width="1"/>`);
+      for (const rg of sy.rings ?? []) out.push(`<circle cx="${X(rg.c[0])}" cy="${Y(rg.c[1])}" r="${(rg.r * S).toFixed(1)}" fill="none" stroke="#5b5348" stroke-width="0.8"/>`);
+    }
+    for (const it of cp.items.filter((i) => i.row === "upper")) out.push(`<polygon points="${poly(it.poly)}" fill="none" stroke="#7a6f60" stroke-width="1" stroke-dasharray="5 3"/>`);
+    for (const it of cp.items.filter((i) => i.label && i.row !== "upper")) {
+      const cc = px(polygonCentroid(it.poly));
+      out.push(`<text x="${cc[0]}" y="${cc[1] + 3}" font-size="${Math.max(7, fs - 4)}" fill="#5b5348" text-anchor="middle">${esc(it.label!)}</text>`);
+    }
+    if (labels) {
+      const lc = px(cp.labelAt);
+      L.push({ lines: [{ text: cp.id, size: fs - 2, color: "#5b4a33", bold: true }], prio: 2.8, cands: [{ x: lc[0], y: lc[1], cost: 0 }, { x: lc[0], y: lc[1] - fs, cost: 10 }, { x: lc[0], y: lc[1] + fs, cost: 10 }], optional: true });
     }
   }
 

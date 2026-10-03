@@ -1,0 +1,1957 @@
+{
+ "name": "Japandi Garden Apartment",
+ "description": "Interior design showcase: open-plan living/dining/kitchen, entry hall, guest WC, study, master suite with walk-in closet and en-suite, deck terrace. Japandi style with walnut and sage accents.",
+ "style": "japandi",
+ "defaults": {
+  "wallThickness": 0.12,
+  "exteriorWallThickness": 0.3,
+  "exteriorMaterial": "stucco",
+  "doorMaterial": "wood_oak",
+  "doorFrameMaterial": "wood_oak",
+  "windowFrameMaterial": "metal_black"
+ },
+ "materials": {
+  "sage_paint": {
+   "base": "paint_green",
+   "color": "#b7c2ad"
+  },
+  "warm_white": {
+   "base": "plaster_white",
+   "color": "#f1ece3"
+  },
+  "clay_paint": {
+   "base": "plaster_beige",
+   "color": "#d8c4ad"
+  }
+ },
+ "site": {
+  "groundMaterial": "grass",
+  "margin": 5
+ },
+ "levels": [
+  {
+   "id": "apartment",
+   "name": "Apartment",
+   "height": 3.0,
+   "walls": [
+    {
+     "id": "ext",
+     "points": [
+      [
+       0,
+       0
+      ],
+      [
+       16,
+       0
+      ],
+      [
+       16,
+       11
+      ],
+      [
+       0,
+       11
+      ]
+     ],
+     "closed": true
+    },
+    {
+     "id": "w_core",
+     "points": [
+      [
+       0,
+       6.6
+      ],
+      [
+       16,
+       6.6
+      ]
+     ]
+    },
+    {
+     "id": "w_great_e",
+     "points": [
+      [
+       9.6,
+       0
+      ],
+      [
+       9.6,
+       11
+      ]
+     ]
+    },
+    {
+     "id": "w_study_w",
+     "points": [
+      [
+       5,
+       6.6
+      ],
+      [
+       5,
+       11
+      ]
+     ]
+    },
+    {
+     "id": "w_wc_w",
+     "points": [
+      [
+       3.2,
+       8.6
+      ],
+      [
+       3.2,
+       11
+      ]
+     ]
+    },
+    {
+     "id": "w_wc_s",
+     "points": [
+      [
+       3.2,
+       8.6
+      ],
+      [
+       5,
+       8.6
+      ]
+     ]
+    },
+    {
+     "id": "w_closet_bath",
+     "points": [
+      [
+       12.8,
+       6.6
+      ],
+      [
+       12.8,
+       11
+      ]
+     ]
+    }
+   ],
+   "openings": [
+    {
+     "id": "front_door",
+     "type": "door",
+     "at": [
+      1.6,
+      11
+     ],
+     "width": 1.0,
+     "panelMaterial": "wood_walnut",
+     "swing": "in"
+    },
+    {
+     "id": "hall_arch",
+     "type": "opening",
+     "at": [
+      1.6,
+      6.6
+     ],
+     "width": 1.6,
+     "height": 2.4
+    },
+    {
+     "id": "wc_door",
+     "type": "door",
+     "at": [
+      4.1,
+      8.6
+     ],
+     "width": 0.75,
+     "swing": "out",
+     "hinge": "right"
+    },
+    {
+     "id": "study_door",
+     "type": "door",
+     "at": [
+      5,
+      7.6
+     ],
+     "width": 0.85,
+     "swing": "out"
+    },
+    {
+     "id": "master_door",
+     "type": "door",
+     "at": [
+      9.6,
+      1.1
+     ],
+     "width": 0.9,
+     "swing": "out"
+    },
+    {
+     "id": "closet_door",
+     "type": "opening",
+     "at": [
+      11.2,
+      6.6
+     ],
+     "width": 1.0,
+     "height": 2.3
+    },
+    {
+     "id": "bath_door",
+     "type": "door",
+     "at": [
+      14.4,
+      6.6
+     ],
+     "width": 0.8,
+     "swing": "out"
+    },
+    {
+     "id": "living_slider",
+     "type": "door",
+     "at": [
+      3.0,
+      0
+     ],
+     "width": 3.0,
+     "height": 2.4,
+     "style": "sliding",
+     "treatment": {
+      "type": "curtains_and_sheers",
+      "mount": "ceiling",
+      "material": "linen_white",
+      "sheerMaterial": "sheer_white",
+      "open": 0.8
+     }
+    },
+    {
+     "id": "dining_slider",
+     "type": "door",
+     "at": [
+      7.3,
+      0
+     ],
+     "width": 2.4,
+     "height": 2.4,
+     "style": "sliding",
+     "treatment": {
+      "type": "sheers",
+      "mount": "ceiling",
+      "open": 0.85
+     }
+    },
+    {
+     "id": "master_win",
+     "type": "window",
+     "at": [
+      11.5,
+      0
+     ],
+     "width": 1.8,
+     "height": 1.6,
+     "sill": 0.6,
+     "style": "fixed",
+     "treatment": {
+      "type": "curtains",
+      "mount": "ceiling",
+      "material": "style_japandi_fabric",
+      "open": 0.7
+     }
+    },
+    {
+     "id": "master_slider",
+     "type": "door",
+     "at": [
+      14.5,
+      0
+     ],
+     "width": 1.8,
+     "height": 2.4,
+     "style": "sliding",
+     "treatment": {
+      "type": "curtains",
+      "mount": "ceiling",
+      "material": "style_japandi_fabric",
+      "open": 0.75
+     }
+    },
+    {
+     "id": "master_win_e",
+     "type": "window",
+     "at": [
+      16,
+      3.3
+     ],
+     "width": 1.6,
+     "height": 1.5,
+     "sill": 0.7,
+     "treatment": {
+      "type": "roman_blind",
+      "material": "linen_white",
+      "open": 0.6
+     }
+    },
+    {
+     "id": "study_win",
+     "type": "window",
+     "at": [
+      7.3,
+      11
+     ],
+     "width": 1.8,
+     "height": 1.4,
+     "sill": 0.9,
+     "treatment": {
+      "type": "roman_blind",
+      "material": "linen_white",
+      "open": 0.7
+     }
+    },
+    {
+     "id": "bath_win",
+     "type": "window",
+     "at": [
+      14.4,
+      11
+     ],
+     "width": 1.2,
+     "height": 0.9,
+     "sill": 1.5,
+     "glassMaterial": "glass_frosted",
+     "treatment": {
+      "type": "venetian",
+      "open": 0.5
+     }
+    },
+    {
+     "id": "wc_win",
+     "type": "window",
+     "at": [
+      4.1,
+      11
+     ],
+     "width": 0.6,
+     "height": 0.6,
+     "sill": 1.6,
+     "style": "fixed",
+     "glassMaterial": "glass_frosted"
+    }
+   ],
+   "rooms": [
+    {
+     "id": "great",
+     "name": "Living, dining & kitchen",
+     "polygon": [
+      [
+       0,
+       0
+      ],
+      [
+       9.6,
+       0
+      ],
+      [
+       9.6,
+       6.6
+      ],
+      [
+       0,
+       6.6
+      ]
+     ],
+     "floorMaterial": "wood_herringbone_oak",
+     "finishes": {
+      "walls": "warm_white",
+      "accents": [
+       {
+        "side": "west",
+        "material": "slats_oak"
+       }
+      ],
+      "skirting": {
+       "height": 0.1,
+       "profile": "square"
+      },
+      "ceiling": {
+       "type": "beams",
+       "spacing": 1.6,
+       "material": "warm_white",
+       "beamMaterial": "wood_oak"
+      }
+     }
+    },
+    {
+     "id": "hall",
+     "name": "Entry hall",
+     "polygon": [
+      [
+       0,
+       6.6
+      ],
+      [
+       5,
+       6.6
+      ],
+      [
+       5,
+       8.6
+      ],
+      [
+       3.2,
+       8.6
+      ],
+      [
+       3.2,
+       11
+      ],
+      [
+       0,
+       11
+      ]
+     ],
+     "floorMaterial": "terrazzo_white",
+     "finishes": {
+      "walls": "grasscloth_natural",
+      "skirting": {
+       "height": 0.12,
+       "profile": "bevel",
+       "material": "wood_oak"
+      },
+      "floorBorder": {
+       "width": 0.18,
+       "material": "marble_black",
+       "inset": 0.12
+      },
+      "threshold": "marble_white"
+     }
+    },
+    {
+     "id": "wc",
+     "name": "Guest WC",
+     "polygon": [
+      [
+       3.2,
+       8.6
+      ],
+      [
+       5,
+       8.6
+      ],
+      [
+       5,
+       11
+      ],
+      [
+       3.2,
+       11
+      ]
+     ],
+     "floorMaterial": "tiles_hex_white",
+     "finishes": {
+      "walls": "tiles_zellige_green",
+      "threshold": "marble_white"
+     }
+    },
+    {
+     "id": "study",
+     "name": "Study",
+     "polygon": [
+      [
+       5,
+       6.6
+      ],
+      [
+       9.6,
+       6.6
+      ],
+      [
+       9.6,
+       11
+      ],
+      [
+       5,
+       11
+      ]
+     ],
+     "floorMaterial": "wood_floor_oak",
+     "finishes": {
+      "walls": "sage_paint",
+      "accents": [
+       {
+        "side": "east",
+        "material": "wallpaper_botanical"
+       }
+      ],
+      "skirting": {
+       "height": 0.12,
+       "profile": "square"
+      },
+      "cornice": {
+       "profile": "cove"
+      }
+     }
+    },
+    {
+     "id": "master",
+     "name": "Master bedroom",
+     "polygon": [
+      [
+       9.6,
+       0
+      ],
+      [
+       16,
+       0
+      ],
+      [
+       16,
+       6.6
+      ],
+      [
+       9.6,
+       6.6
+      ]
+     ],
+     "floorMaterial": "wood_floor_oak",
+     "finishes": {
+      "walls": "linen_wallcovering",
+      "accents": [
+       {
+        "side": "west",
+        "material": "reeded_oak"
+       }
+      ],
+      "skirting": {
+       "height": 0.1,
+       "profile": "square"
+      },
+      "ceiling": {
+       "type": "tray",
+       "drop": 0.22,
+       "inset": 0.7,
+       "coveLight": "emissive_light"
+      }
+     }
+    },
+    {
+     "id": "closet",
+     "name": "Walk-in closet",
+     "polygon": [
+      [
+       9.6,
+       6.6
+      ],
+      [
+       12.8,
+       6.6
+      ],
+      [
+       12.8,
+       11
+      ],
+      [
+       9.6,
+       11
+      ]
+     ],
+     "floorMaterial": "wood_floor_oak",
+     "finishes": {
+      "walls": "warm_white",
+      "skirting": {
+       "height": 0.1
+      }
+     }
+    },
+    {
+     "id": "ensuite",
+     "name": "En-suite bathroom",
+     "polygon": [
+      [
+       12.8,
+       6.6
+      ],
+      [
+       16,
+       6.6
+      ],
+      [
+       16,
+       11
+      ],
+      [
+       12.8,
+       11
+      ]
+     ],
+     "floorMaterial": "terrazzo_white",
+     "finishes": {
+      "walls": "microcement_sand",
+      "accents": [
+       {
+        "side": "north",
+        "material": "tiles_zellige_white"
+       }
+      ],
+      "threshold": "marble_white"
+     }
+    }
+   ],
+   "terraces": [
+    {
+     "id": "deck",
+     "name": "Deck terrace",
+     "polygon": [
+      [
+       0.4,
+       -2.6
+      ],
+      [
+       15.6,
+       -2.6
+      ],
+      [
+       15.6,
+       -0.15
+      ],
+      [
+       0.4,
+       -0.15
+      ]
+     ],
+     "material": "wood_floor_gray",
+     "thickness": 0.15
+    }
+   ],
+   "furniture": [
+    {
+     "id": "sofa",
+     "type": "sectional_sofa",
+     "position": [
+      3.75,
+      3.3
+     ],
+     "facing": "west",
+     "width": 2.8,
+     "depth": 2.0
+    },
+    {
+     "id": "cushion1",
+     "type": "cushion",
+     "position": [
+      4.45,
+      2.4
+     ],
+     "facing": "west",
+     "elevation": 0.45,
+     "materials": {
+      "fabric": "velvet_rust"
+     }
+    },
+    {
+     "id": "cushion2",
+     "type": "cushion",
+     "position": [
+      4.45,
+      4.2
+     ],
+     "facing": "west",
+     "elevation": 0.45,
+     "materials": {
+      "fabric": "sage_paint"
+     }
+    },
+    {
+     "id": "living_rug",
+     "type": "rug",
+     "position": [
+      2.3,
+      3.3
+     ],
+     "width": 3.0,
+     "depth": 2.4,
+     "rotation": 90
+    },
+    {
+     "id": "coffee_table",
+     "type": "coffee_table",
+     "position": [
+      1.9,
+      3.3
+     ],
+     "rotation": 90,
+     "width": 1.1,
+     "depth": 0.6
+    },
+    {
+     "id": "coffee_decor",
+     "type": "books_stack",
+     "position": [
+      1.9,
+      3.6
+     ],
+     "elevation": 0.42,
+     "rotation": 90
+    },
+    {
+     "id": "coffee_bowl",
+     "type": "decor_bowl",
+     "position": [
+      1.9,
+      2.95
+     ],
+     "elevation": 0.42
+    },
+    {
+     "id": "lounge_chair",
+     "type": "lounge_chair",
+     "position": [
+      1.75,
+      5.3
+     ],
+     "rotation": 315
+    },
+    {
+     "id": "living_lamp",
+     "type": "floor_lamp",
+     "position": [
+      0.55,
+      6.1
+     ]
+    },
+    {
+     "id": "living_plant",
+     "type": "plant_large",
+     "position": [
+      5.25,
+      0.7
+     ],
+     "options": {
+      "species": "monstera",
+      "pot": "basket"
+     }
+    },
+    {
+     "id": "sideboard",
+     "type": "sideboard",
+     "position": [
+      3.8,
+      6.3
+     ],
+     "facing": "south",
+     "width": 1.8
+    },
+    {
+     "id": "sideboard_lamp",
+     "type": "table_lamp",
+     "position": [
+      3.15,
+      6.32
+     ],
+     "elevation": 0.75
+    },
+    {
+     "id": "sideboard_vase",
+     "type": "vase",
+     "position": [
+      4.45,
+      6.32
+     ],
+     "elevation": 0.75,
+     "options": {
+      "shape": "bottle",
+      "stems": "branches"
+     }
+    },
+    {
+     "id": "living_art",
+     "type": "wall_art",
+     "position": [
+      3.8,
+      6.525
+     ],
+     "facing": "south",
+     "elevation": 1.2,
+     "width": 1.2,
+     "height": 0.85,
+     "options": {
+      "frame": "oak",
+      "art": "abstract"
+     }
+    },
+    {
+     "id": "dining_table",
+     "type": "table",
+     "position": [
+      7.3,
+      1.68
+     ],
+     "width": 1.9,
+     "depth": 0.95
+    },
+    {
+     "id": "dchair1",
+     "type": "chair",
+     "position": [
+      6.75,
+      0.98
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "dchair2",
+     "type": "chair",
+     "position": [
+      7.85,
+      0.98
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "dchair3",
+     "type": "chair",
+     "position": [
+      6.75,
+      2.38
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dchair4",
+     "type": "chair",
+     "position": [
+      7.85,
+      2.38
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dchair5",
+     "type": "chair",
+     "position": [
+      6.1,
+      1.68
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "dchair6",
+     "type": "chair",
+     "position": [
+      8.5,
+      1.68
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "dining_vase",
+     "type": "vase",
+     "position": [
+      7.3,
+      1.68
+     ],
+     "elevation": 0.75,
+     "options": {
+      "shape": "bulb",
+      "stems": "flowers"
+     }
+    },
+    {
+     "id": "console",
+     "type": "console_table",
+     "position": [
+      0.34,
+      8.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "hall_mirror",
+     "type": "mirror_round",
+     "position": [
+      0.165,
+      8.6
+     ],
+     "facing": "east",
+     "elevation": 1.15,
+     "width": 0.8,
+     "height": 0.8
+    },
+    {
+     "id": "hall_lamp",
+     "type": "table_lamp",
+     "position": [
+      0.34,
+      8.15
+     ],
+     "elevation": 0.8
+    },
+    {
+     "id": "shoe_cab",
+     "type": "shoe_cabinet",
+     "position": [
+      0.3,
+      10.1
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "coat_rack",
+     "type": "coat_rack",
+     "position": [
+      2.75,
+      10.45
+     ]
+    },
+    {
+     "id": "hall_plant",
+     "type": "plant_large",
+     "position": [
+      0.45,
+      7.25
+     ],
+     "width": 0.6,
+     "depth": 0.6,
+     "height": 1.3,
+     "options": {
+      "species": "snake_plant",
+      "pot": "cylinder"
+     }
+    },
+    {
+     "id": "wc_toilet",
+     "type": "toilet",
+     "position": [
+      3.62,
+      10.47
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "wc_roll",
+     "type": "toilet_roll_holder",
+     "position": [
+      3.325,
+      10.15
+     ],
+     "facing": "east",
+     "elevation": 0.7
+    },
+    {
+     "id": "desk",
+     "type": "desk",
+     "position": [
+      7.3,
+      10.5
+     ],
+     "facing": "south",
+     "width": 1.6
+    },
+    {
+     "id": "desk_chair",
+     "type": "office_chair",
+     "position": [
+      7.3,
+      9.75
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "desk_lamp",
+     "type": "table_lamp",
+     "position": [
+      6.75,
+      10.6
+     ],
+     "elevation": 0.75
+    },
+    {
+     "id": "daybed",
+     "type": "daybed",
+     "position": [
+      5.55,
+      9.3
+     ],
+     "rotation": 90
+    },
+    {
+     "id": "study_throw",
+     "type": "throw_blanket",
+     "position": [
+      5.55,
+      10.05
+     ],
+     "rotation": 90,
+     "elevation": 0.05,
+     "options": {
+      "style": "draped"
+     }
+    },
+    {
+     "id": "study_chair",
+     "type": "accent_chair",
+     "position": [
+      8.55,
+      8.7
+     ],
+     "rotation": 110
+    },
+    {
+     "id": "study_plant",
+     "type": "plant_large",
+     "position": [
+      9.1,
+      10.4
+     ],
+     "options": {
+      "species": "fiddle_leaf"
+     }
+    },
+    {
+     "id": "study_art",
+     "type": "gallery_wall",
+     "position": [
+      5.075,
+      9.3
+     ],
+     "rotation": 90,
+     "elevation": 1.15
+    },
+    {
+     "id": "bed",
+     "type": "platform_bed",
+     "position": [
+      10.85,
+      3.8
+     ],
+     "facing": "east",
+     "width": 1.8,
+     "depth": 2.2
+    },
+    {
+     "id": "ns_left",
+     "type": "nightstand",
+     "position": [
+      9.9,
+      2.35
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "ns_right",
+     "type": "nightstand",
+     "position": [
+      9.9,
+      5.25
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "lamp_left",
+     "type": "table_lamp",
+     "position": [
+      9.9,
+      2.35
+     ],
+     "elevation": 0.55
+    },
+    {
+     "id": "lamp_right",
+     "type": "table_lamp",
+     "position": [
+      9.9,
+      5.25
+     ],
+     "elevation": 0.55
+    },
+    {
+     "id": "bed_art",
+     "type": "wall_art",
+     "position": [
+      9.675,
+      3.8
+     ],
+     "facing": "east",
+     "elevation": 1.35,
+     "width": 1.5,
+     "height": 0.7,
+     "options": {
+      "frame": "thin_black",
+      "art": "landscape"
+     }
+    },
+    {
+     "id": "bed_rug",
+     "type": "rug",
+     "position": [
+      11.4,
+      3.8
+     ],
+     "width": 3.2,
+     "depth": 2.4,
+     "rotation": 90
+    },
+    {
+     "id": "bed_bench",
+     "type": "dining_bench",
+     "position": [
+      12.3,
+      3.8
+     ],
+     "rotation": 90,
+     "width": 1.4,
+     "options": {
+      "cushion": true
+     }
+    },
+    {
+     "id": "bed_throw",
+     "type": "throw_blanket",
+     "position": [
+      11.75,
+      3.8
+     ],
+     "rotation": 90,
+     "elevation": 0.4,
+     "options": {
+      "style": "folded"
+     }
+    },
+    {
+     "id": "reading_chair",
+     "type": "lounge_chair",
+     "position": [
+      15.1,
+      5.5
+     ],
+     "rotation": 135
+    },
+    {
+     "id": "reading_lamp",
+     "type": "floor_lamp",
+     "position": [
+      15.55,
+      6.1
+     ]
+    },
+    {
+     "id": "dresser",
+     "type": "dressing_table",
+     "position": [
+      15.6,
+      1.4
+     ],
+     "facing": "west",
+     "options": {
+      "mirror": "round"
+     }
+    },
+    {
+     "id": "dresser_stool",
+     "type": "ottoman",
+     "position": [
+      15.0,
+      1.4
+     ],
+     "width": 0.42,
+     "depth": 0.42
+    },
+    {
+     "id": "tub",
+     "type": "freestanding_bathtub",
+     "position": [
+      14.4,
+      10.3
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "bath_toilet",
+     "type": "toilet",
+     "position": [
+      15.47,
+      8.5
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "towel_rail",
+     "type": "towel_rail",
+     "position": [
+      15.79,
+      9.4
+     ],
+     "facing": "west",
+     "elevation": 0.4
+    },
+    {
+     "id": "bath_mat",
+     "type": "bath_mat",
+     "position": [
+      14.4,
+      9.45
+     ]
+    },
+    {
+     "id": "bath_plant",
+     "type": "plant_large",
+     "position": [
+      15.5,
+      10.5
+     ],
+     "width": 0.5,
+     "depth": 0.5,
+     "height": 1.1,
+     "options": {
+      "species": "snake_plant"
+     }
+    },
+    {
+     "id": "deck_sofa",
+     "type": "outdoor_sofa",
+     "position": [
+      3.0,
+      -1.9
+     ],
+     "facing": "north",
+     "width": 2.2
+    },
+    {
+     "id": "deck_table",
+     "type": "coffee_table",
+     "position": [
+      3.0,
+      -1.0
+     ],
+     "width": 1.0,
+     "depth": 0.5,
+     "materials": {
+      "top": "wood_teak",
+      "legs": "wood_teak"
+     }
+    },
+    {
+     "id": "deck_planter1",
+     "type": "planter",
+     "position": [
+      0.9,
+      -2.2
+     ],
+     "width": 0.6
+    },
+    {
+     "id": "deck_planter2",
+     "type": "planter",
+     "position": [
+      9.2,
+      -2.2
+     ],
+     "width": 0.9
+    },
+    {
+     "id": "lounger1",
+     "type": "sun_lounger",
+     "position": [
+      12.0,
+      -1.4
+     ],
+     "rotation": 0,
+     "width": 0.7,
+     "depth": 1.9
+    },
+    {
+     "id": "lounger2",
+     "type": "sun_lounger",
+     "position": [
+      12.9,
+      -1.4
+     ],
+     "rotation": 0,
+     "width": 0.7,
+     "depth": 1.9
+    },
+    {
+     "id": "tree1",
+     "type": "tree",
+     "position": [
+      -3,
+      -4
+     ],
+     "options": {
+      "kind": "deciduous"
+     }
+    },
+    {
+     "id": "tree2",
+     "type": "tree",
+     "position": [
+      19,
+      9
+     ],
+     "options": {
+      "kind": "conifer"
+     }
+    },
+    {
+     "id": "stool1",
+     "type": "bar_stool",
+     "position": [
+      5.8,
+      3.35
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "stool2",
+     "type": "bar_stool",
+     "position": [
+      6.5,
+      3.35
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "stool3",
+     "type": "bar_stool",
+     "position": [
+      7.2,
+      3.35
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "tv",
+     "type": "tv",
+     "position": [
+      0.28,
+      3.3
+     ],
+     "facing": "east",
+     "elevation": 1.05,
+     "width": 1.6,
+     "height": 0.95,
+     "options": {
+      "mount": "wall"
+     }
+    },
+    {
+     "id": "kettle",
+     "type": "kettle",
+     "position": [
+      6.8,
+      6.3
+     ],
+     "elevation": 0.9
+    },
+    {
+     "id": "coffee_machine",
+     "type": "coffee_machine",
+     "position": [
+      7.25,
+      6.32
+     ],
+     "elevation": 0.9
+    },
+    {
+     "id": "herbs",
+     "type": "plant_herbs",
+     "position": [
+      9.3,
+      4.3
+     ],
+     "rotation": 270,
+     "elevation": 0.9
+    },
+    {
+     "id": "fruit",
+     "type": "fruit_bowl",
+     "position": [
+      5.95,
+      4.25
+     ],
+     "elevation": 0.92
+    },
+    {
+     "id": "shower",
+     "type": "shower",
+     "position": [
+      15.35,
+      7.15
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "vanity_mirror1",
+     "type": "mirror_arched",
+     "position": [
+      12.875,
+      7.65
+     ],
+     "rotation": 90,
+     "elevation": 1.15,
+     "width": 0.6,
+     "height": 0.9
+    },
+    {
+     "id": "vanity_mirror2",
+     "type": "mirror_arched",
+     "position": [
+      12.875,
+      8.55
+     ],
+     "rotation": 90,
+     "elevation": 1.15,
+     "width": 0.6,
+     "height": 0.9
+    },
+    {
+     "id": "wc_mirror",
+     "type": "mirror_round",
+     "position": [
+      4.925,
+      10.2
+     ],
+     "rotation": 270,
+     "elevation": 1.15,
+     "width": 0.5,
+     "height": 0.5
+    },
+    {
+     "id": "closet_rug",
+     "type": "rug",
+     "position": [
+      11.2,
+      8.9
+     ],
+     "width": 1.2,
+     "depth": 2.2,
+     "materials": {
+      "main": "carpet_beige"
+     }
+    }
+   ],
+   "lights": [
+    {
+     "id": "great_dl",
+     "type": "downlight",
+     "room": "great",
+     "spacing": 2.1,
+     "margin": 0.9,
+     "lumens": 450
+    },
+    {
+     "id": "dining_pendant",
+     "type": "pendant",
+     "shade": "cluster",
+     "position": [
+      7.3,
+      1.75
+     ],
+     "hangHeight": 1.65,
+     "lumens": 1500,
+     "material": "metal_brass"
+    },
+    {
+     "id": "island_p1",
+     "type": "pendant",
+     "shade": "dome",
+     "position": [
+      5.7,
+      4.3
+     ],
+     "hangHeight": 1.7,
+     "kelvin": 3000,
+     "lumens": 700,
+     "material": "metal_black"
+    },
+    {
+     "id": "island_p2",
+     "type": "pendant",
+     "shade": "dome",
+     "position": [
+      6.5,
+      4.3
+     ],
+     "hangHeight": 1.7,
+     "kelvin": 3000,
+     "lumens": 700,
+     "material": "metal_black"
+    },
+    {
+     "id": "island_p3",
+     "type": "pendant",
+     "shade": "dome",
+     "position": [
+      7.3,
+      4.3
+     ],
+     "hangHeight": 1.7,
+     "kelvin": 3000,
+     "lumens": 700,
+     "material": "metal_black"
+    },
+    {
+     "id": "hall_flush",
+     "type": "ceiling",
+     "position": [
+      1.6,
+      9.2
+     ],
+     "style": "flush",
+     "lumens": 1100
+    },
+    {
+     "id": "hall_flush2",
+     "type": "ceiling",
+     "position": [
+      3.6,
+      7.6
+     ],
+     "style": "flush",
+     "lumens": 800
+    },
+    {
+     "id": "wc_dl",
+     "type": "downlight",
+     "position": [
+      4.1,
+      9.8
+     ],
+     "kelvin": 3000,
+     "lumens": 600
+    },
+    {
+     "id": "wc_sconce",
+     "type": "wall_sconce",
+     "position": [
+      4.1,
+      10.8
+     ],
+     "height": 1.9,
+     "style": "glow"
+    },
+    {
+     "id": "study_pendant",
+     "type": "pendant",
+     "shade": "drum",
+     "position": [
+      7.3,
+      8.6
+     ],
+     "hangHeight": 2.15,
+     "lumens": 1300
+    },
+    {
+     "id": "master_dl",
+     "type": "downlight",
+     "room": "master",
+     "spacing": 2.4,
+     "margin": 1.2,
+     "lumens": 400
+    },
+    {
+     "id": "bed_sconce_l",
+     "type": "wall_sconce",
+     "position": [
+      9.7,
+      2.0
+     ],
+     "height": 1.6,
+     "style": "down"
+    },
+    {
+     "id": "bed_sconce_r",
+     "type": "wall_sconce",
+     "position": [
+      9.7,
+      5.6
+     ],
+     "height": 1.6,
+     "style": "down"
+    },
+    {
+     "id": "closet_dl",
+     "type": "downlight",
+     "room": "closet",
+     "spacing": 1.5,
+     "margin": 0.75,
+     "lumens": 450,
+     "kelvin": 3500
+    },
+    {
+     "id": "bath_dl",
+     "type": "downlight",
+     "room": "ensuite",
+     "spacing": 1.6,
+     "margin": 0.8,
+     "kelvin": 3000,
+     "lumens": 500
+    },
+    {
+     "id": "deck_sconce1",
+     "type": "wall_sconce",
+     "position": [
+      5.2,
+      -0.2
+     ],
+     "height": 2.2,
+     "style": "updown"
+    },
+    {
+     "id": "deck_sconce2",
+     "type": "wall_sconce",
+     "position": [
+      13.0,
+      -0.2
+     ],
+     "height": 2.2,
+     "style": "updown"
+    }
+   ],
+   "roofs": [
+    {
+     "id": "roof",
+     "type": "flat",
+     "polygon": [
+      [
+       0,
+       0
+      ],
+      [
+       16,
+       0
+      ],
+      [
+       16,
+       11
+      ],
+      [
+       0,
+       11
+      ]
+     ],
+     "overhang": 0.4,
+     "parapet": 0.5,
+     "material": "gravel"
+    }
+   ],
+   "casework": [
+    {
+     "id": "kitchen",
+     "type": "kitchen",
+     "path": [
+      [
+       5.3,
+       6.54
+      ],
+      [
+       9.54,
+       6.54
+      ],
+      [
+       9.54,
+       3.3
+      ]
+     ],
+     "doorStyle": "slab",
+     "handle": "gola",
+     "materials": {
+      "front": "wood_oak",
+      "worktop": "style_japandi_stone",
+      "backsplash": "tiles_zellige_white"
+     },
+     "modules": [
+      {
+       "kind": "fridge",
+       "width": 0.7
+      },
+      {
+       "kind": "tall_oven"
+      },
+      {
+       "kind": "base_drawers",
+       "width": "auto"
+      },
+      {
+       "kind": "dishwasher"
+      },
+      {
+       "id": "sink",
+       "kind": "sink",
+       "width": 0.9
+      },
+      {
+       "kind": "corner"
+      },
+      {
+       "id": "hob",
+       "kind": "hob",
+       "width": 0.9
+      },
+      {
+       "kind": "base_drawers",
+       "width": "auto"
+      }
+     ],
+     "uppers": [
+      {
+       "kind": "upper_glass",
+       "width": "auto"
+      },
+      {
+       "kind": "upper_doors",
+       "width": "auto"
+      },
+      {
+       "kind": "corner"
+      },
+      {
+       "kind": "hood",
+       "over": "hob"
+      },
+      {
+       "kind": "upper_open",
+       "width": "auto"
+      }
+     ],
+     "lighting": true
+    },
+    {
+     "id": "island",
+     "type": "kitchen",
+     "position": [
+      6.49,
+      4.3
+     ],
+     "facing": "north",
+     "length": 2.4,
+     "handle": "gola",
+     "materials": {
+      "front": "wood_walnut",
+      "worktop": "style_japandi_stone"
+     },
+     "island": {
+      "seating": 0.3,
+      "waterfall": "both"
+     },
+     "modules": [
+      {
+       "kind": "base_drawers",
+       "width": "auto"
+      },
+      {
+       "kind": "base_doors",
+       "width": "auto"
+      },
+      {
+       "kind": "base_drawers",
+       "width": "auto"
+      }
+     ]
+    },
+    {
+     "id": "media",
+     "type": "media",
+     "path": [
+      [
+       0.15,
+       1.7
+      ],
+      [
+       0.15,
+       4.9
+      ]
+     ],
+     "doorStyle": "fluted",
+     "materials": {
+      "front": "wood_walnut"
+     },
+     "modules": [
+      {
+       "kind": "open_shelf",
+       "width": 0.5
+      },
+      {
+       "kind": "base_drawers",
+       "width": "auto",
+       "drawers": 2
+      },
+      {
+       "kind": "base_drawers",
+       "width": "auto",
+       "drawers": 2
+      },
+      {
+       "kind": "open_shelf",
+       "width": 0.5
+      }
+     ]
+    },
+    {
+     "id": "wardrobes",
+     "type": "wardrobe",
+     "path": [
+      [
+       9.66,
+       7.05
+      ],
+      [
+       9.66,
+       10.79
+      ],
+      [
+       12.74,
+       10.79
+      ],
+      [
+       12.74,
+       7.05
+      ]
+     ],
+     "toCeiling": true,
+     "doorStyle": "slab",
+     "handle": "edge",
+     "materials": {
+      "front": "wood_oak"
+     },
+     "modules": [
+      {
+       "kind": "wardrobe",
+       "width": "auto",
+       "interior": "hanging"
+      },
+      {
+       "kind": "wardrobe",
+       "width": "auto",
+       "interior": "drawers",
+       "open": true
+      },
+      {
+       "kind": "corner"
+      },
+      {
+       "kind": "wardrobe",
+       "width": "auto",
+       "interior": "double_hanging"
+      },
+      {
+       "kind": "tall_open",
+       "width": "auto",
+       "decor": false
+      },
+      {
+       "kind": "wardrobe",
+       "width": "auto",
+       "interior": "shelves"
+      },
+      {
+       "kind": "corner"
+      },
+      {
+       "kind": "wardrobe",
+       "width": "auto",
+       "interior": "shoes"
+      },
+      {
+       "kind": "wardrobe",
+       "width": "auto",
+       "interior": "mixed"
+      }
+     ]
+    },
+    {
+     "id": "vanity",
+     "type": "vanity",
+     "path": [
+      [
+       12.86,
+       7.15
+      ],
+      [
+       12.86,
+       9.05
+      ]
+     ],
+     "materials": {
+      "front": "wood_walnut",
+      "worktop": "style_japandi_stone"
+     },
+     "modules": [
+      {
+       "kind": "basin",
+       "width": "auto",
+       "basin": "vessel"
+      },
+      {
+       "kind": "basin",
+       "width": "auto",
+       "basin": "vessel"
+      }
+     ]
+    },
+    {
+     "id": "wc_vanity",
+     "type": "vanity",
+     "path": [
+      [
+       4.94,
+       10.55
+      ],
+      [
+       4.94,
+       9.85
+      ]
+     ],
+     "materials": {
+      "front": "wood_walnut",
+      "worktop": "style_japandi_stone"
+     },
+     "depth": 0.4,
+     "modules": [
+      {
+       "kind": "basin",
+       "width": "auto",
+       "basin": "vessel"
+      }
+     ]
+    },
+    {
+     "id": "study_shelves",
+     "type": "shelving",
+     "path": [
+      [
+       5.45,
+       6.66
+      ],
+      [
+       9.15,
+       6.66
+      ]
+     ],
+     "materials": {
+      "front": "wood_oak"
+     },
+     "modules": [
+      {
+       "kind": "tall_open",
+       "width": "auto"
+      },
+      {
+       "kind": "tall_open",
+       "width": "auto"
+      },
+      {
+       "kind": "tall_open",
+       "width": "auto"
+      },
+      {
+       "kind": "tall_open",
+       "width": "auto"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

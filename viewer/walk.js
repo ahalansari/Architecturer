@@ -234,9 +234,9 @@ export class WalkMode {
         p.add(m);
         break;
       }
-      // walking into a closed door opens it
+      // walking into a closed room door opens it (cabinet doors and drawers only open with E)
       const leaf = this.leafOf(hit.object);
-      if (leaf && !this.doorState.get(leaf)?.open) this.toggleDoor(leaf);
+      if (leaf && leaf.userData.opening && !this.doorState.get(leaf)?.open) this.toggleDoor(leaf);
       const step = Math.min(Math.max(0, hit.distance - RADIUS), len);
       p.addScaledVector(dir, step);
       const rest = m.clone().multiplyScalar(1 - step / len);
@@ -288,6 +288,12 @@ export class WalkMode {
 
   toggleNearestDoor() {
     const me = this.camera.position;
+    // prefer whatever door/drawer is under the crosshair
+    const fwd = new THREE.Vector3();
+    this.camera.getWorldDirection(fwd);
+    const aimed = this.cast(me.clone(), fwd, 3);
+    const aimedLeaf = aimed && this.leafOf(aimed.object);
+    if (aimedLeaf) return this.toggleDoor(aimedLeaf);
     let best = null, bestD = 2.5;
     for (const mesh of this.world.doors) {
       const leaf = this.leafOf(mesh);
@@ -314,9 +320,27 @@ export class WalkMode {
         base: { pos: leaf.position.clone(), rot: leaf.quaternion.clone() },
         sign: away ? 1 : -1,
         slideDir: d.clone().normalize(),
+        slideDistance: null,
         motion: leaf.userData.motion ?? "hinged",
         size: new THREE.Box3().setFromObject(leaf).getSize(new THREE.Vector3()),
       };
+      // cabinet doors say exactly how they hinge: a unit axis in plan coords; positive rotation opens
+      const hx = leaf.userData.axis;
+      if (Array.isArray(hx) && hx.length === 3 && s.motion === "hinged") {
+        const world = new THREE.Vector3(hx[0], hx[2], -hx[1]);
+        const parentQ = leaf.parent ? leaf.parent.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion();
+        s.hingeAxis = world.applyQuaternion(parentQ).normalize();
+        s.maxAngle = ((leaf.userData.maxAngle ?? 95) * Math.PI) / 180;
+      }
+      // drawers / sliding fronts can say exactly how they move (plan coords: x east, y north, z up)
+      const ax = leaf.userData.slideAxis;
+      if (Array.isArray(ax) && ax.length === 3) {
+        const world = new THREE.Vector3(ax[0], ax[2], -ax[1]);
+        // the axis is given in plan space; bring it into the leaf's parent frame
+        const parentQ = leaf.parent ? leaf.parent.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion();
+        s.slideDir = world.applyQuaternion(parentQ).normalize();
+        s.slideDistance = leaf.userData.slideDistance ?? null;
+      }
       this.doorState.set(leaf, s);
     }
     s.open = !s.open;
@@ -331,8 +355,9 @@ export class WalkMode {
       leaf.position.copy(s.base.pos);
       leaf.quaternion.copy(s.base.rot);
       // sliding panels run along their own length (hinge side -> far edge); garage doors lift
-      if (s.motion === "slide") leaf.position.addScaledVector(s.slideDir, Math.max(s.size.x, s.size.z) * 0.9 * e);
+      if (s.motion === "slide") leaf.position.addScaledVector(s.slideDir, (s.slideDistance ?? Math.max(s.size.x, s.size.z) * 0.9) * e);
       else if (s.motion === "lift") leaf.position.y += s.size.y * 0.92 * e;
+      else if (s.hingeAxis) leaf.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(s.hingeAxis, s.maxAngle * e));
       else leaf.rotateY(s.sign * (Math.PI / 2) * e);
       leaf.updateMatrixWorld(true);
     }

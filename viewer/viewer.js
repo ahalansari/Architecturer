@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { WalkMode } from "./walk.js";
+import { DayNight } from "./lighting.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view");
@@ -33,6 +34,9 @@ sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
+
+// Day / Night switch (night = the plan's KHR_lights_punctual lights), see lighting.js
+const dayNight = new DayNight({ scene, renderer, camera });
 
 const ktx2 = new KTX2Loader().setTranscoderPath("/three/examples/jsm/libs/basis/").detectSupport(renderer);
 const gltfLoader = new GLTFLoader().setKTX2Loader(ktx2);

@@ -133,6 +133,8 @@ interface Canvas {
   cavity: number;
   /** Cavity blur radius in tile units. */
   cavityRadius: number;
+  /** Optional per-pixel metalness added to the material's (metallic inks). */
+  metal?: Float32Array;
 }
 
 function makeCanvas(size: number, seed: number): Canvas {
@@ -1200,6 +1202,689 @@ const paintDisks: Painter = (c, p) => {
   c.cavityRadius = 0.01;
 };
 
+// ---------------------------------------------------------------------------
+// Interior finishes: parquet, terrazzo, decorative tiles, wallcoverings, slats
+// ---------------------------------------------------------------------------
+
+/** Extra wood state from plankFigure. */
+const plank = { late: 0, pore: 0 };
+
+/**
+ * Wood figure of one plank in plank-local coordinates (X along the plank, Y across, tile units; L × Wd plank).
+ * Shared noise fields are sampled in plank space with a per-plank offset, so grain follows each plank whatever
+ * its orientation. `straight` forces rift grain (needed when X wraps around the tile, e.g. full-height slats).
+ */
+function plankFigure(c: Canvas, f: WoodFields, X: number, Y: number, L: number, Wd: number, id: number, density: number, contrast: number, straight = false): number {
+  const s = c.seed;
+  const r1 = rnd(id, 62, s), r2 = rnd(id, 63, s), r3 = rnd(id, 64, s);
+  const D = density * (0.75 + r2 * 0.5);
+  const su = X + rnd(id, 68, s), sv = Y + rnd(id, 69, s);
+  let t: number;
+  if (!straight && r3 < 0.6) {
+    const xc = rnd(id, 65, s) * L, yc = Wd * (0.5 + (rnd(id, 66, s) - 0.5) * 2.4);
+    const q = 0.06 + rnd(id, 67, s) * 0.08;
+    t = Math.hypot(Y - yc, q * (X - xc)) * D;
+  } else t = Y * D;
+  t += sample(f.warp, c.size, su, sv) * 1.6 + sample(f.warp2, c.size, su, sv) * 0.4 + r1 * 7;
+  const r = fract(t);
+  const late = smoothstep(0.55, 0.86, r) * (1 - smoothstep(0.9, 1, r));
+  const pore = sample(f.pores, c.size, su, sv);
+  plank.late = late;
+  plank.pore = pore;
+  return 1 + contrast * (-late * 0.24 - r * 0.06 + pore * 0.07 + sample(f.fiber, c.size, su, sv) * 0.05 + sample(f.low, c.size, su, sv) * 0.04);
+}
+
+/** Shared shading of a wood block: figure, per-plank tone, bevelled joint. d = distance to the plank edge (tile units). */
+function paintBlock(c: Canvas, i: number, woodCol: RGB, figure: number, id: number, d: number, gapW: number, variation: number) {
+  const m = smoothstep(gapW * 0.5, gapW * 0.5 + 0.0012, d);
+  const r1 = rnd(id, 70, c.seed), r2 = rnd(id, 71, c.seed);
+  const tone = 1 + (r1 - 0.5) * 0.3 * variation;
+  const hue = (r2 - 0.5) * 0.08 * variation;
+  const sh = figure * tone * (0.9 + 0.1 * m);
+  const gk = 0.25;
+  setCol(c, i, mix(woodCol[0] * gk, woodCol[0] * sh * (1 + hue), m), mix(woodCol[1] * gk, woodCol[1] * sh, m), mix(woodCol[2] * gk, woodCol[2] * sh * (1 - hue), m));
+  c.h[i] = m * 0.003 + smoothstep(0, 0.004, d) * 0.0005 - plank.late * 0.00012 + plank.pore * 0.00006;
+  c.rough[i] = (1 - m) * 0.2 + plank.late * 0.05 + plank.pore * 0.03;
+}
+
+/**
+ * Herringbone parquet, spine along u. ratio = plank length / width (integer), rows = zigzag bands per tile.
+ * Tile size = rows · ratio · √2 · plank width (e.g. 5:1, 2 rows, 1.27 m tile → 90 × 450 mm blocks).
+ */
+const paintHerringbone: Painter = (c, p) => {
+  const n = p.int("ratio", 5, 2, 12);
+  const b = p.int("rows", 2, 1, 16);
+  const gapW = p.num("gap", 0.0012, 0, 0.02);
+  const woodCol = p.color(["wood", "base"], hex("#b08456"));
+  const contrast = p.num("contrast", 1, 0, 3);
+  const variation = p.num("variation", 1, 0, 3);
+  const density = p.num("rings", 70, 1, 1000);
+  const f = woodFields(c, 200);
+  const W = 1 / (b * n * Math.SQRT2); // plank width in tile units
+  const U = coords(c.size);
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      // pattern space (plank units): planks axis-aligned, lattice (1,1) and (n,-n)
+      const tu = U[x] / W, tv = U[y] / W;
+      const px = (tu - tv) / Math.SQRT2, py = (tu + tv) / Math.SQRT2;
+      const m0 = Math.floor((px - py + n) / (2 * n));
+      let id = 0, along = 0, across = 0;
+      for (const m of [m0, m0 - 1, m0 + 1]) {
+        const qx = px - m * n, qy = py + m * n;
+        const jh = Math.floor(qy);
+        if (qx >= jh && qx < jh + n) {
+          id = (mod(m, b) * b * n + mod(jh, b * n)) * 2;
+          along = qx - jh;
+          across = qy - jh;
+          break;
+        }
+        const jv = Math.floor(qx);
+        if (qy >= jv + 1 && qy < jv + 1 + n) {
+          id = (mod(m, b) * b * n + mod(jv, b * n)) * 2 + 1;
+          along = qy - jv - 1;
+          across = qx - jv;
+          break;
+        }
+      }
+      const d = Math.min(Math.min(across, 1 - across), Math.min(along, n - along)) * W;
+      const fig = plankFigure(c, f, along * W, across * W, n * W, W, id, density, contrast);
+      paintBlock(c, i, woodCol, fig, id, d, gapW, variation);
+    }
+  c.cavity = 70;
+};
+
+/**
+ * Chevron parquet: planks with mitred ends meeting in V's along v. cols = plank columns per tile (even),
+ * rows = planks per column per tile, angle = plank angle from the spine (45 by default).
+ */
+const paintChevron: Painter = (c, p) => {
+  let cols = p.int("cols", 4, 2, 64);
+  cols += cols & 1;
+  const rows = p.int("rows", 9, 1, 128);
+  const slope = Math.tan((p.num("angle", 45, 20, 70) * Math.PI) / 180);
+  const gapW = p.num("gap", 0.0012, 0, 0.02);
+  const woodCol = p.color(["wood", "base"], hex("#8a6040"));
+  const contrast = p.num("contrast", 1, 0, 3);
+  const variation = p.num("variation", 1, 0, 3);
+  const density = p.num("rings", 70, 1, 1000);
+  const f = woodFields(c, 210);
+  const P = 1 / cols, H = 1 / rows;
+  const k = Math.sqrt(1 + slope * slope);
+  const Wd = H / k; // plank width perpendicular to its sides
+  const U = coords(c.size);
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      const u = U[x], v = U[y];
+      const col = Math.floor(u * cols);
+      const xl = u - col * P;
+      const sgn = col & 1 ? -1 : 1;
+      // triangle wave keeps the strips continuous across columns (the V)
+      const tri = col & 1 ? P - xl : xl;
+      const vv = v + slope * tri;
+      const row = Math.floor(vv / H);
+      const fr = vv / H - row;
+      const id = mod(col, cols) * 4096 + mod(row, rows);
+      const along = (sgn > 0 ? xl : P - xl) * k;
+      const across = fr * Wd;
+      const d = Math.min(Math.min(fr, 1 - fr) * Wd, Math.min(xl, P - xl));
+      const fig = plankFigure(c, f, along, across, P * k, Wd, id, density, contrast);
+      paintBlock(c, i, woodCol, fig, id, d, gapW, variation);
+    }
+  c.cavity = 70;
+};
+
+/** Basketweave parquet: square blocks of `strips` parallel planks, alternating direction. blocks = per tile edge (even). */
+const paintParquet: Painter = (c, p) => {
+  let blocks = p.int("blocks", 4, 2, 64);
+  blocks += blocks & 1;
+  const strips = p.int("strips", 3, 1, 12);
+  const gapW = p.num("gap", 0.0012, 0, 0.02);
+  const woodCol = p.color(["wood", "base"], hex("#a87a4c"));
+  const contrast = p.num("contrast", 1, 0, 3);
+  const variation = p.num("variation", 1, 0, 3);
+  const density = p.num("rings", 70, 1, 1000);
+  const f = woodFields(c, 220);
+  const B = 1 / blocks, Ws = B / strips;
+  const U = coords(c.size);
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      const bx = Math.floor(U[x] * blocks), by = Math.floor(U[y] * blocks);
+      const lx = U[x] * blocks - bx, ly = U[y] * blocks - by;
+      const horiz = ((bx + by) & 1) === 0;
+      const a = horiz ? lx : ly, s = (horiz ? ly : lx) * strips;
+      const si = Math.floor(s), fs = s - si;
+      const id = (mod(by, blocks) * blocks + mod(bx, blocks)) * 16 + si;
+      const d = Math.min(Math.min(fs, 1 - fs) * Ws, Math.min(a, 1 - a) * B);
+      const fig = plankFigure(c, f, a * B, fs * Ws, B, Ws, id, density, contrast);
+      paintBlock(c, i, woodCol, fig, id, d, gapW, variation);
+    }
+  c.cavity = 70;
+};
+
+function paletteParam(p: Params, def: string[]): RGB[] {
+  const listed = p
+    .str("palette", "")
+    .split(/[,;\s]+/)
+    .map((x) => parseColor(x))
+    .filter((x): x is RGB => !!x);
+  return listed.length ? listed : def.map(hex);
+}
+
+/**
+ * Polished terrazzo: angular marble chips of two sizes in a fine cement matrix.
+ * base = matrix colour, palette = chip colours, chips = large chips per tile edge, density 0..1.
+ */
+const paintTerrazzo: Painter = (c, p) => {
+  const base = p.color(["base", "matrix"], hex("#e9e5dd"));
+  const palette = paletteParam(p, ["#f7f5f0", "#e4e0d9", "#cfcac2", "#9b968f", "#6f6b66", "#2c2b2a", "#b9876a", "#d7c3a0"]);
+  const big = p.int("chips", 18, 2, 64);
+  const density = p.num("density", 0.6, 0, 1);
+  const wu = fbm(c, 24, 24, 2, 231), wv = fbm(c, 24, 24, 2, 232);
+  const vorA = voronoi(c, big, big, 0.9, 233, wu, wv, 0.12 / big);
+  const vorB = voronoi(c, big * 2, big * 2, 0.95, 234, wv, wu, 0.1 / big);
+  const vorC = voronoi(c, big * 5, big * 5, 0.95, 235);
+  const low = fbm(c, 3, 3, 4, 236), fine = fbm(c, 128, 128, 2, 237);
+  const pick = (id: number, salt: number) => palette[Math.floor(rnd(id, salt, c.seed) * palette.length)];
+  for (let i = 0; i < c.n; i++) {
+    let col: RGB = [base[0] * (1 + fine[i] * 0.06 + low[i] * 0.03), base[1] * (1 + fine[i] * 0.06 + low[i] * 0.03), base[2] * (1 + fine[i] * 0.06 + low[i] * 0.03)];
+    let rough = 0.05 + fine[i] * 0.03, h = fine[i] * 0.00004;
+    const layers: [Voronoi, number, number, number][] = [
+      [vorC, big * 5, 238, 0.7],
+      [vorB, big * 2, 239, 0.55],
+      [vorA, big, 240, 0.75],
+    ];
+    for (const [vor, cells, salt, keep] of layers) {
+      const id = vor.id[i];
+      if (rnd(id, salt, c.seed) > density * keep) continue;
+      const gap = (0.2 + rnd(id, salt + 1, c.seed) * 0.45) / cells;
+      const e = vor.edge[i] - gap * 0.5;
+      const m = smoothstep(-0.0006, 0.0006, e);
+      if (m <= 0) continue;
+      const pc = pick(id, salt + 2);
+      const tone = 0.9 + rnd(id, salt + 3, c.seed) * 0.2 + fine[i] * 0.05;
+      col = [mix(col[0], pc[0] * tone, m), mix(col[1], pc[1] * tone, m), mix(col[2], pc[2] * tone, m)];
+      rough = mix(rough, -0.04, m);
+      h = mix(h, 0.00006, m);
+    }
+    setCol(c, i, col[0], col[1], col[2]);
+    c.h[i] = h;
+    c.rough[i] = rough;
+  }
+  c.cavity = 0;
+};
+
+/** Pointy-top hex lattice that wraps: `cols` cells along u, an even row count along v (slightly squashed to fit). */
+function hexCell(u: number, v: number, cols: number, rows: number, out: { id: number; cx: number; cy: number; dx: number; dy: number; d: number }) {
+  const R = 0.8660254;
+  const X = u * cols, Y = v * rows * R;
+  const j0 = Math.floor(Y / R);
+  let best = 1e9;
+  for (let j = j0 - 1; j <= j0 + 1; j++) {
+    const off = j & 1 ? 0.5 : 0;
+    const i0 = Math.round(X - off);
+    for (let i = i0 - 1; i <= i0 + 1; i++) {
+      const cx = i + off, cy = j * R;
+      const dd = (X - cx) ** 2 + (Y - cy) ** 2;
+      if (dd < best) {
+        best = dd;
+        out.id = mod(i, cols) + mod(j, rows) * cols;
+        out.cx = cx;
+        out.cy = cy;
+      }
+    }
+  }
+  out.dx = X - out.cx;
+  out.dy = Y - out.cy;
+  const a = Math.abs(out.dx), b = Math.abs(0.5 * out.dx + R * out.dy), c2 = Math.abs(-0.5 * out.dx + R * out.dy);
+  out.d = (0.5 - Math.max(a, b, c2)) / cols; // distance to the hex edge, tile units
+  return out;
+}
+
+const hexRows = (cols: number) => Math.max(2, Math.round(cols / (2 * 0.8660254)) * 2);
+
+/**
+ * Hexagonal tiles. cols = hexagons per tile edge; style "flat" (default) or "penny" (round mosaic on the same lattice).
+ * palette = several tile colours mixed at random (blend mosaics); otherwise `tile`.
+ */
+const paintHexTiles: Painter = (c, p) => {
+  const cols = p.int("cols", 6, 1, 256);
+  const rows = hexRows(cols);
+  const penny = p.str("style", "flat") === "penny";
+  const groutW = p.num("groutWidth", penny ? 0.004 : 0.004, 0, 0.1);
+  const tileCol = p.color(["tile", "base"], hex("#f2f1ed"));
+  const groutCol = p.color(["grout", "groutColor"], hex("#c9c5bd"));
+  const variation = p.num("variation", 1, 0, 4);
+  const palette = p.str("palette", "") ? paletteParam(p, []) : null;
+  const wav = fbm(c, 6, 6, 3, 241), fine = fbm(c, 96, 96, 2, 242);
+  const aa = Math.max(0.0006, 0.7 / c.size);
+  const U = coords(c.size);
+  const cell = { id: 0, cx: 0, cy: 0, dx: 0, dy: 0, d: 0 };
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      hexCell(U[x], U[y], cols, rows, cell);
+      const d = penny ? (0.46 - Math.hypot(cell.dx, cell.dy)) / cols - groutW * 0.5 : cell.d - groutW * 0.5;
+      const m = smoothstep(-aa, aa, d);
+      const r1 = rnd(cell.id, 243, c.seed);
+      const tc = palette ? palette[Math.floor(rnd(cell.id, 244, c.seed) * palette.length)] : tileCol;
+      const tone = (1 + (r1 - 0.5) * 0.08 * variation) * (1 + wav[i] * 0.015 * variation);
+      const gt = 1 + fine[i] * 0.1;
+      setCol(c, i, mix(groutCol[0] * gt, tc[0] * tone, m), mix(groutCol[1] * gt, tc[1] * tone, m), mix(groutCol[2] * gt, tc[2] * tone, m));
+      const tilt = ((rnd(cell.id, 245, c.seed) - 0.5) * cell.dx + (rnd(cell.id, 246, c.seed) - 0.5) * cell.dy) * 0.003 / cols * 8;
+      const edge = penny ? 0.004 / Math.max(1, cols / 16) : 0.003;
+      c.h[i] = m * (0.002 + 0.0015 * Math.sqrt(smoothstep(0, edge, d)) + tilt) + fine[i] * 0.0001 * (1 - m);
+      c.rough[i] = (1 - m) * 0.55 + m * wav[i] * 0.03;
+    }
+  c.cavity = 60;
+};
+
+/**
+ * Square mosaic: small tiles mixed from a palette (pool / bathroom blends). count = tiles per tile edge.
+ */
+const paintMosaic: Painter = (c, p) => {
+  const count = p.int("count", 32, 2, 512);
+  const groutW = p.num("groutWidth", 0.0025, 0, 0.05);
+  const groutCol = p.color(["grout", "groutColor"], hex("#d9d6cf"));
+  const palette = paletteParam(p, ["#2f6ea3", "#3f85b8", "#5aa0c9", "#26577f", "#7fb8d6", "#3b7aa0"]);
+  const fine = fbm(c, 96, 96, 2, 251);
+  const aa = Math.max(0.0005, 0.7 / c.size);
+  const U = coords(c.size);
+  const cell = newCell();
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      rectCell(U[x], U[y], count, count, 0, cell);
+      const d = cell.d - groutW * 0.5;
+      const m = smoothstep(-aa, aa, d);
+      const tc = palette[Math.floor(rnd(cell.id, 252, c.seed) * palette.length)];
+      const tone = 0.92 + rnd(cell.id, 253, c.seed) * 0.16;
+      const gt = 1 + fine[i] * 0.1;
+      setCol(c, i, mix(groutCol[0] * gt, tc[0] * tone, m), mix(groutCol[1] * gt, tc[1] * tone, m), mix(groutCol[2] * gt, tc[2] * tone, m));
+      const tilt = ((rnd(cell.id, 254, c.seed) - 0.5) * (cell.lx - 0.5) + (rnd(cell.id, 255, c.seed) - 0.5) * (cell.ly - 0.5)) * 0.0015;
+      c.h[i] = m * (0.0015 + 0.001 * Math.sqrt(smoothstep(0, 0.002, d)) + tilt) + fine[i] * 0.00008 * (1 - m);
+      c.rough[i] = (1 - m) * 0.5;
+    }
+  c.cavity = 60;
+};
+
+/**
+ * Zellige: hand-cut glazed terracotta squares. Wobbly edges, strong tile-to-tile tone variation, glaze pooling
+ * darker at the edges, undulating glossy surface with pinholes. count = tiles per tile edge.
+ */
+const paintZellige: Painter = (c, p) => {
+  const count = p.int("count", 8, 1, 128);
+  const groutW = p.num("groutWidth", 0.005, 0, 0.05);
+  const tileCol = p.color(["tile", "base"], hex("#3f7f6a"));
+  const groutCol = p.color(["grout", "groutColor"], hex("#d8d2c6"));
+  const variation = p.num("variation", 1, 0, 3);
+  const wu = fbm(c, 2 * count, 2 * count, 2, 261), wv = fbm(c, 2 * count, 2 * count, 2, 262);
+  const und = fbm(c, 3 * count, 3 * count, 3, 263);
+  const cloud = fbm(c, 2 * count, 2 * count, 4, 264);
+  const fine = fbm(c, 128, 128, 2, 265);
+  const U = coords(c.size);
+  const cell = newCell();
+  const wob = 0.014 / count;
+  const px = 0.7 / c.size; // anti-aliasing half-width
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      rectCell(U[x] + wu[i] * wob, U[y] + wv[i] * wob, count, count, 0, cell);
+      const d = cell.d - groutW * 0.5;
+      const m = smoothstep(-px, px, d);
+      const r1 = rnd(cell.id, 266, c.seed), r2 = rnd(cell.id, 267, c.seed), r3 = rnd(cell.id, 268, c.seed);
+      const tone = (1 + (r1 - 0.5) * 0.5 * variation) * (1 + cloud[i] * 0.16 * variation);
+      const hue = (r2 - 0.5) * 0.1 * variation;
+      // glaze pools (thicker, darker) toward the tile edges
+      const pool = 1 - smoothstep(0, 0.012 / count * 8, d);
+      const sh = tone * (1 - pool * 0.28) * (1 + fine[i] * 0.03);
+      const tr = tileCol[0] * sh * (1 + hue), tg = tileCol[1] * sh * (1 + hue * 0.3), tb = tileCol[2] * sh * (1 - hue);
+      const gt = 1 + fine[i] * 0.12;
+      setCol(c, i, mix(groutCol[0] * gt, tr, m), mix(groutCol[1] * gt, tg, m), mix(groutCol[2] * gt, tb, m));
+      // pillowed, undulating surface
+      const dome = Math.sqrt(smoothstep(0, 0.25 / count, d));
+      const tilt = ((r3 - 0.5) * (cell.lx - 0.5) + (rnd(cell.id, 269, c.seed) - 0.5) * (cell.ly - 0.5)) * 0.006 / count * 8;
+      c.h[i] = m * (0.002 + 0.0018 * dome + und[i] * 0.0007 + tilt) + fine[i] * 0.0001;
+      c.rough[i] = (1 - m) * 0.6 + m * (und[i] * 0.04 + pool * 0.03);
+    }
+  // pinholes / bubbles in the glaze
+  const holes = p.int("pinholes", count * count * 3, 0, 100000);
+  for (let k = 0; k < holes; k++) {
+    const cu = rnd(k, 1, c.seed ^ 270), cv = rnd(k, 2, c.seed ^ 270);
+    const r = (0.0006 + rnd(k, 3, c.seed ^ 270) * 0.001) * (8 / count) * 0.5 + 0.0004;
+    forDisc(c.size, cu, cv, r, (i, du, dv) => {
+      const t = 1 - Math.sqrt(du * du + dv * dv) / r;
+      c.h[i] -= t * r * 0.4;
+      c.rough[i] += t * 0.1;
+    });
+  }
+  c.cavity = 40;
+};
+
+/** Paper relief + printed ink areas shared by the wallpaper styles. */
+const paintWallpaper: Painter = (c, p) => {
+  const style = p.str("style", "stripes");
+  const base = p.color(["base", "paper"], hex("#e9e4d6"));
+  const ink = p.color(["ink", "color2"], hex("#9aab8d"));
+  const accent = p.color(["accent", "color3"], ink);
+  const metallic = p.num("metallic", 0, 0, 1); // printed ink sheen (gold / silver)
+  const { size } = c;
+  const paper = fbm(c, 64, 64, 3, 281), low = fbm(c, 4, 4, 3, 282), fibre = fbm(c, 192, 24, 2, 283);
+  const U = coords(size);
+  const TAU = Math.PI * 2;
+  // ink coverage (0..1) per pixel and which colour
+  const inkM = new Float32Array(c.n), accM = new Float32Array(c.n);
+  const aa = 1.5 / size;
+  const reps = p.int("repeats", style === "stripes" ? 6 : style === "artdeco" ? 6 : 2, 1, 64);
+
+  if (style === "stripes") {
+    // regency stripe: wide ink stripe, two pinstripes in the accent colour
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const i = y * size + x;
+        const t = fract(U[x] * reps);
+        const w = 1 / reps;
+        const dWide = (Math.abs(t - 0.25) - 0.17) * w;
+        inkM[i] = 1 - smoothstep(-aa, aa, dWide);
+        const pin = Math.min(Math.abs(t - 0.58), Math.abs(t - 0.92)) * w - 0.0025;
+        accM[i] = 1 - smoothstep(-aa, aa, pin);
+      }
+  } else if (style === "damask") {
+    // half-drop repeat of a mirrored ornament
+    const cols = reps, rows = reps;
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const i = y * size + x;
+        const fx = U[x] * cols;
+        const ci = Math.floor(fx);
+        const fy = U[y] * rows + (ci & 1 ? 0.5 : 0);
+        const lx = fx - ci - 0.5, ly = fy - Math.floor(fy) - 0.5;
+        const ax = Math.abs(lx);
+        // ornament distance field (cell units, negative inside)
+        const ell = (x0: number, y0: number, rx: number, ry: number, rot: number) => {
+          const cs = Math.cos(rot), sn = Math.sin(rot);
+          const qx = (ax - x0) * cs + (ly - y0) * sn, qy = -(ax - x0) * sn + (ly - y0) * cs;
+          return (Math.hypot(qx / rx, qy / ry) - 1) * Math.min(rx, ry);
+        };
+        const ring = (x0: number, y0: number, r: number, t: number) => Math.abs(Math.hypot(ax - x0, ly - y0) - r) - t;
+        let dd = ell(0, 0.02, 0.11, 0.27, 0);
+        dd = Math.max(dd, -ell(0, 0.04, 0.045, 0.17, 0)); // hollow body
+        dd = Math.min(dd, ell(0, 0.04, 0.02, 0.12, 0)); // spine
+        dd = Math.min(dd, ell(0.15, -0.04, 0.05, 0.17, 0.55)); // side leaves
+        dd = Math.min(dd, ell(0.2, 0.17, 0.035, 0.11, -0.9));
+        dd = Math.min(dd, ell(0, -0.33, 0.05, 0.075, 0)); // crown bud
+        dd = Math.min(dd, ell(0.07, -0.27, 0.03, 0.07, 0.6));
+        dd = Math.min(dd, Math.max(ring(0.13, 0.31, 0.07, 0.014), -(ly - 0.31))); // scrolls
+        dd = Math.min(dd, ell(0, 0.33, 0.03, 0.06, 0));
+        // small diamond between repeats
+        const qx = Math.abs(lx) - 0.5, qy = Math.abs(ly) - 0.5;
+        dd = Math.min(dd, (Math.abs(qx) + Math.abs(qy)) * 0.7 - 0.05);
+        inkM[i] = 1 - smoothstep(-aa * cols * 0.6, aa * cols * 0.6, dd);
+        // ogee frame of fine leafy lines around each motif (accent)
+        const ox = Math.abs(lx), oy = ly;
+        const curve = 0.38 - 0.1 * Math.cos(Math.PI * oy * 2); // stays inside the column so half-drops line up
+        const fd = Math.abs(ox - curve) - 0.012 - 0.008 * Math.max(0, Math.sin(oy * TAU * 4));
+        accM[i] = (1 - smoothstep(-aa * cols, aa * cols, fd)) * (1 - inkM[i]);
+      }
+  } else if (style === "artdeco") {
+    // overlapping fans (scallops) with concentric arcs and rays
+    const cols = reps, rows = reps * 2;
+    const R = 0.5 / cols;
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const i = y * size + x;
+        const u = U[x], v = U[y];
+        let found = false;
+        // fans open upward (toward -v); lower rows overlap upper ones
+        const r0 = Math.floor(v * rows);
+        for (let r = r0 + 1; r >= r0 - 1 && !found; r--) {
+          const off = r & 1 ? 0.5 : 0;
+          const cy = (r + 1) / rows;
+          const ci = Math.round(u * cols - off);
+          for (let k = ci - 1; k <= ci + 1 && !found; k++) {
+            const cx = (k + off) / cols;
+            const dx = u - cx, dy = cy - v;
+            const dist = Math.hypot(dx, dy);
+            if (dy < 0 || dist > R) continue;
+            found = true;
+            const t = dist / R;
+            const ang = Math.atan2(dx, dy); // -pi/2..pi/2
+            const arcs = Math.min(Math.abs(t - 0.98), Math.abs(t - 0.72), Math.abs(t - 0.46)) * R - 0.0018;
+            const rays = Math.abs(fract(((ang + Math.PI / 2) / Math.PI) * 9 + 0.5) - 0.5) * (Math.PI / 9) * dist - 0.0012;
+            const rayMask = t > 0.46 && t < 0.72 ? 1 - smoothstep(-aa, aa, rays) : 0;
+            inkM[i] = Math.max(1 - smoothstep(-aa, aa, arcs), rayMask);
+            accM[i] = t < 0.2 ? 1 - smoothstep(0.17, 0.2, t) : 0;
+          }
+        }
+      }
+  } else if (style === "botanical") {
+    // leafy sprigs on a jittered (wrapped) grid: a curved stem with alternate pointed leaves, two greens
+    const cells = reps * 2;
+    const stroke = (cu: number, cv: number, dx: number, dy: number, len: number, halfW: (t: number) => number, mask: Float32Array) =>
+      forDisc(size, cu + dx * len * 0.5, cv + dy * len * 0.5, len * 0.55, (i, du, dv) => {
+        const t = (du * dx + dv * dy) / len + 0.5;
+        if (t < 0 || t > 1) return;
+        const e = Math.abs(-du * dy + dv * dx) - halfW(t) * len;
+        const mk = 1 - smoothstep(-aa, aa, e);
+        if (mk > mask[i]) mask[i] = mk;
+      });
+    for (let gy = 0; gy < cells; gy++)
+      for (let gx = 0; gx < cells; gx++) {
+        const id = gy * cells + gx;
+        let pu = (gx + 0.15 + rnd(id, 284, c.seed) * 0.3) / cells, pv = (gy + 0.85 - rnd(id, 285, c.seed) * 0.2) / cells;
+        let ang = -Math.PI / 2 + (rnd(id, 286, c.seed) - 0.5) * 1.6; // mostly growing up the wall (-v)
+        const bend = (rnd(id, 287, c.seed) - 0.5) * 0.5;
+        const L = (0.75 + rnd(id, 288, c.seed) * 0.35) / cells;
+        const mask = rnd(id, 289, c.seed) < 0.45 ? accM : inkM;
+        const steps = 7;
+        for (let k = 0; k < steps; k++) {
+          const seg = L / steps;
+          const dx = Math.cos(ang), dy = Math.sin(ang);
+          stroke(pu, pv, dx, dy, seg * 1.05, () => 0.004 / seg, mask);
+          pu += dx * seg;
+          pv += dy * seg;
+          if (k >= 1) {
+            const side = k & 1 ? 1 : -1;
+            const la = ang + side * (0.75 + rnd(id * 9 + k, 290, c.seed) * 0.25);
+            const ll = L * (0.42 - k * 0.035) * (0.8 + rnd(id * 9 + k, 291, c.seed) * 0.4);
+            stroke(pu, pv, Math.cos(la), Math.sin(la), ll, (t) => 0.17 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.7)), 1.2) + (t < 0.08 ? 0.03 : 0), mask);
+          }
+          ang += bend / steps;
+        }
+        // tip leaf
+        stroke(pu, pv, Math.cos(ang), Math.sin(ang), L * 0.3, (t) => 0.17 * Math.sin(Math.PI * Math.pow(t, 0.7)), mask);
+      }
+  } else {
+    // "trellis": ogee lattice lines
+    const cols = reps * 2;
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const i = y * size + x;
+        const u = U[x] * cols, v = U[y] * cols;
+        const a = Math.abs(fract(u + 0.25 * Math.sin(TAU * v * 0.5) + 0.5) - 0.5);
+        const b = Math.abs(fract(u - 0.25 * Math.sin(TAU * v * 0.5) + 0.5) - 0.5);
+        const dd = Math.min(a, b) / cols - 0.003;
+        inkM[i] = 1 - smoothstep(-aa, aa, dd);
+        const dot = Math.hypot(fract(u) - 0.5, fract(v * 0.5 + 0.25) * 2 - 1) / cols - 0.006;
+        accM[i] = 1 - smoothstep(-aa, aa, dot);
+      }
+  }
+
+  for (let i = 0; i < c.n; i++) {
+    const pt = 1 + paper[i] * 0.025 + low[i] * 0.02 + fibre[i] * 0.015;
+    let r = base[0] * pt, g = base[1] * pt, b = base[2] * pt;
+    const im = inkM[i], am = accM[i];
+    const it = 1 + paper[i] * 0.03;
+    r = mix(r, ink[0] * it, im); g = mix(g, ink[1] * it, im); b = mix(b, ink[2] * it, im);
+    r = mix(r, accent[0] * it, am); g = mix(g, accent[1] * it, am); b = mix(b, accent[2] * it, am);
+    setCol(c, i, r, g, b);
+    const printed = Math.max(im, am);
+    c.h[i] = paper[i] * 0.00012 + fibre[i] * 0.00005 + printed * 0.00015;
+    c.rough[i] = -printed * metallic * 0.35 + paper[i] * 0.03;
+    if (metallic > 0) (c.metal ??= new Float32Array(c.n))[i] = printed * metallic;
+  }
+  c.cavity = 0;
+};
+
+/**
+ * Vertical ribbed wall panels (tile u = across the ribs, v = up). style:
+ * "slats" (wood slats on a dark acoustic felt), "flutes" (concave channels), "reeds" (convex half-rounds),
+ * "beadboard" (tongue-and-groove boards with a V-groove and bead). count = ribs per tile edge.
+ */
+const paintFluted: Painter = (c, p) => {
+  const style = p.str("style", "slats");
+  const count = p.int("count", style === "slats" ? 20 : style === "beadboard" ? 8 : 16, 1, 512);
+  const base = p.color(["base", "wood"], style === "slats" ? hex("#b58a5d") : hex("#efede8"));
+  const felt = p.color(["felt", "gap"], hex("#1f1f21"));
+  const gapF = p.num("gap", 0.32, 0.05, 0.8); // slats: gap fraction of the pitch
+  const contrast = p.num("contrast", style === "slats" ? 1 : 0.15, 0, 3);
+  const variation = p.num("variation", style === "slats" ? 1 : 0.2, 0, 3);
+  const f = woodFields(c, 300);
+  const fine = fbm(c, 96, 96, 2, 301);
+  const P = 1 / count;
+  const U = coords(c.size);
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      const fu = U[x] * count;
+      const k = Math.floor(fu), lx = fu - k;
+      const id = mod(k, count);
+      const fig = plankFigure(c, f, U[y], lx * P, 1, P, id, 60, contrast, true);
+      const tone = 1 + (rnd(id, 302, c.seed) - 0.5) * 0.25 * variation;
+      let sh = fig * tone, h = 0, rough = plank.late * 0.04 + plank.pore * 0.02, ao = 1;
+      let isFelt = 0;
+      if (style === "slats") {
+        const half = (1 - gapF) / 2;
+        const d = (half - Math.abs(lx - 0.5)) * P; // distance to slat edge
+        const m = smoothstep(-0.0004, 0.0006, d);
+        isFelt = 1 - m;
+        const round = Math.sqrt(smoothstep(0, 0.0025, d));
+        h = m * (0.012 + 0.002 * round) + fine[i] * 0.00005;
+        ao = mix(0.55 + 0.45 * smoothstep(0, 0.35, Math.abs(lx - 0.5) * 2 - (1 - gapF)), 1, m);
+        sh *= 0.92 + 0.08 * round;
+      } else if (style === "flutes") {
+        const t = (lx - 0.5) / 0.44;
+        const inside = Math.abs(t) < 1 ? Math.sqrt(1 - t * t) : 0;
+        h = -inside * P * 0.32;
+        ao = 1 - inside * 0.15;
+        sh *= 1 - inside * 0.04;
+      } else if (style === "reeds") {
+        const t = (lx - 0.5) / 0.5;
+        const dome = Math.sqrt(Math.max(0, 1 - t * t));
+        h = dome * P * 0.35;
+        ao = 0.75 + 0.25 * Math.sqrt(dome);
+      } else {
+        // beadboard: V-groove at the board joint, bead next to it
+        const g = Math.min(lx, 1 - lx) * P;
+        const groove = 1 - smoothstep(0, 0.0025, g);
+        const bx = (lx - 0.12) / 0.045;
+        const bead = Math.abs(bx) < 1 ? Math.sqrt(1 - bx * bx) : 0;
+        const beadGap = Math.abs(lx - 0.07) < 0.012 || Math.abs(lx - 0.17) < 0.012 ? 1 : 0;
+        h = (1 - groove) * 0.002 - beadGap * 0.0012 + bead * 0.0014;
+        ao = 1 - groove * 0.4 - beadGap * 0.25;
+      }
+      const col: RGB = [base[0] * sh, base[1] * sh, base[2] * sh];
+      const ft = 1 + fine[i] * 0.15;
+      setCol(c, i, mix(col[0], felt[0] * ft, isFelt), mix(col[1], felt[1] * ft, isFelt), mix(col[2], felt[2] * ft, isFelt));
+      c.h[i] = h;
+      c.ao[i] = ao;
+      c.rough[i] = rough + isFelt * 0.3;
+    }
+  c.cavity = style === "slats" ? 20 : 30;
+};
+
+/**
+ * Microcement / tadelakt: seamless trowelled cement plaster. Cloudy tone, overlapping trowel arcs, burnished
+ * (glossier) streaks and fine pinholes. polish 0..1 makes it glossier (tadelakt ≈ 0.8).
+ */
+const paintMicrocement: Painter = (c, p) => {
+  const base = p.color("base", hex("#b9b5ae"));
+  const polish = p.num("polish", 0.3, 0, 1);
+  const mottle = p.num("mottle", 1, 0, 3);
+  const low = fbm(c, 2, 2, 6, 311, 0.55), mid = fbm(c, 6, 6, 4, 312), fine = fbm(c, 128, 128, 2, 313);
+  const trowel = fbm(c, 4, 4, 4, 314), trowel2 = fbm(c, 7, 7, 3, 315);
+  for (let i = 0; i < c.n; i++) {
+    const t1 = fract(trowel[i] * 5 + low[i] * 0.8), t2 = fract(trowel2[i] * 4 - mid[i]);
+    const arc = smoothstep(0, 0.08, t1) * (1 - t1) + 0.6 * smoothstep(0, 0.1, t2) * (1 - t2);
+    const burnish = Math.pow(Math.max(0, 1 - Math.abs(t1 - 0.05) * 8), 2);
+    const s = 1 + mottle * (low[i] * 0.1 + mid[i] * 0.05) + fine[i] * 0.02 - burnish * 0.05 + arc * 0.015;
+    setCol(c, i, base[0] * s, base[1] * s, base[2] * s);
+    c.h[i] = arc * 0.0003 + fine[i] * 0.00006 + low[i] * 0.0004;
+    c.rough[i] = -polish * 0.3 - burnish * 0.15 * (0.4 + polish) + fine[i] * 0.03 + mid[i] * 0.05;
+  }
+  const pores = p.int("pores", 500, 0, 20000);
+  for (let k = 0; k < pores; k++) {
+    const cu = rnd(k, 1, c.seed ^ 316), cv = rnd(k, 2, c.seed ^ 316);
+    const r = 0.0006 + Math.pow(rnd(k, 3, c.seed ^ 316), 3) * 0.0015;
+    forDisc(c.size, cu, cv, r, (i, du, dv) => {
+      const t = 1 - Math.sqrt(du * du + dv * dv) / r;
+      c.h[i] -= t * r * 0.3;
+      const kk = 1 - t * 0.15;
+      c.col[i * 3] *= kk;
+      c.col[i * 3 + 1] *= kk;
+      c.col[i * 3 + 2] *= kk;
+    });
+  }
+  c.cavity = 30;
+};
+
+/**
+ * Grasscloth: horizontal natural fibre strands of irregular width on a paper backing, faint vertical warp threads,
+ * and `panels` paper widths per tile with a seam and a slight tone shift between them (as hung).
+ */
+const paintGrasscloth: Painter = (c, p) => {
+  const base = p.color(["base", "fibre"], hex("#c9b48e"));
+  const backing = p.color(["backing", "paper"], hex("#8d7a5c"));
+  const strands = p.int("strands", 110, 8, 1000);
+  const panels = p.int("panels", 2, 1, 8);
+  const warpN = p.int("warp", 36, 0, 512);
+  const variation = p.num("variation", 1, 0, 3);
+  const { size } = c;
+  const slub = fbm(c, 6, 128, 3, 321), streak = fbm(c, 2, 256, 2, 322), low = fbm(c, 3, 3, 3, 323);
+  // random strand boundaries along v (normalized to the tile)
+  const yb = new Float64Array(strands + 1);
+  for (let s = 0; s < strands; s++) yb[s + 1] = yb[s] + 0.4 + Math.pow(rnd(s, 324, c.seed), 2) * 1.6;
+  for (let s = 0; s <= strands; s++) yb[s] /= yb[strands];
+  const U = coords(size);
+  let row = 0;
+  for (let y = 0; y < size; y++) {
+    const v = U[y];
+    while (row < strands - 1 && v >= yb[row + 1]) row++;
+    const w = yb[row + 1] - yb[row];
+    const ly = (v - yb[row]) / w;
+    const prof = Math.sqrt(Math.max(0, Math.sin(Math.PI * ly)));
+    const tone = 1 + (rnd(row, 325, c.seed) - 0.5) * 0.16 * variation;
+    const hue = (rnd(row, 326, c.seed) - 0.5) * 0.05 * variation;
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      const u = U[x];
+      const panel = Math.floor(u * panels);
+      const pt = 1 + (rnd(panel, 327, c.seed) - 0.5) * 0.08;
+      const gap = 1 - smoothstep(0.05, 0.16, prof + slub[i] * 0.12);
+      const sh = tone * pt * (0.88 + 0.12 * prof) * (1 + slub[i] * 0.09 + streak[i] * 0.05 + low[i] * 0.03);
+      let r = mix(base[0] * sh * (1 + hue), backing[0], gap), g = mix(base[1] * sh, backing[1], gap), b = mix(base[2] * sh * (1 - hue), backing[2], gap);
+      let h = prof * w * 0.25 * (1 - gap) + streak[i] * 0.00003;
+      // vertical warp threads binding the strands
+      if (warpN > 0) {
+        const dw = Math.abs(fract(u * warpN + rnd(row, 328, c.seed) * 0.02) - 0.5) / warpN;
+        const th = 1 - smoothstep(0.0003, 0.0007, dw);
+        r = mix(r, base[0] * 1.08, th * 0.6); g = mix(g, base[1] * 1.08, th * 0.6); b = mix(b, base[2] * 1.02, th * 0.6);
+        h += th * w * 0.12;
+      }
+      // paper seam between panels
+      const ds = Math.abs(fract(u * panels + 0.5) - 0.5) / panels;
+      const seam = 1 - smoothstep(0.0002, 0.0008, ds);
+      setCol(c, i, r * (1 - seam * 0.3), g * (1 - seam * 0.3), b * (1 - seam * 0.3));
+      c.h[i] = h - seam * 0.0004;
+      c.rough[i] = streak[i] * 0.04 + gap * 0.05;
+    }
+  }
+  c.cavity = 40;
+  c.cavityRadius = 0.006;
+};
+
 const PAINTERS: Record<TexturePattern, Painter> = {
   none: paintNone,
   brick: paintBrick,
@@ -1221,6 +1906,17 @@ const PAINTERS: Record<TexturePattern, Painter> = {
   paving: paintPaving,
   siding: paintSiding,
   disks: paintDisks,
+  herringbone: paintHerringbone,
+  chevron: paintChevron,
+  parquet: paintParquet,
+  terrazzo: paintTerrazzo,
+  hex_tiles: paintHexTiles,
+  mosaic: paintMosaic,
+  zellige: paintZellige,
+  wallpaper: paintWallpaper,
+  fluted: paintFluted,
+  microcement: paintMicrocement,
+  grasscloth: paintGrasscloth,
 };
 
 // ---------------------------------------------------------------------------
@@ -1305,7 +2001,7 @@ export function generateTextures(mat: MaterialDef, size = 512): TextureSet {
     baseColor[k + 3] = alpha;
     orm[k] = Math.round(ao * 255);
     orm[k + 1] = Math.round(clamp(rough0 + c.rough[i], 0.02, 1) * 255);
-    orm[k + 2] = metal;
+    orm[k + 2] = c.metal ? Math.round(clamp01(metal / 255 + c.metal[i]) * 255) : metal;
     orm[k + 3] = 255;
   }
 

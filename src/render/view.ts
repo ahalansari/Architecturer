@@ -1,7 +1,8 @@
 import { sceneBounds, type SceneNode } from "../geometry/scene.js";
 import type { Vec3 } from "../geometry/math.js";
 import { texturesFor, type Compiled } from "../pipeline.js";
-import { encodePNG, renderPreset, renderScene, type MaterialLookup, type ViewPreset } from "./raster.js";
+import { encodePNG, renderPreset, renderScene, type LightingMode, type LightOccluderLevel, type MaterialLookup, type ViewPreset } from "./raster.js";
+import { interiorCamera, type InteriorView } from "./interior.js";
 
 export interface ViewOptions {
   view?: ViewPreset;
@@ -22,6 +23,10 @@ export interface ViewOptions {
   zoom?: number;
   /** Cutaway height above the level floor (default: min(0.75 * level height, 2.2)). */
   cutHeight?: number;
+  /** day (default) | night (artificial lights only, to judge a lighting design) | dusk */
+  lighting?: LightingMode;
+  /** Interior review: eye-level shot of a room, or a square-on wall elevation (see interior.ts). */
+  interior?: InteriorView;
 }
 
 /** Render the compiled building to a PNG (pure JS, headless). */
@@ -62,8 +67,22 @@ export function renderViewPNG(c: Compiled, o: ViewOptions = {}): Buffer {
     };
   }
   const width = o.width ?? 1280, height = o.height ?? 800;
-  const opts = { width, height, clipZ };
-  const img = o.eye
+  // walls block artificial light, so lamps don't leak into neighbouring rooms
+  const occluders: LightOccluderLevel[] = c.levels.map((l) => ({
+    z0: l.elevation,
+    z1: l.elevation + l.height,
+    walls: l.segments.map((sg) => ({ a: sg.a, b: sg.b, z0: sg.z0, z1: sg.z1, holes: sg.holes })),
+  }));
+  const opts = { width, height, clipZ, lighting: o.lighting, occluders };
+  const shot = o.interior && (o.interior.room || o.interior.elevation) ? interiorCamera(c, o.interior, width / height) : null;
+  if (shot?.clipZ !== undefined) {
+    // elevations show one floor: drop the levels above and cut at the top of the wall
+    root = { ...c.root, children: c.root.children.filter((n) => n.kind !== "level" || c.root!.children.indexOf(n) <= shot.level) };
+    opts.clipZ = shot.clipZ;
+  }
+  const img = shot
+    ? renderScene(root, lookup, shot.camera, opts)
+    : o.eye
     ? renderScene(root, lookup, { eye: o.eye, target: o.target ?? bounds.min.map((v, i) => (v + bounds.max[i]) / 2) as Vec3, fov: o.fov }, opts)
     : renderPreset(root, lookup, o.view ?? "iso", bounds, opts);
   return encodePNG(img);

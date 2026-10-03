@@ -2,6 +2,7 @@ import { deg2rad, m4, pointSegment, v2, type Vec2, type Vec3 } from "../geometry
 import { MeshBuilder } from "../geometry/mesh.js";
 import type { SceneNode } from "../geometry/scene.js";
 import type { Opening, Project } from "../schema/schema.js";
+import { buildTreatment } from "./treatments.js";
 import { clearRange, segDir, segLength, type WallSegment } from "./walls.js";
 
 export interface PlacedOpening {
@@ -117,7 +118,7 @@ const r3 = (n: number) => Math.round(n * 1000) / 1000;
  * Build the frame, glass and door leaves for an opening. Returns a node whose
  * frame meshes are in world space; door leaves are child nodes pivoting at their hinge.
  */
-export function buildOpening(p: PlacedOpening, project: Project): SceneNode {
+export function buildOpening(p: PlacedOpening, project: Project, ctx: { ceilingZ?: number } = {}): SceneNode {
   const { op, seg, width: w, height: h, style } = p;
   const D = project.defaults;
   const d = segDir(seg);
@@ -167,6 +168,15 @@ export function buildOpening(p: PlacedOpening, project: Project): SceneNode {
     }
   });
   node.meshes = mb.meshes();
+  if (op.treatment) {
+    // curtains / blinds on the room side; fabric sheets come back as world-space meshes
+    const tb = new MeshBuilder();
+    const ceilZ = (ctx.ceilingZ ?? seg.z1) - p.z0;
+    const sheets = tb.with(frame, () =>
+      buildTreatment(op.treatment!, { w, h: hh, t, ins: seg.interiorSide === "left" ? 1 : -1, floorZ: seg.z0 + 0.01 - p.z0, ceilZ, frame }, tb),
+    );
+    node.children.push({ name: `${p.id}_treatment`, kind: "window_treatment", meshes: [...tb.meshes(), ...sheets], children: [], extras: { type: op.treatment.type, open: op.treatment.open } });
+  }
 
   if (isDoor) {
     const cw = w - 2 * fw, ch = hh - fw - 0.01;

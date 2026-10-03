@@ -1,0 +1,109 @@
+{
+  "name": "Finishes showcase",
+  "description": "Interior finishes: herringbone living room with coffered ceiling, ogee cornice and a damask feature wall; panelled bedroom with grasscloth, dado rail and a tray ceiling with LED cove; zellige bathroom with hex floor; terrazzo kitchen with oak beams and a zellige backsplash; marble entrance hall with a border inlay, picture rail and frieze.",
+  "defaults": { "exteriorWallThickness": 0.3, "wallThickness": 0.12, "exteriorMaterial": "stucco", "wallMaterial": "warm_white" },
+  "materials": {
+    "warm_white": { "base": "paint_white", "color": "#f3efe6" },
+    "sage_paint": { "base": "paint_green", "color": "#8fa58a" },
+    "ink_blue": { "base": "paint_blue", "color": "#3c4f6b" }
+  },
+  "levels": [
+    {
+      "id": "ground",
+      "height": 3.0,
+      "walls": [
+        { "id": "ext", "points": [[0, 0], [13, 0], [13, 10], [0, 10]], "closed": true },
+        { "id": "w_mid", "points": [[0, 5], [13, 5]] },
+        { "id": "w_lk", "points": [[7.5, 0], [7.5, 5]] },
+        { "id": "w_bb", "points": [[6, 5], [6, 10]] },
+        { "id": "w_bh", "points": [[9, 5], [9, 10]] }
+      ],
+      "openings": [
+        { "id": "front_door", "type": "door", "at": [11, 10], "width": 1.0 },
+        { "id": "d_kitchen", "type": "door", "at": [11.2, 5] },
+        { "id": "d_bed", "type": "door", "at": [5.3, 5], "hinge": "right" },
+        { "id": "d_bath", "type": "door", "at": [9, 6.0], "swing": "out" },
+        { "id": "arch", "type": "opening", "at": [7.5, 2.6], "width": 1.8, "height": 2.3 },
+        { "id": "win_l1", "type": "window", "at": [2.0, 0], "width": 1.6, "height": 1.6, "sill": 0.6 },
+        { "id": "win_l2", "type": "window", "at": [5.4, 0], "width": 1.6, "height": 1.6, "sill": 0.6 },
+        { "id": "win_k", "type": "window", "at": [10.25, 0], "width": 1.4 },
+        { "id": "win_b", "type": "window", "at": [3.2, 10], "width": 1.6, "height": 1.4 },
+        { "id": "win_bath", "type": "window", "at": [7.5, 10], "width": 0.8, "height": 0.7, "sill": 1.4 }
+      ],
+      "rooms": [
+        {
+          "id": "living", "name": "Living room", "polygon": [[0, 0], [7.5, 0], [7.5, 5], [0, 5]],
+          "floorMaterial": "wood_herringbone_oak",
+          "finishes": {
+            "accents": [{ "side": "west", "material": "wallpaper_damask_green" }],
+            "skirting": { "height": 0.16, "profile": "ogee" },
+            "cornice": { "profile": "ogee", "height": 0.12, "depth": 0.12 },
+            "ceiling": { "type": "coffered", "spacing": 1.4, "beamWidth": 0.16, "beamDepth": 0.14 },
+            "threshold": "wood_oak"
+          }
+        },
+        {
+          "id": "kitchen", "name": "Kitchen", "polygon": [[7.5, 0], [13, 0], [13, 5], [7.5, 5]],
+          "floorMaterial": "terrazzo_white",
+          "finishes": {
+            "accents": [{ "side": "east", "material": "tiles_zellige_white", "from": 0.9, "to": 1.55 }],
+            "skirting": { "height": 0.08, "profile": "square", "material": "warm_white" },
+            "ceiling": { "type": "beams", "spacing": 0.9, "beamMaterial": "wood_oak" }
+          }
+        },
+        {
+          "id": "bedroom", "name": "Bedroom", "polygon": [[0, 5], [6, 5], [6, 10], [0, 10]],
+          "floorMaterial": "wood_chevron_oak",
+          "finishes": {
+            "walls": "grasscloth_natural",
+            "wainscot": { "height": 0.9, "material": "sage_paint", "style": "panels", "cap": { "size": 0.05 } },
+            "skirting": { "height": 0.14, "profile": "bevel", "material": "sage_paint" },
+            "cornice": { "profile": "cove" },
+            "ceiling": { "type": "tray", "drop": 0.25, "inset": 0.6 }
+          }
+        },
+        {
+          "id": "bath", "name": "Bathroom", "polygon": [[6, 5], [9, 5], [9, 10], [6, 10]],
+          "floorMaterial": "tiles_hex_white",
+          "finishes": {
+            "walls": "tiles_zellige_green",
+            "threshold": "marble_white"
+          }
+        },
+        {
+          "id": "hall", "name": "Entrance hall", "polygon": [[9, 5], [13, 5], [13, 10], [9, 10]],
+          "floorMaterial": "marble_white",
+          "finishes": {
+            "walls": "wallpaper_stripes_navy",
+            "floorBorder": { "width": 0.25, "material": "marble_black", "inset": 0.15 },
+            "skirting": { "height": 0.18, "profile": "ogee", "material": "ink_blue" },
+            "pictureRail": { "height": 2.2, "frieze": "warm_white" },
+            "cornice": { "profile": "step" },
+            "threshold": "marble_black"
+          }
+        }
+      ],
+      "furniture": [
+        { "id": "fireplace", "type": "fireplace", "position": [0.35, 2.5], "facing": "east" },
+        { "id": "sofa", "type": "sofa", "position": [4.4, 2.5], "facing": "west", "width": 2.2, "materials": { "body": "velvet_emerald", "cushions": "velvet_emerald" } },
+        { "id": "coffee", "type": "coffee_table", "position": [2.75, 2.5], "rotation": 90 },
+        { "id": "rug", "type": "rug", "position": [2.9, 2.5], "rotation": 90, "width": 2.4, "depth": 1.7 },
+        { "id": "arm1", "type": "armchair", "position": [2.6, 0.95], "facing": "north" },
+        { "id": "plant_l", "type": "plant", "position": [0.55, 4.45], "height": 1.4 },
+        { "id": "counter", "type": "kitchen_counter", "position": [12.55, 2.4], "facing": "west", "width": 2.4 },
+        { "id": "fridge", "type": "fridge", "position": [12.5, 4.3], "facing": "west" },
+        { "id": "ktable", "type": "table", "position": [9.6, 2.6], "rotation": 90, "width": 1.4 },
+        { "id": "kchair1", "type": "chair", "position": [9.05, 2.6], "facing": "east" },
+        { "id": "kchair2", "type": "chair", "position": [10.15, 2.6], "facing": "west" },
+        { "id": "bed", "type": "bed", "position": [1.2, 7.5], "facing": "east" },
+        { "id": "ns1", "type": "nightstand", "position": [0.38, 6.35], "facing": "east" },
+        { "id": "ns2", "type": "nightstand", "position": [0.38, 8.65], "facing": "east" },
+        { "id": "dresser", "type": "dresser", "position": [5.69, 7.6], "facing": "west" },
+        { "id": "tub", "type": "bathtub", "position": [7.5, 9.475], "facing": "south" },
+        { "id": "wc", "type": "toilet", "position": [6.41, 6.6], "facing": "east" },
+        { "id": "vanity", "type": "bathroom_sink", "position": [6.3, 8.0], "facing": "east" },
+        { "id": "mat", "type": "door_mat", "position": [11, 9.5] }
+      ]
+    }
+  ]
+}

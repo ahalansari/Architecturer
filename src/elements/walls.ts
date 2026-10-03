@@ -29,6 +29,72 @@ export interface WallSegment {
   freeA: boolean;
   freeB: boolean;
   holes: WallHole[];
+  /** Part of a closed loop (exterior wall): reveals take the interior face's finish across the whole thickness. */
+  exterior?: boolean;
+  /** Per-room face finishes (set by elements/finishes.ts); faces without a zone keep matLeft/matRight/matTop. */
+  paint?: WallPaint;
+}
+
+/** Height bands of a face: band i covers z from bands[i-1].z1 (or -inf) up to bands[i].z1 (absolute z). */
+export interface FaceBand {
+  z1: number;
+  /** null = keep the face's own material. */
+  material: string | null;
+}
+
+/** A stretch [u0, u1] (segment u, meters from `a`) of a face with its height bands. */
+export interface FaceZone {
+  u0: number;
+  u1: number;
+  bands: FaceBand[];
+}
+
+export interface WallPaint {
+  left: FaceZone[];
+  right: FaceZone[];
+  /** End caps of free ends (only painted when the cap faces into a finished room). */
+  capA?: FaceBand[];
+  capB?: FaceBand[];
+}
+
+function bandMaterial(bands: FaceBand[] | undefined, z: number, def: string): string {
+  if (bands) for (const b of bands) if (z < b.z1) return b.material ?? def;
+  return def;
+}
+
+function zoneAt(zones: FaceZone[] | undefined, u: number): FaceZone | undefined {
+  return zones?.find((z) => u >= z.u0 - 1e-6 && u <= z.u1 + 1e-6);
+}
+
+/** Material of a painted face at (u, z). */
+export function faceMaterial(zones: FaceZone[] | undefined, u: number, z: number, def: string): string {
+  return bandMaterial(zoneAt(zones, u)?.bands, z, def);
+}
+
+/** Split [a, b] at the given cut values (kept sorted, deduplicated). */
+function cutRange(a: number, b: number, cuts: Iterable<number>): number[] {
+  const xs = [a, b];
+  for (const c of cuts) if (c > a + 1e-5 && c < b - 1e-5) xs.push(c);
+  return [...new Set(xs)].sort((x, y) => x - y);
+}
+
+/** Emit a face rectangle split along u by zone boundaries and along z by band boundaries, each piece with its material. */
+function paintedRect(
+  zones: FaceZone[] | undefined,
+  def: string,
+  ua: number,
+  ub: number,
+  za: number,
+  zb: number,
+  emit: (mat: string, ua: number, ub: number, za: number, zb: number) => void,
+) {
+  if (!zones?.length) return emit(def, ua, ub, za, zb);
+  const us = cutRange(ua, ub, zones.flatMap((z) => [z.u0, z.u1]));
+  for (let i = 0; i < us.length - 1; i++) {
+    const zone = zoneAt(zones, (us[i] + us[i + 1]) / 2);
+    const zs = cutRange(za, zb, zone ? zone.bands.map((b) => b.z1) : []);
+    for (let j = 0; j < zs.length - 1; j++) emit(bandMaterial(zone?.bands, (zs[j] + zs[j + 1]) / 2, def), us[i], us[i + 1], zs[j], zs[j + 1]);
+  }
 }
 
 export interface WallHole {
@@ -86,6 +152,7 @@ export function expandWalls(
         matRight,
         matTop: w.topMaterial ?? base,
         interiorSide,
+        exterior: closed,
         dist0: dist,
         aL: a, aR: a, bL: b, bR: b,
         freeA: true,
@@ -271,13 +338,18 @@ export function buildWallSegment(mb: MeshBuilder, s: WallSegment, revealMaterial
   const uOf = (p: Vec2) => v2.dot(v2.sub(p, s.a), d);
   const holes = s.holes.map((h) => ({ ...h, z0: Math.max(h.z0, s.z0), z1: Math.min(h.z1, s.z1) })).filter((h) => h.z1 > h.z0);
 
+  const paint = s.paint;
   // left face (+N), seen from the left: run u from high to low
   holedRect(uOf(s.aL), uOf(s.bL), s.z0, s.z1, holes, (ua, ub, za, zb) =>
-    mb.quad(s.matLeft, P(ub, half, za), P(ua, half, za), P(ua, half, zb), P(ub, half, zb)),
+    paintedRect(paint?.left, s.matLeft, ua, ub, za, zb, (m, ua, ub, za, zb) =>
+      mb.quad(m, P(ub, half, za), P(ua, half, za), P(ua, half, zb), P(ub, half, zb)),
+    ),
   );
   // right face (-N)
   holedRect(uOf(s.aR), uOf(s.bR), s.z0, s.z1, holes, (ua, ub, za, zb) =>
-    mb.quad(s.matRight, P(ua, -half, za), P(ub, -half, za), P(ub, -half, zb), P(ua, -half, zb)),
+    paintedRect(paint?.right, s.matRight, ua, ub, za, zb, (m, ua, ub, za, zb) =>
+      mb.quad(m, P(ua, -half, za), P(ub, -half, za), P(ub, -half, zb), P(ua, -half, zb)),
+    ),
   );
 
   // top: footprint polygon (includes the junction centers so multi-wall nodes have no gaps)
@@ -286,26 +358,59 @@ export function buildWallSegment(mb: MeshBuilder, s: WallSegment, revealMaterial
   );
   mb.flat(s.matTop, foot, s.z1);
 
-  // end caps on free ends
-  const cap = (pL: Vec2, pR: Vec2, atStart: boolean) => {
-    const L: Vec3 = [pL[0], pL[1], 0], R: Vec3 = [pR[0], pR[1], 0];
-    const pts: Vec3[] = atStart
-      ? [[L[0], L[1], s.z0], [R[0], R[1], s.z0], [R[0], R[1], s.z1], [L[0], L[1], s.z1]]
-      : [[R[0], R[1], s.z0], [L[0], L[1], s.z0], [L[0], L[1], s.z1], [R[0], R[1], s.z1]];
-    mb.quad(s.matTop, ...(pts as [Vec3, Vec3, Vec3, Vec3]));
+  // end caps on free ends (split into height bands when a finished room sees them)
+  const cap = (pL: Vec2, pR: Vec2, atStart: boolean, bands?: FaceBand[]) => {
+    const [p0, p1] = atStart ? [pL, pR] : [pR, pL];
+    const zs = cutRange(s.z0, s.z1, bands ? bands.map((b) => b.z1) : []);
+    for (let j = 0; j < zs.length - 1; j++)
+      mb.quad(
+        bandMaterial(bands, (zs[j] + zs[j + 1]) / 2, s.matTop),
+        [p0[0], p0[1], zs[j]], [p1[0], p1[1], zs[j]], [p1[0], p1[1], zs[j + 1]], [p0[0], p0[1], zs[j + 1]],
+      );
   };
-  if (s.freeA) cap(s.aL, s.aR, true);
-  if (s.freeB) cap(s.bL, s.bR, false);
+  if (s.freeA) cap(s.aL, s.aR, true, paint?.capA);
+  if (s.freeB) cap(s.bL, s.bR, false, paint?.capB);
 
   // reveals: the inner faces of each hole, spanning the thickness
   const rm = revealMaterial ?? (s.interiorSide === "left" ? s.matLeft : s.matRight);
-  for (const h of holes) {
-    // jamb at u0 faces +d, jamb at u1 faces -d
-    mb.quad(rm, P(h.u0, -half, h.z0), P(h.u0, half, h.z0), P(h.u0, half, h.z1), P(h.u0, -half, h.z1));
-    mb.quad(rm, P(h.u1, half, h.z0), P(h.u1, -half, h.z0), P(h.u1, -half, h.z1), P(h.u1, half, h.z1));
-    // head faces down
-    if (h.z1 < s.z1 - 1e-5) mb.quad(rm, P(h.u0, -half, h.z1), P(h.u0, half, h.z1), P(h.u1, half, h.z1), P(h.u1, -half, h.z1));
-    // sill faces up
-    if (h.z0 > s.z0 + 1e-5) mb.quad(rm, P(h.u0, half, h.z0), P(h.u0, -half, h.z0), P(h.u1, -half, h.z0), P(h.u1, half, h.z0));
+  if (!paint) {
+    for (const h of holes) {
+      // jamb at u0 faces +d, jamb at u1 faces -d
+      mb.quad(rm, P(h.u0, -half, h.z0), P(h.u0, half, h.z0), P(h.u0, half, h.z1), P(h.u0, -half, h.z1));
+      mb.quad(rm, P(h.u1, half, h.z0), P(h.u1, -half, h.z0), P(h.u1, -half, h.z1), P(h.u1, half, h.z1));
+      // head faces down
+      if (h.z1 < s.z1 - 1e-5) mb.quad(rm, P(h.u0, -half, h.z1), P(h.u0, half, h.z1), P(h.u1, half, h.z1), P(h.u1, -half, h.z1));
+      // sill faces up
+      if (h.z0 > s.z0 + 1e-5) mb.quad(rm, P(h.u0, half, h.z0), P(h.u0, -half, h.z0), P(h.u1, -half, h.z0), P(h.u1, half, h.z0));
+    }
+    return;
   }
+  // Painted: each reveal takes the finish of the face it turns from, band by band (a tiled bathroom gets tiled
+  // window reveals). Exterior walls use the interior finish across the whole depth; interior walls split at the
+  // centerline so each room keeps its own finish.
+  const inner = s.interiorSide === "left" ? paint.left : paint.right;
+  const halves: { w0: number; w1: number; zones: FaceZone[]; def: string }[] = s.exterior
+    ? [{ w0: -half, w1: half, zones: inner, def: rm }]
+    : [
+        { w0: -half, w1: 0, zones: paint.right, def: revealMaterial ?? s.matRight },
+        { w0: 0, w1: half, zones: paint.left, def: revealMaterial ?? s.matLeft },
+      ];
+  const e = 1e-3;
+  for (const h of holes)
+    for (const { w0, w1, zones, def } of halves) {
+      for (const [u, uLook, dir] of [[h.u0, h.u0 - e, 1], [h.u1, h.u1 + e, -1]] as const) {
+        const bands = zoneAt(zones, uLook)?.bands;
+        const zs = cutRange(h.z0, h.z1, bands ? bands.map((b) => b.z1) : []);
+        for (let j = 0; j < zs.length - 1; j++) {
+          const m = bandMaterial(bands, (zs[j] + zs[j + 1]) / 2, def);
+          if (dir > 0) mb.quad(m, P(u, w0, zs[j]), P(u, w1, zs[j]), P(u, w1, zs[j + 1]), P(u, w0, zs[j + 1]));
+          else mb.quad(m, P(u, w1, zs[j]), P(u, w0, zs[j]), P(u, w0, zs[j + 1]), P(u, w1, zs[j + 1]));
+        }
+      }
+      const um = (h.u0 + h.u1) / 2;
+      if (h.z1 < s.z1 - 1e-5)
+        mb.quad(faceMaterial(zones, um, h.z1 + e, def), P(h.u0, w0, h.z1), P(h.u0, w1, h.z1), P(h.u1, w1, h.z1), P(h.u1, w0, h.z1));
+      if (h.z0 > s.z0 + 1e-5)
+        mb.quad(faceMaterial(zones, um, h.z0 - e, def), P(h.u0, w1, h.z0), P(h.u0, w0, h.z0), P(h.u1, w0, h.z0), P(h.u1, w1, h.z0));
+    }
 }

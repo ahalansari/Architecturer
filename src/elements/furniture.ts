@@ -2280,6 +2280,1865 @@ function buildMailbox(mb: MeshBuilder, s: FurnitureSpec) {
 }
 
 // ---------------------------------------------------------------------------
+// interior decor
+// WALL-MOUNTED items (wall_art, gallery_wall, floating_shelf, wall_clock, mirror_round, mirror_arched,
+// towel_rail, towel_hook_set, toilet_roll_holder, mirror_full_length with lean=false) are built at
+// z = 0..h with their BACK FLAT AGAINST THE WALL at y = +d/2 and the front facing -Y: place them with
+// `elevation` and a position half their depth in front of the wall face.
+// ---------------------------------------------------------------------------
+
+/** Quad oriented so its normal points away from `ref`. */
+function quadOut(mb: MeshBuilder, mat: string, a: Vec3, b: Vec3, c: Vec3, d: Vec3, ref: Vec3) {
+  const n = v3.add(v3.cross(v3.sub(b, a), v3.sub(c, a)), v3.cross(v3.sub(c, a), v3.sub(d, a)));
+  const m: Vec3 = [(a[0] + b[0] + c[0] + d[0]) / 4, (a[1] + b[1] + c[1] + d[1]) / 4, (a[2] + b[2] + c[2] + d[2]) / 4];
+  if (v3.dot(n, v3.sub(m, ref)) < 0) mb.quad(mat, d, c, b, a);
+  else mb.quad(mat, a, b, c, d);
+}
+
+/**
+ * Surface of revolution around the vertical axis at (cx, cy). `prof` = [radius, z] points:
+ * rising segments become smooth outward walls, falling segments inward walls (vessel interiors),
+ * level segments discs/annuli (moving inward = facing up, outward = facing down).
+ */
+function lathe(mb: MeshBuilder, mat: string, cx: number, cy: number, prof: Vec2[], seg = 16) {
+  for (let i = 0; i + 1 < prof.length; i++) {
+    const [r0, z0] = prof[i], [r1, z1] = prof[i + 1];
+    if (Math.abs(z1 - z0) < 1e-6) {
+      if (Math.abs(r1 - r0) < 1e-6) continue;
+      const ro = Math.max(r0, r1), ri = Math.min(r0, r1);
+      mb.flat(mat, ellipse(cx, cy, ro, ro, seg), z0, r1 > r0, ri > 1e-4 ? [ellipse(cx, cy, ri, ri, seg)] : []);
+    } else if (z1 > z0) {
+      mb.cylinder(mat, [cx, cy, z0], Math.max(r0, 1e-4), Math.max(r1, 1e-4), z1 - z0, seg, { top: false, bottom: false });
+    } else {
+      loft(mb, mat, ellipse(cx, cy, Math.max(r1, 1e-4), Math.max(r1, 1e-4), seg), z1, ellipse(cx, cy, Math.max(r0, 1e-4), Math.max(r0, 1e-4), seg), z0, true);
+    }
+  }
+}
+
+/** Like `lathe`, but every ring is a rounded rectangle (w x d, corner r) shrunk by the profile's inset. */
+function rectLathe(mb: MeshBuilder, mat: string, cx: number, cy: number, w: number, d: number, r: number, prof: Vec2[], seg = 5) {
+  const ring = (s: number) => roundRect(cx, cy, Math.max(w - 2 * s, 0.004), Math.max(d - 2 * s, 0.004), Math.max(r - s, 0.0015), seg);
+  for (let i = 0; i + 1 < prof.length; i++) {
+    const [s0, z0] = prof[i], [s1, z1] = prof[i + 1];
+    if (Math.abs(z1 - z0) < 1e-6) {
+      if (Math.abs(s1 - s0) < 1e-6) continue;
+      const so = Math.min(s0, s1), si = Math.max(s0, s1);
+      const inner = Math.min(w, d) - 2 * si > 0.006 ? [ring(si)] : [];
+      mb.flat(mat, ring(so), z0, s1 < s0, inner);
+    } else if (z1 > z0) loft(mb, mat, ring(s0), z0, ring(s1), z1);
+    else loft(mb, mat, ring(s1), z1, ring(s0), z0, true);
+  }
+}
+
+/**
+ * Leaf / blade: closed thin solid from `base` along unit `dir`, width profile `shape(t)` (0..1),
+ * drooping by `droop` * len * t^2, edges cupped down. `side` overrides the width direction.
+ */
+function blade(
+  mb: MeshBuilder,
+  mat: string,
+  base: Vec3,
+  dir: Vec3,
+  len: number,
+  wid: number,
+  o: { droop?: number; n?: number; shape?: (t: number) => number; cup?: number; th?: number; side?: Vec3 } = {},
+) {
+  const n = o.n ?? 5, th = o.th ?? 0.004, cup = o.cup ?? 0.25, droop = o.droop ?? 0;
+  const shape = o.shape ?? ((t: number) => Math.sin(Math.PI * Math.min(1, t)));
+  dir = v3.norm(dir);
+  let side = o.side ?? v3.cross([0, 0, 1], dir);
+  if (v3.len(side) < 1e-3) side = [1, 0, 0];
+  side = v3.norm(side);
+  const nrm = v3.norm(v3.cross(dir, side));
+  const C: Vec3[] = [], L: Vec3[] = [], R: Vec3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const c = v3.add(v3.add(base, v3.scale(dir, len * t)), [0, 0, -droop * len * t * t]);
+    const wv = wid * Math.max(0, shape(t));
+    C.push(c);
+    L.push(v3.add(v3.add(c, v3.scale(side, wv)), v3.scale(nrm, -cup * wv)));
+    R.push(v3.add(v3.add(c, v3.scale(side, -wv)), v3.scale(nrm, -cup * wv)));
+  }
+  const dn = (p: Vec3) => v3.add(p, v3.scale(nrm, -th));
+  for (let i = 0; i < n; i++) {
+    const mid = v3.add(v3.lerp(C[i], C[i + 1], 0.5), v3.scale(nrm, -th / 2 - cup * wid * 0.3 * shape((i + 0.5) / n)));
+    quadOut(mb, mat, C[i], L[i], L[i + 1], C[i + 1], dn(mid));
+    quadOut(mb, mat, C[i], C[i + 1], R[i + 1], R[i], dn(mid));
+    quadOut(mb, mat, dn(C[i]), dn(L[i]), dn(L[i + 1]), dn(C[i + 1]), v3.add(mid, v3.scale(nrm, th * 2)));
+    quadOut(mb, mat, dn(C[i]), dn(C[i + 1]), dn(R[i + 1]), dn(R[i]), v3.add(mid, v3.scale(nrm, th * 2)));
+    quadOut(mb, mat, L[i], dn(L[i]), dn(L[i + 1]), L[i + 1], v3.lerp(C[i], C[i + 1], 0.5));
+    quadOut(mb, mat, R[i], R[i + 1], dn(R[i + 1]), dn(R[i]), v3.lerp(C[i], C[i + 1], 0.5));
+  }
+}
+
+/** Puffy pillow in the XZ plane (faces -Y / +Y), centered at (cx, y0, cz); T = half thickness. */
+function pillow(mb: MeshBuilder, mat: string, cx: number, y0: number, cz: number, w: number, h: number, T: number, round = false, tufted = false, N = 8) {
+  const P = (i: number, j: number, s: number): Vec3 => {
+    const u = -1 + (2 * i) / N, v = -1 + (2 * j) / N;
+    let x: number, z: number, f: number;
+    if (round) {
+      const du = u * Math.sqrt(1 - (v * v) / 2), dv = v * Math.sqrt(1 - (u * u) / 2);
+      x = (du * w) / 2;
+      z = (dv * h) / 2;
+      f = Math.pow(Math.max(0, 1 - (du * du + dv * dv)), 0.45);
+    } else {
+      x = ((u * w) / 2) * (1 - 0.07 * (1 - v * v));
+      z = ((v * h) / 2) * (1 - 0.07 * (1 - u * u));
+      f = Math.pow(Math.max(0, 1 - u * u), 0.5) * Math.pow(Math.max(0, 1 - v * v), 0.5);
+    }
+    if (tufted) f *= 1 - 0.4 * Math.exp(-(u * u + v * v) * 10);
+    return [cx + x, y0 + s * T * f, cz + z];
+  };
+  const ref: Vec3 = [cx, y0, cz];
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++)
+      for (const s of [-1, 1]) quadOut(mb, mat, P(i, j, s), P(i + 1, j, s), P(i + 1, j + 1, s), P(i, j + 1, s), ref);
+  return (i: number, j: number) => P(i, j, 0);
+}
+
+/** Torus around `axis` ("y": ring standing in the XZ plane, "z": lying flat). Arc a0..a1 of the ring. */
+function torus(mb: MeshBuilder, mat: string, c: Vec3, R: number, r: number, axis: "y" | "z" = "z", segR = 20, segr = 8, a0 = 0, a1 = TAU) {
+  const e1: Vec3 = [1, 0, 0], e2: Vec3 = axis === "z" ? [0, 1, 0] : [0, 0, 1], e3: Vec3 = axis === "z" ? [0, 0, 1] : [0, -1, 0];
+  const P = (i: number, j: number): Vec3 => {
+    const u = a0 + ((a1 - a0) * i) / segR, v = (j / segr) * TAU;
+    const k = R + r * Math.cos(v);
+    return v3.add(c, v3.add(v3.add(v3.scale(e1, k * Math.cos(u)), v3.scale(e2, k * Math.sin(u))), v3.scale(e3, r * Math.sin(v))));
+  };
+  const T = (i: number): Vec3 => {
+    const u = a0 + ((a1 - a0) * i) / segR;
+    return v3.add(c, v3.add(v3.scale(e1, R * Math.cos(u)), v3.scale(e2, R * Math.sin(u))));
+  };
+  for (let i = 0; i < segR; i++) {
+    const ref = v3.lerp(T(i), T(i + 1), 0.5);
+    for (let j = 0; j < segr; j++) quadOut(mb, mat, P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1), ref);
+  }
+}
+
+/** Smooth-ish tube swept along a polyline with per-point radius (0 radius = pointed end). */
+function sweepTube(mb: MeshBuilder, mat: string, pts: Vec3[], radii: number[], seg = 8) {
+  const rings: Vec3[][] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const t = v3.norm(v3.sub(pts[Math.min(pts.length - 1, i + 1)], pts[Math.max(0, i - 1)]));
+    let n = v3.cross(t, [0, 0, 1]);
+    if (v3.len(n) < 1e-3) n = [1, 0, 0];
+    n = v3.norm(n);
+    const b = v3.cross(t, n);
+    const ring: Vec3[] = [];
+    for (let k = 0; k < seg; k++) {
+      const a = (k / seg) * TAU;
+      ring.push(v3.add(pts[i], v3.add(v3.scale(n, Math.cos(a) * radii[i]), v3.scale(b, Math.sin(a) * radii[i]))));
+    }
+    rings.push(ring);
+  }
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const ref = v3.lerp(pts[i], pts[i + 1], 0.5);
+    for (let k = 0; k < seg; k++) {
+      const j = (k + 1) % seg;
+      quadOut(mb, mat, rings[i][k], rings[i][j], rings[i + 1][j], rings[i + 1][k], ref);
+    }
+  }
+  for (const [i, o] of [[0, 1], [pts.length - 1, pts.length - 2]]) {
+    if (radii[i] < 1e-4) continue;
+    const out = v3.norm(v3.sub(pts[i], pts[o]));
+    mb.polygon(mat, rings[i], out);
+  }
+}
+
+// ---- small decor primitives (shared by shelves, trays, consoles...) ----
+
+const VASE_PROFILES: Record<string, Vec2[]> = {
+  bottle: [[0, 0], [0.72, 0], [0.95, 0.07], [1, 0.33], [0.86, 0.55], [0.36, 0.72], [0.25, 0.8], [0.26, 0.97], [0.3, 1], [0.21, 1], [0.19, 0.9], [0, 0.9]],
+  bulb: [[0, 0], [0.5, 0], [0.84, 0.1], [1, 0.38], [0.92, 0.64], [0.58, 0.82], [0.36, 0.9], [0.34, 1], [0.27, 1], [0.26, 0.86], [0, 0.86]],
+  cylinder: [[0, 0], [0.95, 0], [1, 0.03], [1, 1], [0.9, 1], [0.9, 0.06], [0, 0.06]],
+  pot: [[0, 0], [0.72, 0], [0.8, 0.05], [1, 0.85], [1.06, 0.88], [1.06, 1], [0.94, 1], [0.94, 0.9], [0, 0.9]],
+  bowl: [[0, 0], [0.42, 0], [0.45, 0.12], [0.8, 0.45], [1, 1], [0.93, 1], [0.74, 0.5], [0.4, 0.22], [0, 0.22]],
+  jar: [[0, 0], [0.9, 0], [1, 0.06], [1, 0.92], [0.92, 1], [0.84, 1], [0.84, 0.08], [0, 0.08]],
+};
+
+function vessel(mb: MeshBuilder, mat: string, x: number, y: number, z: number, r: number, hgt: number, shape: keyof typeof VASE_PROFILES, seg = 16) {
+  lathe(mb, mat, x, y, VASE_PROFILES[shape].map(([pr, pz]) => [pr * r, z + pz * hgt] as Vec2), seg);
+}
+
+/** Book standing upright (spine to -Y) or lying flat (spine to -Y), with paper pages showing. */
+function book(mb: MeshBuilder, cover: string, pages: string, x0: number, y0: number, z0: number, bw: number, bd: number, bh: number, flat = false) {
+  const c = Math.min(0.0025, Math.min(bw, bh) * 0.15);
+  if (!flat) {
+    mb.box(cover, [x0, y0, z0], [x0 + c, y0 + bd, z0 + bh]);
+    mb.box(cover, [x0 + bw - c, y0, z0], [x0 + bw, y0 + bd, z0 + bh]);
+    mb.box(cover, [x0 + c, y0, z0], [x0 + bw - c, y0 + c, z0 + bh]);
+    mb.box(pages, [x0 + c, y0 + c, z0 + 0.003], [x0 + bw - c, y0 + bd - 0.003, z0 + bh - 0.003]);
+  } else {
+    mb.box(cover, [x0, y0, z0], [x0 + bw, y0 + bd, z0 + c]);
+    mb.box(cover, [x0, y0, z0 + bh - c], [x0 + bw, y0 + bd, z0 + bh]);
+    mb.box(cover, [x0, y0, z0 + c], [x0 + bw, y0 + c, z0 + bh - c]);
+    mb.box(pages, [x0 + 0.003, y0 + c, z0 + c], [x0 + bw - 0.003, y0 + bd - 0.003, z0 + bh - c]);
+  }
+}
+
+/** Upright books from x to at most xEnd; returns the x where the row ended. */
+function bookRow(mb: MeshBuilder, covers: string[], pages: string, x: number, xEnd: number, yFront: number, maxD: number, z: number, maxH: number, rnd: () => number) {
+  while (true) {
+    const bw = 0.018 + rnd() * 0.022;
+    if (x + bw > xEnd) break;
+    const bh = Math.min(maxH, 0.17 + rnd() * 0.09);
+    const y0 = yFront + rnd() * 0.008;
+    const bd = Math.min(yFront + maxD - y0, 0.13 + rnd() * 0.05);
+    book(mb, covers[Math.floor(rnd() * covers.length) % covers.length], pages, x, y0, z, bw, bd, bh);
+    x += bw + 0.001;
+  }
+  return x;
+}
+
+/** Stack of books lying flat; returns the top z. */
+function bookPile(mb: MeshBuilder, covers: string[], pages: string, cx: number, cy: number, z: number, maxW: number, maxD: number, n: number, rnd: () => number) {
+  for (let i = 0; i < n; i++) {
+    const bw = Math.min(maxW, 0.19 + rnd() * 0.06) - i * 0.012, bd = Math.min(maxD, 0.14 + rnd() * 0.04) - i * 0.008;
+    const bh = 0.022 + rnd() * 0.016;
+    const ox = (rnd() - 0.5) * Math.max(0, maxW - bw) * 0.8;
+    book(mb, covers[(i + Math.floor(rnd() * 3)) % covers.length], pages, cx - bw / 2 + ox, cy - bd / 2, z, bw, bd, bh, true);
+    z += bh;
+  }
+  return z;
+}
+
+function candle(mb: MeshBuilder, wax: string, flame: string | null, x: number, y: number, z: number, r: number, hgt: number) {
+  mb.cylinder(wax, [x, y, z], r, r, hgt, 14);
+  if (!flame) return;
+  mb.cylinder("rubber_black", [x, y, z + hgt], 0.0012, 0.001, 0.008, 4, { bottom: false });
+  mb.sphere(flame, [x, y, z + hgt + 0.016], 0.006, 8, 6, [1, 1, 2]);
+}
+
+function miniPlant(mb: MeshBuilder, pot: string, soil: string, foliageMat: string, x: number, y: number, z: number, r: number, hgt: number, seed: number) {
+  const ph = Math.min(hgt * 0.45, r * 2.2);
+  vessel(mb, pot, x, y, z, r, ph, "pot", 12);
+  mb.cylinder(soil, [x, y, z + ph * 0.86], r * 0.92, r * 0.92, 0.003, 12, { bottom: false });
+  const fr = Math.min(r * 1.25, hgt * 0.35);
+  foliage(mb, foliageMat, x, y, z + ph * 0.8, fr * 2, fr * 2, hgt - ph * 0.8, 4, seed, 8);
+}
+
+/** Dress a shelf strip [x0,x1] x [yF,yB] at height z with books, a vase, a plant... */
+function shelfDecor(mb: MeshBuilder, M: Record<string, string>, x0: number, x1: number, yF: number, yB: number, z: number, clearH: number, seed: number) {
+  const rnd = rng(seed);
+  const covers = [M.book_a, M.book_b, M.book_c];
+  const depth = yB - yF;
+  if (clearH < 0.08 || depth < 0.08) return;
+  const yc = (yF + yB) / 2;
+  let x = x0 + 0.02 + rnd() * 0.04;
+  const order = Math.floor(rnd() * 3);
+  for (let k = 0; k < 3 && x < x1 - 0.06; k++) {
+    const kind = (k + order) % 3;
+    if (kind === 0 && clearH > 0.16) {
+      const end = Math.min(x1 - 0.02, x + 0.1 + rnd() * 0.12);
+      x = bookRow(mb, covers, M.pages, x, end, yB - Math.min(depth - 0.01, 0.17) - 0.004, depth - 0.012, z, clearH - 0.01, rnd) + 0.06;
+    } else if (kind === 1) {
+      const r = Math.min(0.05, depth * 0.3, (x1 - x) / 2 - 0.01);
+      if (r < 0.02) break;
+      const vh = Math.min(clearH - 0.01, r * 4);
+      vessel(mb, M.vase, x + r, yc, z, r, vh, rnd() < 0.5 ? "bulb" : "bottle", 12);
+      x += 2 * r + 0.07;
+    } else {
+      const r = Math.min(0.045, depth * 0.3, (x1 - x) / 2 - 0.01);
+      if (r < 0.02) break;
+      if (rnd() < 0.5 && clearH > 0.12) miniPlant(mb, M.pot, M.soil, M.foliage, x + r * 1.25, yc, z, r, Math.min(clearH - 0.01, 0.22), seed + k);
+      else {
+        const top = bookPile(mb, covers, M.pages, x + 0.1, yc, z, Math.min(0.2, x1 - x - 0.01), depth - 0.02, 2, rnd);
+        if (top + 0.05 < z + clearH) mb.sphere(M.vase, [x + 0.1, yc, top + 0.035], 0.035, 12, 8);
+        x += 0.1;
+      }
+      x += 2 * r + 0.08;
+    }
+  }
+}
+
+const DECOR_SLOTS = { book_a: "fabric_red", book_b: "art_navy", book_c: "art_cream", pages: "paper_white", vase: "ceramic_white", pot: "terracotta", soil: "dirt", foliage: "plant_green" };
+
+// ---- wall art ----
+
+type FrameStyle = "thin_black" | "oak" | "gold" | "none";
+type ArtStyle = "abstract" | "landscape" | "geometric" | "botanical";
+const FRAME_STYLES = ["thin_black", "oak", "gold", "none"] as const;
+const ART_STYLES = ["abstract", "landscape", "geometric", "botanical"] as const;
+const FRAME_DEF: Record<FrameStyle, { fw: number; mat: string }> = {
+  thin_black: { fw: 0.016, mat: "metal_black" },
+  oak: { fw: 0.032, mat: "wood_oak" },
+  gold: { fw: 0.042, mat: "metal_gold" },
+  none: { fw: 0, mat: "" },
+};
+
+/** Flat procedural artwork painted as stacked 1.5 mm layers in front of yFront (facing -Y). */
+function paintArt(mb: MeshBuilder, M: Record<string, string>, x0: number, x1: number, z0: number, z1: number, yFront: number, art: ArtStyle, seed: number) {
+  const W = x1 - x0, H = z1 - z0, m = Math.min(W, H);
+  const rnd = rng(seed * 7919 + 13);
+  const pal = [M.art_a, M.art_b, M.art_c, M.art_d];
+  const Y = (layer: number) => yFront - 0.0015 * (layer + 1);
+  const uv = (u: number, v: number, layer: number): Vec3 => [x0 + clamp(u, 0, 1) * W, Y(layer), z0 + clamp(v, 0, 1) * H];
+  const poly = (mat: string, layer: number, pts: Vec2[]) => mb.polygon(mat, pts.map(([u, v]) => uv(u, v, layer)), [0, -1, 0]);
+  /** circle / arc in meters around (u,v); a0..a1 partial arcs include the center */
+  const disc = (mat: string, layer: number, cu: number, cv: number, r: number, a0 = 0, a1 = TAU, seg = 28) => {
+    const pts: Vec3[] = [];
+    const full = a1 - a0 >= TAU - 1e-6;
+    const cx = x0 + cu * W, cz = z0 + cv * H;
+    if (!full) pts.push([cx, Y(layer), cz]);
+    const n = full ? seg : Math.max(4, Math.round((seg * (a1 - a0)) / TAU));
+    for (let i = 0; i < (full ? n : n + 1); i++) {
+      const a = a0 + ((a1 - a0) * i) / n;
+      pts.push([clamp(cx + Math.cos(a) * r, x0, x1), Y(layer), clamp(cz + Math.sin(a) * r, z0, z1)]);
+    }
+    mb.polygon(mat, pts, [0, -1, 0]);
+  };
+  const j = () => (rnd() - 0.5) * 0.08;
+  if (art === "landscape") {
+    disc(M.art_c, 0, 0.7 + j(), 0.72 + j() * 0.5, 0.11 * m);
+    const far: Vec2[] = [[0, 0], [1, 0], [1, 0.46]];
+    for (const [u, v] of [[0.86, 0.57], [0.7, 0.43], [0.52, 0.66], [0.33, 0.46], [0.18, 0.62], [0, 0.44]] as Vec2[]) far.push([u, v + j() * 0.5]);
+    poly(M.art_d, 1, far);
+    const wave = (base: number, amp: number, k: number, ph: number, layer: number, mat: string) => {
+      const pts: Vec2[] = [[0, 0], [1, 0]];
+      for (let i = 12; i >= 0; i--) pts.push([i / 12, base + amp * Math.sin(Math.PI * k * (i / 12) + ph)]);
+      poly(mat, layer, pts);
+    };
+    wave(0.3, 0.07, 2.4, 0.5 + rnd(), 2, M.art_b);
+    wave(0.13, 0.05, 1.6, 1 + rnd(), 3, M.art_a);
+  } else if (art === "geometric") {
+    const cols = W > H * 1.25 ? 3 : 2, rows = H > W * 1.25 ? 3 : 2;
+    const cw = 1 / cols, ch = 1 / rows;
+    let last = -1;
+    for (let cx = 0; cx < cols; cx++)
+      for (let cy = 0; cy < rows; cy++) {
+        const u0 = cx * cw, v0 = cy * ch, u1 = u0 + cw, v1 = v0 + ch;
+        let ci = Math.floor(rnd() * 4);
+        if (ci === last) ci = (ci + 1) % 4;
+        last = ci;
+        if (rnd() < 0.45) poly(pal[(ci + 2) % 4], 0, [[u0, v0], [u1, v0], [u1, v1], [u0, v1]]);
+        const r = Math.min(cw * W, ch * H);
+        const k = Math.floor(rnd() * 4);
+        const ucx = (u0 + u1) / 2, vcy = (v0 + v1) / 2;
+        if (k === 0) disc(pal[ci], 1, ucx, v0, r * 0.48, 0, Math.PI);
+        else if (k === 1) disc(pal[ci], 1, u0, v0, r * 0.95, 0, Math.PI / 2);
+        else if (k === 2) poly(pal[ci], 1, [[u0 + cw * 0.1, v0 + ch * 0.1], [u1 - cw * 0.1, v0 + ch * 0.1], [ucx, v1 - ch * 0.1]]);
+        else disc(pal[ci], 1, ucx, vcy, r * 0.32);
+      }
+  } else if (art === "botanical") {
+    const stem: Vec2[] = [];
+    const n = 10;
+    const bend = 0.08 + j();
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      stem.push([0.5 + bend * Math.sin(t * 2.2) - bend * 0.5, 0.08 + 0.8 * t]);
+    }
+    const sw = 0.006 / W;
+    poly(M.art_b, 0, [...stem.map(([u, v]) => [u - sw, v] as Vec2), ...stem.map(([u, v]) => [u + sw, v] as Vec2).reverse()]);
+    for (let i = 1; i < 9; i++) {
+      const [u, v] = stem[i];
+      const side = i % 2 ? 1 : -1;
+      const ang = Math.PI / 2 - side * (0.75 + rnd() * 0.25);
+      const L = 0.17 * m * (1 - i * 0.05), Wd = L * 0.32;
+      const cxm = x0 + u * W + Math.cos(ang) * L * 0.55, czm = z0 + v * H + Math.sin(ang) * L * 0.55;
+      const pts: Vec3[] = [];
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * TAU;
+        const lx = Math.cos(a) * L * 0.55, ly = Math.sin(a) * Wd * 0.5 * (1 - 0.3 * Math.cos(a));
+        pts.push([clamp(cxm + lx * Math.cos(ang) - ly * Math.sin(ang), x0, x1), Y(1 + (i % 2)), clamp(czm + lx * Math.sin(ang) + ly * Math.cos(ang), z0, z1)]);
+      }
+      mb.polygon(i % 3 === 0 ? M.art_a : M.art_d, pts, [0, -1, 0]);
+    }
+    disc(M.art_c, 0, 0.5 + bend * 0.4, 0.9, 0.035 * m);
+  } else {
+    disc(M.art_b, 0, 1, 0, 0.62 * m, Math.PI / 2, Math.PI, 20);
+    const aw = 0.34 * m, ax = 0.12 + j();
+    const az0 = 0.1, az1 = 0.48 + j() * 0.5;
+    poly(M.art_a, 1, [[ax, az0], [ax + aw / W, az0], [ax + aw / W, az1], [ax, az1]]);
+    disc(M.art_a, 1, ax + aw / W / 2, az1, aw / 2, 0, Math.PI, 16);
+    disc(M.art_c, 2, 0.68 + j(), 0.7 + j(), 0.15 * m);
+    poly(M.art_d, 3, [[0.55, 0.12], [0.82, 0.12], [0.82, 0.3], [0.55, 0.3]]);
+    const lv = 0.86 + j() * 0.3;
+    poly(M.art_e, 3, [[0.1, lv], [0.42, lv], [0.42, lv + 0.012], [0.1, lv + 0.012]]);
+  }
+}
+
+/** A framed (or canvas-wrapped) artwork occupying x0..x1, z0..z1, back at yb, depth d. */
+function artwork(mb: MeshBuilder, M: Record<string, string>, x0: number, x1: number, z0: number, z1: number, yb: number, d: number, frame: FrameStyle, art: ArtStyle, matBoard: boolean, seed: number) {
+  const W = x1 - x0, H = z1 - z0;
+  if (frame === "none") {
+    mb.box(M.canvas, [x0, yb - d + 0.007, z0], [x1, yb, z1]);
+    paintArt(mb, M, x0, x1, z0, z1, yb - d + 0.007, art, seed);
+    return;
+  }
+  const fw = Math.min(FRAME_DEF[frame].fw, W * 0.12, H * 0.12);
+  const fm = M.frame !== "metal_black" ? M.frame : FRAME_DEF[frame].mat;
+  const yf = yb - d;
+  mb.box(fm, [x0, yf, z0], [x1, yb, z0 + fw]);
+  mb.box(fm, [x0, yf, z1 - fw], [x1, yb, z1]);
+  mb.box(fm, [x0, yf, z0 + fw], [x0 + fw, yb, z1 - fw]);
+  mb.box(fm, [x1 - fw, yf, z0 + fw], [x1, yb, z1 - fw]);
+  let ix0 = x0 + fw, ix1 = x1 - fw, iz0 = z0 + fw, iz1 = z1 - fw;
+  if (frame === "gold") {
+    const lw = fw * 0.3, ly = yf + 0.008;
+    mb.box(fm, [ix0, ly, iz0], [ix1, yb, iz0 + lw]);
+    mb.box(fm, [ix0, ly, iz1 - lw], [ix1, yb, iz1]);
+    mb.box(fm, [ix0, ly, iz0 + lw], [ix0 + lw, yb, iz1 - lw]);
+    mb.box(fm, [ix1 - lw, ly, iz0 + lw], [ix1, yb, iz1 - lw]);
+    ix0 += lw; ix1 -= lw; iz0 += lw; iz1 -= lw;
+  }
+  const yArt = yf + (frame === "gold" ? 0.014 : 0.008);
+  if (matBoard) {
+    const mw = Math.min(ix1 - ix0, iz1 - iz0) * 0.13;
+    mb.box(M.mat, [ix0, yArt, iz0], [ix1, yb, iz0 + mw]);
+    mb.box(M.mat, [ix0, yArt, iz1 - mw], [ix1, yb, iz1]);
+    mb.box(M.mat, [ix0, yArt, iz0 + mw], [ix0 + mw, yb, iz1 - mw]);
+    mb.box(M.mat, [ix1 - mw, yArt, iz0 + mw], [ix1, yb, iz1 - mw]);
+    ix0 += mw; ix1 -= mw; iz0 += mw; iz1 -= mw;
+    mb.box(M.canvas, [ix0, yArt + 0.008, iz0], [ix1, yb, iz1], { skip: ["+x", "-x", "+z", "-z"] });
+    paintArt(mb, M, ix0, ix1, iz0, iz1, yArt + 0.008, art, seed);
+  } else {
+    mb.box(M.canvas, [ix0, yArt, iz0], [ix1, yb, iz1], { skip: ["+x", "-x", "+z", "-z"] });
+    paintArt(mb, M, ix0, ix1, iz0, iz1, yArt, art, seed);
+  }
+}
+
+const ART_SLOTS = { frame: "metal_black", canvas: "art_cream", mat: "paint_white", art_a: "art_terracotta", art_b: "art_navy", art_c: "art_mustard", art_d: "art_sage", art_e: "art_charcoal" };
+
+function buildWallArt(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const frame = optStr(s, "frame", FRAME_STYLES, "thin_black");
+  const art = optStr(s, "art", ART_STYLES, "abstract");
+  const matB = optBool(s, "mat", frame === "thin_black" || frame === "oak");
+  artwork(mb, s.materials, -w / 2, w / 2, 0, h, d / 2, Math.min(d, 0.05), frame, art, matB, Math.round(optNum(s, "seed", 1)));
+}
+
+function buildGalleryWall(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const fixed = optStr(s, "frame", ["mixed", ...FRAME_STYLES] as const, "mixed");
+  const seed = Math.round(optNum(s, "seed", 1));
+  const T: [number, number, number, number][] = [
+    [0, 0.36, 0.3, 0.64], [0.34, 0.56, 0.27, 0.44], [0.34, 0, 0.27, 0.5], [0.65, 0.4, 0.35, 0.6], [0, 0, 0.3, 0.3], [0.65, 0, 0.2, 0.34], [0.89, 0.06, 0.11, 0.24],
+  ];
+  const frames: FrameStyle[] = ["thin_black", "oak", "gold", "thin_black", "none", "oak", "thin_black"];
+  const arts: ArtStyle[] = ["landscape", "geometric", "botanical", "abstract", "abstract", "botanical", "geometric"];
+  T.forEach(([u, v, uw, vh], i) => {
+    const f = fixed === "mixed" ? frames[(i + seed) % frames.length] : fixed;
+    artwork(mb, s.materials, -w / 2 + u * w, -w / 2 + (u + uw) * w, v * h, (v + vh) * h, d / 2, Math.min(d, f === "none" ? 0.03 : 0.025), f, arts[(i + seed) % arts.length], f === "thin_black" || f === "oak", seed * 10 + i);
+  });
+}
+
+function buildFloatingShelf(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const t = Math.min(0.04, h * 0.2);
+  mb.box(M.shelf, [-w / 2, -d / 2, 0], [w / 2, d / 2, t]);
+  if (optBool(s, "decor", true)) shelfDecor(mb, M, -w / 2, w / 2, -d / 2 + 0.01, d / 2 - 0.005, t, h - t, Math.round(w * 100 + d * 1000));
+}
+
+function buildWallShelves(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const decor = optBool(s, "decor", true);
+  if (optStr(s, "style", ["ladder", "grid"] as const, "ladder") === "grid") {
+    const t = 0.02;
+    const cols = Math.max(1, Math.round(w / 0.38)), rows = Math.max(1, Math.round(h / 0.38));
+    const cw = (w - t) / cols, rh = (h - t) / rows;
+    mb.box(M.shelf, [-w / 2, d / 2 - 0.006, 0], [w / 2, d / 2, h]);
+    for (let i = 0; i <= cols; i++) mb.box(M.shelf, [-w / 2 + i * cw, -d / 2, 0], [-w / 2 + i * cw + t, d / 2 - 0.006, h]);
+    for (let j = 0; j <= rows; j++)
+      for (let i = 0; i < cols; i++) mb.box(M.shelf, [-w / 2 + i * cw + t, -d / 2, j * rh], [-w / 2 + (i + 1) * cw, d / 2 - 0.006, j * rh + t]);
+    if (!decor) return;
+    for (let j = 0; j < rows; j++)
+      for (let i = 0; i < cols; i++) {
+        const x0 = -w / 2 + i * cw + t, x1 = x0 + cw - t, z = j * rh + t;
+        const k = (i * 3 + j * 5) % 4;
+        if (k === 3) {
+          const bw = cw - t - 0.03;
+          rectLathe(mb, M.basket, (x0 + x1) / 2, 0, bw, d - 0.04, 0.02, [[0, z], [0, z + rh * 0.8], [0.008, z + rh * 0.8], [0.008, z + 0.01], [bw, z + 0.01]], 2);
+        } else shelfDecor(mb, M, x0, x1, -d / 2 + 0.02, d / 2 - 0.01, z, rh - t, i * 17 + j * 31 + 3);
+      }
+    return;
+  }
+  // ladder leaning against the wall
+  const rs = 0.035;
+  const yA = -d / 2 + rs / 2 + 0.005, yB = d / 2 - rs / 2 - 0.004;
+  const yAt = (z: number) => yA + ((yB - yA) * z) / h;
+  for (const sx of [-1, 1]) beam(mb, M.shelf, [sx * (w / 2 - rs / 2), yA, 0.006], [sx * (w / 2 - rs / 2), yB, h - rs * 0.6], rs, rs);
+  const n = Math.max(2, Math.round(h / 0.38));
+  for (let i = 0; i < n; i++) {
+    const z = 0.12 + ((h - 0.25) * i) / (n - 1);
+    const yf = yAt(z) - rs / 2;
+    if (d / 2 - yf < 0.06) continue;
+    mb.box(M.shelf, [-w / 2 + rs, yf, z], [w / 2 - rs, d / 2 - 0.004, z + 0.02]);
+    const clear = i < n - 1 ? (h - 0.25) / (n - 1) - 0.03 : h - z - 0.03;
+    if (decor) shelfDecor(mb, M, -w / 2 + rs, w / 2 - rs, yf + 0.005, d / 2 - 0.006, z + 0.02, clear, i * 13 + 7);
+  }
+}
+
+function buildVase(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const shape = optStr(s, "shape", ["bottle", "bulb", "cylinder"] as const, "bulb");
+  const stems = optStr(s, "stems", ["none", "branches", "flowers", "pampas"] as const, "branches");
+  const R = (Math.min(w, d) / 2) * (stems === "none" ? 1 : 0.62);
+  const bh = stems === "none" ? h : Math.min(h * 0.45, R * 4.2);
+  const r = R * (shape === "cylinder" ? 0.85 : 1);
+  vessel(mb, M.vase, 0, 0, 0, r, bh, shape, 18);
+  if (stems === "none") return;
+  const neckZ = bh * 0.9;
+  const rnd = rng(Math.round(h * 1000));
+  const reach = Math.min(w, d) / 2 - (stems === "pampas" ? 0.08 : stems === "flowers" ? 0.035 : 0.04);
+  const n = stems === "flowers" ? 5 : stems === "pampas" ? 4 : 4;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + rnd() * 0.5;
+    const out = reach * (0.35 + rnd() * 0.55);
+    const top: Vec3 = [Math.cos(a) * out, Math.sin(a) * out, h - (stems === "pampas" ? 0.11 : 0.03) - rnd() * (h - bh) * 0.25];
+    const base: Vec3 = [Math.cos(a) * 0.004, Math.sin(a) * 0.004, neckZ - 0.03];
+    const mid: Vec3 = [top[0] * 0.35, top[1] * 0.35, (base[2] + top[2]) * 0.55];
+    mb.rod(M.stems, base, mid, 0.0028, 4);
+    mb.rod(M.stems, mid, top, 0.0022, 4);
+    if (stems === "flowers") {
+      mb.sphere(M.flowers, v3.add(top, [0, 0, 0.012]), 0.03, 10, 7, [1, 1, 0.65]);
+      mb.sphere(M.stems === M.flowers ? M.vase : M.foliage, v3.add(top, [0, 0, 0.026]), 0.01, 6, 4);
+      blade(mb, M.foliage, v3.lerp(base, mid, 0.7), [Math.cos(a + 0.6), Math.sin(a + 0.6), 0.5], 0.07, 0.016, { n: 3 });
+    } else if (stems === "pampas") {
+      const dir = v3.norm(v3.sub(top, mid));
+      const x = v3.norm(v3.cross([0, 0, 1], dir));
+      mb.with(m4.fromBasis(v3.len(x) > 0.1 ? x : [1, 0, 0], v3.cross(dir, v3.len(x) > 0.1 ? x : [1, 0, 0]), dir, top), () => mb.sphere(M.flowers, [0, 0, 0.05], 0.03, 8, 6, [1, 1, 2.2]));
+    } else {
+      // eucalyptus-like branch with paired round leaves
+      for (let k = 1; k <= 5; k++) {
+        const p = v3.lerp(mid, top, k / 5.3);
+        for (const sd of [-1, 1]) {
+          const la = a + sd * 1.3 + k;
+          blade(mb, M.foliage, p, [Math.cos(la), Math.sin(la), 0.15], 0.032, 0.014, { n: 3, cup: 0.1, th: 0.002 });
+        }
+      }
+    }
+  }
+}
+
+function buildBooksStack(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const top = optStr(s, "topper", ["none", "object", "candle"] as const, "object");
+  const rnd = rng(Math.round(w * 1000 + h * 100));
+  const stackH = top === "none" ? h : h * 0.55;
+  const n = Math.max(1, Math.round(stackH / 0.032));
+  const bh = stackH / n;
+  let z = 0;
+  for (let i = 0; i < n; i++) {
+    const bw = w * (0.86 + rnd() * 0.14) - i * 0.01, bd = d * (0.84 + rnd() * 0.16) - i * 0.006;
+    const ox = (rnd() - 0.5) * (w - bw), oy = (rnd() - 0.5) * (d - bd);
+    book(mb, [M.book_a, M.book_b, M.book_c][i % 3], M.pages, -bw / 2 + ox, -bd / 2 + oy, z, bw, bd, bh, true);
+    z += bh;
+  }
+  if (top === "object") {
+    const r = Math.min(h - z, Math.min(w, d) * 0.25) / 2;
+    mb.sphere(M.topper, [0, 0, z + r], r, 14, 10);
+  } else if (top === "candle") candle(mb, M.topper, "emissive_light", 0, 0, z, Math.min(0.035, (h - z) * 0.3), Math.max(0.02, h - z - 0.03));
+}
+
+function buildDecorBowl(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, d) / 2;
+  mb.with(m4.scaling(1, d / w > 1 ? 1 : d / w, 1), () => {
+    vessel(mb, M.bowl, 0, 0, 0, w / 2, h * (optStr(s, "contents", ["none", "orbs"] as const, "none") === "orbs" ? 0.7 : 1), "bowl", 24);
+  });
+  if (optStr(s, "contents", ["none", "orbs"] as const, "none") === "orbs") {
+    const r = Math.min(h * 0.28, R * 0.24);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU + 0.4;
+      mb.sphere(i === 1 ? M.orbs_b : M.orbs, [Math.cos(a) * r * 1.05, Math.sin(a) * r * 1.05 * Math.min(1, d / w), h * 0.7 * 0.24 + r], r, 12, 8);
+    }
+  }
+}
+
+function buildCandleSet(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const lit = optBool(s, "lit", true);
+  const tray = optBool(s, "tray", true);
+  const tz = tray ? 0.015 : 0;
+  if (tray) softBox(mb, M.tray, 0, 0, 0, w, d, tz, Math.min(w, d) * 0.4, 0.004);
+  const r = Math.min(d * 0.32, w / 8);
+  const ch = h - tz - (lit ? 0.03 : 0);
+  const xs = [-w / 2 + r + 0.02, 0, w / 2 - r - 0.02];
+  [1, 0.72, 0.5].forEach((k, i) => candle(mb, M.wax, lit ? M.flame : null, xs[i], (i - 1) * d * 0.08, tz, r * (1 - i * 0.08), ch * k));
+}
+
+function buildCushion(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const style = optStr(s, "style", ["plain", "piped", "tufted"] as const, "plain");
+  const round = optStr(s, "shape", ["square", "round"] as const, "square") === "round";
+  const T = clamp(Math.min(w, h) * 0.17, 0.04, Math.max(0.03, d * 0.45));
+  const th = Math.asin(clamp((d - 2 * T) / h, 0, 0.35));
+  const c = Math.cos(th), sn = Math.sin(th);
+  const ph = (h - 2 * sn * T) / c;
+  mb.with(m4.mul(m4.translation(0, -d / 2 + c * T, sn * T), m4.rotationX(-th)), () => {
+    const pin = style === "piped" ? 0.012 : 0;
+    const seam = pillow(mb, M.fabric, 0, 0, ph / 2, w - pin, ph - pin, T, round, style === "tufted", 8);
+    if (style === "piped") {
+      const N = 8;
+      const loop: Vec3[] = [];
+      for (let i = 0; i < N; i++) loop.push(seam(i, 0));
+      for (let j = 0; j < N; j++) loop.push(seam(N, j));
+      for (let i = N; i > 0; i--) loop.push(seam(i, N));
+      for (let j = N; j > 0; j--) loop.push(seam(0, j));
+      for (let i = 0; i < loop.length; i++) mb.rod(M.piping, loop[i], loop[(i + 1) % loop.length], 0.005, 5);
+    }
+    if (style === "tufted") for (const sy of [-1, 1]) mb.sphere(M.piping, [0, sy * T * 0.6, ph / 2], 0.012, 8, 6);
+  });
+}
+
+function buildThrowBlanket(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const th = 0.012;
+  if (optStr(s, "style", ["draped", "folded"] as const, "draped") === "folded") {
+    // folded runner lying on top with a flap hanging over the -Y edge (bed end)
+    const ft = 0.035;
+    softBox(mb, M.fabric, 0, 0.012, h - ft, w, d - 0.024, ft, 0.03, 0.012);
+    const drop = Math.min(h * 0.6, 0.35);
+    mb.rod(M.fabric, [-w / 2 + 0.004, -d / 2 + 0.024, h - ft / 2 - 0.001], [w / 2 - 0.004, -d / 2 + 0.024, h - ft / 2 - 0.001], ft / 2 + 0.002, 10);
+    softBox(mb, M.fabric, 0, -d / 2 + 0.012, h - drop, w - 0.01, 0.024, drop - ft / 2, 0.01, 0.006);
+    return;
+  }
+  // draped over a support (sofa arm / chair back) running along Y: hangs down both sides
+  const a = w / 2 - 0.025, r = Math.min(0.06, a * 0.6);
+  const dropL = Math.min(h * 0.75, 0.55), dropR = Math.min(h * 0.45, 0.3);
+  const path = (off: number, y: number): Vec3[] => {
+    const pts: Vec3[] = [];
+    const rip = (z0: number, z: number, side: number) => side * 0.016 * Math.sin((y / 0.11) * TAU + side) * clamp((z0 - z) / 0.3, 0, 1);
+    for (let i = 0; i <= 4; i++) {
+      const z = h - r - dropL + (dropL * i) / 4;
+      pts.push([-a - off + rip(h - r, z, -1), y, z]);
+    }
+    for (let i = 1; i < 8; i++) {
+      const t = Math.PI - (i / 8) * Math.PI;
+      pts.push([Math.cos(t) * (a + off - (a - r)) * 0 + (a + off) * Math.cos(t), y, h - r + (r + off) * Math.sin(t) - off * 0]);
+    }
+    for (let i = 4; i >= 0; i--) {
+      const z = h - r - dropR + (dropR * i) / 4;
+      pts.push([a + off + rip(h - r, z, 1), y, z]);
+    }
+    return pts.map((p) => [clamp(p[0], -w / 2, w / 2), p[1], Math.min(p[2], h)] as Vec3);
+  };
+  const ny = Math.max(4, Math.round(d / 0.06));
+  const ys = Array.from({ length: ny + 1 }, (_, k) => -d / 2 + 0.01 + ((d - 0.02) * k) / ny);
+  const outer = ys.map((y) => path(0, y)), inner = ys.map((y) => path(-th, y));
+  const n = outer[0].length;
+  for (let k = 0; k < ny; k++)
+    for (let i = 0; i + 1 < n; i++) {
+      quadOut(mb, M.fabric, outer[k][i], outer[k][i + 1], outer[k + 1][i + 1], outer[k + 1][i], inner[k][i]);
+      quadOut(mb, M.fabric, inner[k][i], inner[k][i + 1], inner[k + 1][i + 1], inner[k + 1][i], outer[k][i]);
+    }
+  for (let k = 0; k < ny; k++)
+    for (const i of [0, n - 1]) {
+      const ref = v3.add(outer[k][i], [0, 0, 0.05]);
+      quadOut(mb, M.fabric, outer[k][i], inner[k][i], inner[k + 1][i], outer[k + 1][i], ref);
+    }
+  for (const k of [0, ny])
+    for (let i = 0; i + 1 < n; i++) {
+      const ref = v3.add(outer[k][i], [0, k === 0 ? 0.05 : -0.05, 0]);
+      quadOut(mb, M.fabric, outer[k][i], outer[k][i + 1], inner[k][i + 1], inner[k][i], ref);
+    }
+}
+
+function buildWallClock(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, h) / 2;
+  const dd = Math.min(d, 0.05);
+  const rim = Math.max(0.012, R * 0.07);
+  mb.with(facingFront(0, d / 2, h / 2), () => {
+    tube(mb, M.frame, 0, 0, 0, dd, R, R, rim, 40, { top: true, bottom: true });
+    mb.cylinder(M.face, [0, 0, 0], R - rim + 0.001, R - rim + 0.001, dd - 0.008, 40);
+    const zf = dd - 0.008;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU;
+      const long = i % 3 === 0;
+      const r0 = (R - rim) * (long ? 0.74 : 0.82), r1 = (R - rim) * 0.92;
+      beam(mb, M.hands, [Math.cos(a) * r0, Math.sin(a) * r0, zf], [Math.cos(a) * r1, Math.sin(a) * r1, zf], 0.002, long ? 0.012 : 0.006);
+    }
+    const hand = (a: number, len: number, wd: number, z: number) => beam(mb, M.hands, [-Math.cos(a) * len * 0.15, -Math.sin(a) * len * 0.15, zf + z], [Math.cos(a) * len, Math.sin(a) * len, zf + z], 0.002, wd);
+    hand(Math.PI / 2 - (10.2 / 12) * TAU, (R - rim) * 0.5, 0.014, 0.002);
+    hand(Math.PI / 2 - (10 / 60) * TAU, (R - rim) * 0.78, 0.009, 0.004);
+    mb.cylinder(M.hands, [0, 0, zf], 0.012, 0.012, 0.007, 12, { bottom: false });
+  });
+}
+
+function buildSculpture(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const form = optStr(s, "form", ["ring", "pebbles", "twist"] as const, "ring");
+  const bz = Math.min(0.04, h * 0.1);
+  softBox(mb, M.base, 0, 0, 0, w * 0.75, d * 0.75, bz, 0.005, 0.003);
+  const H = h - bz;
+  if (form === "ring") {
+    const tr = Math.min(w, H) * 0.12;
+    const R = Math.min(w / 2, H / 2) - tr;
+    torus(mb, M.main, [0, 0, bz + tr + R], R, tr, "y", 28, 10);
+  } else if (form === "pebbles") {
+    let z = bz;
+    const n = 4;
+    for (let i = 0; i < n; i++) {
+      const rx = Math.min(w, d) * 0.42 * (1 - i * 0.16), rz = (H / n) * 0.5;
+      mb.sphere(i % 2 ? M.base : M.main, [(i % 2 ? 1 : -1) * 0.01, 0, z + rz], rx, 16, 9, [1, 0.85, rz / rx]);
+      z += rz * 2;
+    }
+  } else {
+    const n = 14;
+    const lh = H / n;
+    for (let i = 0; i < n; i++) {
+      const sc = 1 - 0.35 * Math.abs(i / (n - 1) - 0.4);
+      mb.with(m4.mul(m4.translation(0, 0, bz + i * lh), m4.rotationZ(i * 0.16)), () => softBox(mb, M.main, 0, 0, 0, Math.min(w, d) * 0.6 * sc, Math.min(w, d) * 0.3 * sc, lh, 0.01, lh * 0.2));
+    }
+  }
+}
+
+function buildTrayWithDecor(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const tz = 0.025;
+  rectLathe(mb, M.tray, 0, 0, w, d, Math.min(0.04, d * 0.2), [[0, 0], [0, tz], [0.008, tz], [0.008, 0.008], [Math.min(w, d), 0.008]]);
+  const rnd = rng(7);
+  const z = 0.008;
+  candle(mb, M.wax, "emissive_light", -w / 2 + 0.06, 0, z, Math.min(0.035, d * 0.15), Math.min(0.09, h - z - 0.03));
+  const vr = Math.min(0.04, d * 0.17);
+  vessel(mb, M.vase, w * 0.08, d * 0.12, z, vr, Math.min(h - z - 0.01, vr * 3.5), "bottle", 14);
+  const top = bookPile(mb, [M.book_a, M.book_b], M.pages, w / 2 - 0.08, -d * 0.08, z, Math.min(0.14, w * 0.35), d - 0.05, 2, rnd);
+  if (top + 0.05 < h) mb.sphere(M.vase, [w / 2 - 0.08, -d * 0.08, top + 0.022], 0.022, 10, 7);
+}
+
+function buildLantern(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const a = Math.min(w, d);
+  const bz = 0.03, roofH = Math.min(0.08, h * 0.18), ring = Math.min(0.05, h * 0.1);
+  const bodyTop = h - roofH - ring;
+  mb.block(M.frame, 0, 0, 0, a, a, bz);
+  const p = 0.016;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.block(M.frame, sx * (a / 2 - p / 2 - 0.006), sy * (a / 2 - p / 2 - 0.006), bz, p, p, bodyTop - bz);
+  mb.block(M.frame, 0, 0, bodyTop - 0.015, a - 0.004, a - 0.004, 0.015);
+  const g = a / 2 - 0.012;
+  for (const sy of [-1, 1]) mb.box(M.glass, [-g, sy * g - 0.002, bz], [g, sy * g + 0.002, bodyTop - 0.015]);
+  for (const sx of [-1, 1]) mb.box(M.glass, [sx * g - 0.002, -g + 0.002, bz], [sx * g + 0.002, g - 0.002, bodyTop - 0.015]);
+  mb.with(m4.rotationZ(Math.PI / 4), () => mb.cylinder(M.frame, [0, 0, bodyTop], (a / 2) * Math.SQRT2, 0.02, roofH, 4));
+  torus(mb, M.frame, [0, 0, h - ring / 2 - 0.004], ring / 2 - 0.004, 0.004, "y", 14, 5);
+  candle(mb, M.wax, M.flame, 0, 0, bz, Math.min(0.04, a * 0.18), Math.min(0.15, (bodyTop - bz) * 0.5));
+}
+
+// ---- plants ----
+
+type PotStyle = "round" | "cylinder" | "tapered" | "square" | "basket";
+const POT_STYLES = ["round", "cylinder", "tapered", "square", "basket"] as const;
+
+/** A planter pot with soil; returns the soil height. */
+function plantPot(mb: MeshBuilder, M: Record<string, string>, style: PotStyle, r: number, ph: number) {
+  const soilZ = ph - Math.min(0.03, ph * 0.1);
+  if (style === "square") {
+    const s = r * 1.8;
+    rectLathe(mb, M.pot, 0, 0, s, s, 0.02, [[0.03, 0], [0, ph * 0.08], [0, ph], [0.018, ph], [0.018, soilZ], [s, soilZ]], 3);
+  } else if (style === "basket") {
+    lathe(mb, M.basket, 0, 0, [[0, 0], [r * 0.82, 0], [r * 0.95, ph * 0.1], [r, ph * 0.92], [r * 0.93, ph * 0.92], [r * 0.93, soilZ], [0, soilZ]], 20);
+    torus(mb, M.basket, [0, 0, ph * 0.92], r * 0.965, Math.min(0.018, ph * 0.06), "z", 24, 6);
+  } else {
+    const P: Record<string, Vec2[]> = {
+      round: [[0, 0], [0.55, 0], [0.8, 0.12], [1, 0.48], [0.96, 0.82], [0.86, 1], [0.8, 1]],
+      cylinder: [[0, 0], [0.96, 0], [1, 0.03], [1, 1], [0.92, 1]],
+      tapered: [[0, 0], [0.62, 0], [0.66, 0.04], [1, 0.95], [1.02, 1], [0.93, 1]],
+    };
+    const prof = P[style].map(([pr, pz]) => [pr * r, pz * ph] as Vec2);
+    const lip = prof[prof.length - 1][0];
+    lathe(mb, M.pot, 0, 0, [...prof, [lip, soilZ], [0, soilZ]], 24);
+  }
+  return soilZ;
+}
+
+type Species = "fiddle_leaf" | "monstera" | "snake_plant" | "olive_tree" | "palm";
+
+function buildPlantLarge(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const sp = optStr(s, "species", ["fiddle_leaf", "monstera", "snake_plant", "olive_tree", "palm"] as const, "fiddle_leaf") as Species;
+  const pot = optStr(s, "pot", POT_STYLES, "round") as PotStyle;
+  const reach = Math.min(w, d) / 2 - 0.01;
+  const ph = clamp(h * 0.24, 0.18, 0.42);
+  const pr = Math.min(reach * (sp === "snake_plant" ? 0.75 : 0.55), ph * 0.85);
+  const soil = plantPot(mb, M, pot, pr, ph);
+  const rnd = rng(Math.round(h * 997 + w * 131));
+  const top = h - 0.01;
+  if (sp === "snake_plant") {
+    const n = 11;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU * 2.3 + rnd();
+      const rr = pr * (0.15 + 0.55 * rnd());
+      const base: Vec3 = [Math.cos(a) * rr, Math.sin(a) * rr, soil - 0.01];
+      const L = (top - soil) * (0.55 + 0.45 * rnd());
+      const tilt = 0.08 + rnd() * 0.18;
+      const dir = v3.norm([Math.cos(a) * tilt, Math.sin(a) * tilt, 1]);
+      const sideA = a + Math.PI / 2 + (rnd() - 0.5) * 1.2;
+      blade(mb, i % 3 === 0 ? M.foliage_alt : M.foliage, base, dir, Math.min(L, (top - soil) / dir[2]), 0.032 + rnd() * 0.012, {
+        n: 6, side: [Math.cos(sideA), Math.sin(sideA), 0], cup: 0.35, th: 0.004, shape: (t) => (t < 0.08 ? 0.6 + t * 5 : t > 0.82 ? Math.max(0, (1 - t) / 0.18) : 1),
+      });
+    }
+    return;
+  }
+  if (sp === "olive_tree") {
+    const crownZ = soil + (top - soil) * 0.42;
+    mb.rod(M.stem, [0, 0, soil - 0.02], [0.02, 0.01, crownZ], 0.022, 7);
+    mb.rod(M.stem, [0.02, 0.01, crownZ], [-0.01, 0.02, crownZ + (top - crownZ) * 0.4], 0.016, 6);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU + 0.5;
+      mb.rod(M.stem, [0.02, 0.01, crownZ], [Math.cos(a) * reach * 0.45, Math.sin(a) * reach * 0.45, crownZ + (top - crownZ) * 0.35], 0.009, 5);
+    }
+    foliage(mb, M.foliage_alt, 0, 0, crownZ, reach * 2, reach * 2, top - crownZ, 9, Math.round(h * 100), 9);
+    return;
+  }
+  if (sp === "palm") {
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rnd() * 0.4;
+      const L = Math.min(reach * (0.85 + rnd() * 0.25), (top - soil) * 0.95);
+      const rise = 1.2 + rnd() * 0.5;
+      const ts = rise / (2 * (rise - 0.5));
+      const peak = ts <= 1 ? (rise * rise) / (4 * (rise - 0.5)) : 0.5;
+      const hz = ((top - soil - 0.04) * (0.75 + 0.22 * rnd())) / peak;
+      const pts: Vec3[] = [];
+      for (let k = 0; k <= 6; k++) {
+        const t = k / 6;
+        pts.push([Math.cos(a) * L * t * 0.95, Math.sin(a) * L * t * 0.95, soil + hz * (rise * t - (rise - 0.5) * t * t)]);
+      }
+      for (let k = 0; k < 6; k++) mb.rod(M.stem, pts[k], pts[k + 1], 0.005 * (1 - k / 8), 4);
+      for (let k = 2; k <= 6; k++) {
+        const p = pts[k], q = pts[Math.min(6, k + 1)];
+        const along = v3.norm(v3.sub(q, p));
+        for (const sd of [-1, 1]) {
+          const sdir = v3.norm(v3.cross([0, 0, 1], along));
+          const ld = v3.norm(v3.add(v3.scale(sdir, sd), v3.scale(along, 0.5)));
+          const ll = 0.16 * L * (1 - Math.abs(k - 3.8) / 5);
+          blade(mb, M.foliage, p, [ld[0], ld[1], ld[2] - 0.25], ll, 0.018, { n: 3, droop: 0.4, cup: 0.3, th: 0.003 });
+        }
+      }
+    }
+    return;
+  }
+  if (sp === "monstera") {
+    const n = 9;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rnd() * 0.5;
+      const elev = 0.35 + rnd() * 0.75;
+      const L = (top - soil) * (0.45 + 0.4 * rnd());
+      const out = reach * (0.35 + 0.35 * rnd());
+      const tip: Vec3 = [Math.cos(a) * out, Math.sin(a) * out, Math.min(top - 0.12, soil + L * Math.sin(elev) + 0.1)];
+      const mid: Vec3 = [tip[0] * 0.4, tip[1] * 0.4, (soil + tip[2]) * 0.5 + 0.05];
+      mb.rod(M.stem, [0, 0, soil - 0.01], mid, 0.007, 5);
+      mb.rod(M.stem, mid, tip, 0.006, 5);
+      const ll = Math.min(0.32, (reach - out) / 1.15);
+      const dir: Vec3 = [Math.cos(a) * 0.9, Math.sin(a) * 0.9, 0.25 - rnd() * 0.3];
+      blade(mb, M.foliage, tip, dir, Math.max(0.12, ll), Math.max(0.1, ll) * 0.45, {
+        n: 6, droop: 0.35, cup: 0.12, th: 0.004, shape: (t) => Math.sin(Math.PI * Math.pow(t, 0.6)) * (1 - 0.18 * Math.max(0, Math.sin(t * 18))),
+      });
+    }
+    return;
+  }
+  // fiddle leaf fig: upright trunk with big broad leaves spiralling up
+  const trunkTop = top - 0.12;
+  mb.rod(M.stem, [0, 0, soil - 0.02], [0.015, 0, trunkTop], 0.016, 7);
+  const z0 = soil + (top - soil) * 0.28;
+  const n = 22;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const z = z0 + (trunkTop - z0) * t;
+    const a = i * 2.4;
+    const L = Math.min(0.26, reach - 0.02) * (1 - 0.35 * t);
+    const pitch = 0.35 + 0.5 * t;
+    const dir: Vec3 = [Math.cos(a) * Math.cos(pitch), Math.sin(a) * Math.cos(pitch), Math.sin(pitch)];
+    const base: Vec3 = [0.015 * t + Math.cos(a) * 0.02, Math.sin(a) * 0.02, z];
+    if (z + L * Math.sin(pitch) > top) continue;
+    blade(mb, M.foliage, base, dir, L, L * 0.38, { n: 5, droop: 0.25, cup: 0.15, th: 0.004, shape: (tt) => Math.sin(Math.PI * Math.pow(tt, 0.72)) });
+  }
+}
+
+function buildHangingPlant(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, d) / 2;
+  const pr = Math.min(R * 0.45, 0.12);
+  const potZ = h * 0.38, ph = pr * 1.1;
+  lathe(mb, M.pot, 0, 0, [[0, potZ], [pr * 0.4, potZ], [pr * 0.85, potZ + ph * 0.3], [pr, potZ + ph], [pr * 0.9, potZ + ph], [pr * 0.9, potZ + ph * 0.85], [0, potZ + ph * 0.85]], 18);
+  // cords to a top ring
+  const ringZ = h - 0.04;
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * TAU + Math.PI / 2;
+    mb.rod(M.cord, [Math.cos(a) * pr * 0.95, Math.sin(a) * pr * 0.95, potZ + ph * 0.6], [Math.cos(a) * 0.012, Math.sin(a) * 0.012, ringZ - 0.01], 0.0035, 4);
+  }
+  torus(mb, M.cord, [0, 0, ringZ + 0.012], 0.018, 0.004, "y", 12, 5);
+  mb.rod(M.cord, [0, 0, ringZ + 0.03], [0, 0, h], 0.003, 4);
+  foliage(mb, M.foliage, 0, 0, potZ + ph * 0.7, pr * 2.2, pr * 2.2, Math.min(0.14, ringZ - potZ - ph), 5, 33, 8);
+  // trailing vines
+  const rnd = rng(5);
+  const nv = 6;
+  for (let i = 0; i < nv; i++) {
+    const a = (i / nv) * TAU + rnd() * 0.5;
+    const len = (potZ + ph) * (0.55 + 0.4 * rnd());
+    const pts: Vec3[] = [];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      const rr = Math.min(R - 0.03, pr * (1 + 0.6 * Math.sin(t * Math.PI * 0.7)));
+      pts.push([Math.cos(a + t * 0.6) * rr, Math.sin(a + t * 0.6) * rr, potZ + ph - len * t]);
+    }
+    for (let k = 0; k < 6; k++) {
+      mb.rod(M.foliage, pts[k], pts[k + 1], 0.0025, 3);
+      const la = a + k;
+      blade(mb, M.foliage, pts[k + 1], [Math.cos(la), Math.sin(la), -0.3], 0.045, 0.02, { n: 2, cup: 0.15, th: 0.003 });
+    }
+  }
+}
+
+// ---- mirrors ----
+
+/** Framed panel with arbitrary convex outline in the XZ plane (CCW seen from the front), back at yb. */
+function framedPanel(mb: MeshBuilder, fmat: string, pmat: string, outline: Vec2[], fw: number, yb: number, depth: number) {
+  const inner = offsetPolygon(outline, -fw);
+  const yf = yb - depth, yp = yf + Math.min(0.008, depth * 0.4);
+  const P = (p: Vec2, y: number): Vec3 => [p[0], y, p[1]];
+  let cx = 0, cz = 0;
+  for (const p of outline) { cx += p[0] / outline.length; cz += p[1] / outline.length; }
+  const n = outline.length;
+  mb.polygon(fmat, outline.map((p) => P(p, yf)), [0, -1, 0], [inner.map((p) => P(p, yf))]);
+  mb.polygon(fmat, outline.map((p) => P(p, yb)), [0, 1, 0]);
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    quadOut(mb, fmat, P(outline[i], yf), P(outline[j], yf), P(outline[j], yb), P(outline[i], yb), [cx, (yf + yb) / 2, cz]);
+    const a = P(inner[i], yf), b = P(inner[j], yf);
+    const m: Vec3 = [(a[0] + b[0]) / 2, yf, (a[2] + b[2]) / 2];
+    quadOut(mb, fmat, a, b, P(inner[j], yp), P(inner[i], yp), [2 * m[0] - cx, yf, 2 * m[2] - cz]);
+  }
+  mb.polygon(pmat, inner.map((p) => P(p, yp)), [0, -1, 0]);
+}
+
+function mirrorOutline(shape: "round" | "arched" | "rect", w: number, h: number, z0 = 0): Vec2[] {
+  if (shape === "round") return ellipse(0, z0 + h / 2, w / 2, h / 2, 48);
+  if (shape === "rect") return roundRect(0, z0 + h / 2, w, h, Math.min(w, h) * 0.04, 3);
+  const r = w / 2, zs = z0 + Math.max(0.01, h - r);
+  const pts: Vec2[] = [[-w / 2, z0], [w / 2, z0]];
+  const arcR = Math.min(r, h - 0.01);
+  for (let i = 0; i <= 20; i++) {
+    const a = (i / 20) * Math.PI;
+    pts.push([Math.cos(a) * r, zs + Math.sin(a) * arcR]);
+  }
+  return pts;
+}
+
+function buildShapedMirror(mb: MeshBuilder, s: FurnitureSpec, shape: "round" | "arched" | "rect") {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const fw = clamp(optNum(s, "frame_width", Math.min(w, h) * 0.04), 0.005, Math.min(w, h) * 0.2);
+  const lean = shape === "rect" && optBool(s, "lean", true);
+  const t = Math.min(0.035, d);
+  if (!lean) {
+    framedPanel(mb, M.frame, M.mirror, mirrorOutline(shape, w, h), fw, d / 2, t);
+    return;
+  }
+  // leaning full-length mirror: bottom edge on the floor at the front, top touching the wall at +Y
+  let th = 0.05;
+  for (let it = 0; it < 30; it++) {
+    const c = Math.cos(th), sn = Math.sin(th);
+    const L = (h - sn * t) / c;
+    const f = c * t + sn * L - (d - 0.002);
+    th -= f / (L * c + 0.01);
+    th = clamp(th, 0, 0.35);
+  }
+  const c = Math.cos(th), sn = Math.sin(th);
+  const L = (h - sn * t) / c;
+  mb.with(m4.mul(m4.translation(0, -d / 2, sn * t), m4.rotationX(-th)), () => framedPanel(mb, M.frame, M.mirror, mirrorOutline("rect", w, L), fw, t, t));
+}
+
+// ---- living / dining / bedroom furniture ----
+
+function buildConsoleTable(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const t = 0.028, f = 0.02;
+  mb.box(M.top, [-w / 2, -d / 2, h - t], [w / 2, d / 2, h]);
+  const lx = w / 2 - 0.03, ly = d / 2 - 0.025;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.block(M.frame, sx * (lx - f / 2), sy * (ly - f / 2), 0, f, f, h - t, { skip: ["+z"] });
+  const rim = (z: number) => {
+    for (const sy of [-1, 1]) mb.box(M.frame, [-lx + f, sy * (ly - f / 2) - f / 2, z], [lx - f, sy * (ly - f / 2) + f / 2, z + f]);
+    for (const sx of [-1, 1]) mb.box(M.frame, [sx * (lx - f / 2) - f / 2, -ly + f, z], [sx * (lx - f / 2) + f / 2, ly - f, z + f]);
+  };
+  rim(h - t - f);
+  if (optBool(s, "shelf", true)) {
+    const zs = Math.min(0.15, h * 0.2);
+    rim(zs);
+    mb.box(M.shelf, [-lx + f, -ly + f, zs + f], [lx - f, ly - f, zs + f + 0.015]);
+  }
+}
+
+function buildSideboard(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const legH = clamp(h * 0.22, 0.08, 0.22);
+  const t = 0.025;
+  const fluted = optStr(s, "fronts", ["fluted", "plain"] as const, "fluted") === "fluted";
+  const yFace = -d / 2 + FRONT;
+  mb.box(M.body, [-w / 2, -d / 2, h - t], [w / 2, d / 2, h]);
+  mb.box(M.body, [-w / 2 + 0.01, yFace, legH], [w / 2 - 0.01, d / 2 - 0.005, h - t], { skip: ["+z"] });
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) mb.rod(M.legs, [sx * (w / 2 - 0.1), sy * (d / 2 - 0.09), legH + 0.005], [sx * (w / 2 - 0.065), sy * (d / 2 - 0.06), 0.012], 0.018, 8);
+  const n = Math.round(optNum(s, "doors", clamp(Math.round(w / 0.45), 2, 6), 1, 8));
+  const dw = (w - 0.02) / n;
+  for (let i = 0; i < n; i++) {
+    const x0 = -w / 2 + 0.01 + i * dw, x1 = x0 + dw;
+    front(mb, M.body, M.handles, x0, x1, legH, h - t, yFace, fluted ? "none" : "knob", i % 2 ? x0 + 0.04 : x1 - 0.04, (legH + h - t) / 2 + 0.05);
+    if (fluted) {
+      const r = 0.0075, pitch = 0.022;
+      const k = Math.floor((x1 - x0 - 0.02) / pitch);
+      const off = (x1 - x0 - (k - 1) * pitch) / 2;
+      for (let j = 0; j < k; j++) mb.rod(M.body, [x0 + off + j * pitch, yFace - FT, legH + 0.012], [x0 + off + j * pitch, yFace - FT, h - t - 0.012], r, 6);
+      const hx = i % 2 ? x0 + off : x1 - off;
+      mb.rod(M.handles, [hx, yFace - FT, (legH + h - t) / 2], [hx, yFace - FT - HP + 0.009, (legH + h - t) / 2], 0.004, 6);
+      mb.sphere(M.handles, [hx, yFace - FT - HP + 0.009, (legH + h - t) / 2], 0.009, 8, 6);
+    }
+  }
+}
+
+function buildBarCart(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const r = 0.011;
+  const wr = Math.min(0.11, h * 0.14);
+  const px0 = -w / 2 + 2 * wr * 0.0 + 0.05, px1 = w / 2 - 0.03;
+  const py = d / 2 - 0.045;
+  const shelves = [Math.max(wr * 1.6, 0.18), h * 0.68];
+  for (const x of [px0, px1])
+    for (const sy of [-1, 1]) {
+      const top = x === px0 ? h - r : shelves[1] + 0.06;
+      mb.cylinder(M.frame, [x, sy * py, x === px1 ? 0.02 : wr], r, r, top - (x === px1 ? 0.02 : wr), 8);
+    }
+  mb.rod(M.frame, [px0, -py, h - r], [px0, py, h - r], r, 8);
+  for (const z of shelves) {
+    mb.box(M.shelves, [px0 + r, -py + r, z], [px1 - r, py - r, z + 0.012]);
+    for (const sy of [-1, 1]) mb.rod(M.frame, [px0, sy * py, z + 0.04], [px1, sy * py, z + 0.04], 0.006, 6);
+    for (const x of [px0, px1]) mb.rod(M.frame, [x, -py, z + 0.04], [x, py, z + 0.04], 0.006, 6);
+    for (const sy of [-1, 1]) mb.rod(M.frame, [px0, sy * py, z], [px1, sy * py, z], r * 0.8, 6);
+  }
+  // wheels on the handle end
+  const wx = -w / 2 + wr + 0.004;
+  for (const sy of [-1, 1]) mb.rod(M.wheels, [wx, sy * (d / 2 - 0.027), wr], [wx, sy * (d / 2 - 0.004), wr], wr, 18);
+  mb.rod(M.frame, [wx, -(d / 2 - 0.027), wr], [wx, d / 2 - 0.027, wr], 0.006, 6);
+  for (const sy of [-1, 1]) mb.cylinder(M.frame, [px1, sy * py, 0], 0.018, 0.014, 0.02, 8);
+  // bottles and glasses
+  const zt = shelves[1] + 0.012;
+  const bh = Math.min(0.3, h - zt - 0.01);
+  vessel(mb, M.bottles, px0 + 0.12, -0.04, zt, 0.04, bh, "bottle", 12);
+  vessel(mb, M.bottles_b, px0 + 0.22, 0.06, zt, 0.035, bh * 0.85, "bottle", 12);
+  vessel(mb, M.bottles, px0 + 0.3, -0.07, zt, 0.032, bh * 0.75, "bulb", 12);
+  for (let i = 0; i < 3; i++) vessel(mb, M.shelves, px1 - 0.08 - i * 0.07, 0.07 - i * 0.02, zt, 0.03, 0.09, "jar", 12);
+  vessel(mb, M.frame, px1 - 0.13, -0.08, zt, 0.06, 0.12, "cylinder", 14);
+  const zb = shelves[0] + 0.012;
+  vessel(mb, M.bottles_b, px0 + 0.14, 0, zb, 0.045, Math.min(0.3, shelves[1] - zb - 0.03), "bottle", 12);
+  bookPile(mb, [M.book_a, M.book_b], M.pages, px1 - 0.16, 0, zb, 0.24, d - 0.1, 2, rng(3));
+}
+
+function buildLoungeChair(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  // swivel 5-star base
+  const R = Math.min(w, d) / 2 - 0.05;
+  const hub = 0.16;
+  mb.cylinder(M.base, [0, 0, 0.05], 0.05, 0.04, hub - 0.05, 12);
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i / 5) * TAU;
+    beam(mb, M.base, [Math.cos(a) * 0.03, Math.sin(a) * 0.03, 0.1], [Math.cos(a) * R, Math.sin(a) * R, 0.035], 0.04, 0.025);
+    mb.cylinder(M.base, [Math.cos(a) * R, Math.sin(a) * R, 0], 0.018, 0.018, 0.035, 8);
+  }
+  mb.cylinder(M.base, [0, 0, hub], 0.03, 0.03, 0.12, 10);
+  const seatZ = hub + 0.12;
+  const sw = w * 0.74, sd = d * 0.62;
+  const sy = -d / 2 + sd / 2 + 0.02;
+  // seat shell + cushion (slightly tilted back)
+  mb.with(m4.mul(m4.translation(0, sy, seatZ), m4.rotationX(-0.12)), () => {
+    softBox(mb, M.shell, 0, 0, 0, sw, sd, 0.025, 0.08, 0.008);
+    softBox(mb, M.cushions, 0, 0, 0.025, sw - 0.04, sd - 0.03, 0.1, 0.07, 0.035);
+  });
+  // back shells (lower back + headrest) reclined
+  const lean = 0.42;
+  const yb0 = sy + sd / 2 - 0.06;
+  const L = Math.min((h - seatZ - 0.07 - 0.1 * Math.sin(lean)) / (0.98 * Math.cos(lean)), (d / 2 - yb0 - 0.12) / Math.sin(lean) + 0.12);
+  mb.with(m4.mul(m4.translation(0, yb0, seatZ + 0.06), m4.rotationX(-lean)), () => {
+    softBox(mb, M.shell, 0, 0.06, 0, sw * 0.95, 0.025, L * 0.62, 0.08, 0.008);
+    softBox(mb, M.cushions, 0, 0.0, 0.04, sw * 0.9, 0.1, L * 0.55, 0.07, 0.035);
+    softBox(mb, M.shell, 0, 0.06, L * 0.66, sw * 0.8, 0.025, L * 0.34, 0.08, 0.008);
+    softBox(mb, M.cushions, 0, 0.0, L * 0.68, sw * 0.75, 0.1, L * 0.3, 0.07, 0.035);
+    mb.box(M.base, [-0.02, 0.07, L * 0.5], [0.02, 0.09, L * 0.75]);
+  });
+  // armrests
+  for (const sx of [-1, 1]) {
+    const ax = sx * (w / 2 - 0.06);
+    mb.box(M.base, [ax - 0.01, sy - 0.05, seatZ], [ax + 0.01, sy + sd / 2 - 0.05, seatZ + 0.2]);
+    softBox(mb, M.cushions, ax, sy + 0.02, seatZ + 0.2, 0.09, sd * 0.75, 0.05, 0.03, 0.015);
+  }
+}
+
+function buildWingbackChair(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const legH = 0.12;
+  const armW = clamp(w * 0.14, 0.09, 0.15);
+  const backD = 0.16;
+  const seatTop = 0.46;
+  const armTop = 0.66;
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) mb.cylinder(M.legs, [sx * (w / 2 - 0.06), sy * (d / 2 - 0.06), 0], 0.018, 0.026, legH + 0.01, 10, { top: false });
+  softBox(mb, M.body, 0, -backD / 2 + 0.01, legH, w - 2 * armW + 0.04, d - backD + 0.02, 0.27, 0.02, 0.015);
+  softBox(mb, M.body, 0, -backD / 2, legH + 0.27, w - 2 * armW, d - backD - 0.01, seatTop - legH - 0.27, 0.05, 0.03);
+  // back
+  softBox(mb, M.body, 0, d / 2 - backD / 2, legH, w - 2 * armW + 0.04, backD, h - legH, 0.06, 0.04);
+  // rolled arms
+  for (const sx of [-1, 1]) {
+    const ax = sx * (w / 2 - armW / 2);
+    softBox(mb, M.body, ax, -0.01, legH, armW, d - 0.02, armTop - legH - 0.04, 0.03, 0.02);
+    mb.rod(M.body, [ax, -d / 2 + armW / 2, armTop - armW / 2], [ax, d / 2 - backD, armTop - armW / 2], armW / 2 - 0.002, 12);
+    // wing: profile in (y, z) extruded across the arm width
+    const yB = d / 2 - backD + 0.04, yF = d / 2 - backD - Math.min(0.3, d * 0.3);
+    const wing: Vec2[] = [[yB, armTop - 0.06], [yB, h - 0.07], [yB - 0.06, h - 0.05], [yF + 0.07, h - 0.16], [yF, h - 0.27], [yF + 0.02, armTop + 0.04], [yF + 0.12, armTop - 0.04]];
+    const x0 = sx > 0 ? w / 2 - armW + 0.01 : -w / 2 + 0.01;
+    mb.with(m4.fromBasis([0, 1, 0], [0, 0, 1], [1, 0, 0], [x0, 0, 0]), () => mb.prism(M.body, wing, 0, armW - 0.03));
+  }
+}
+
+function buildAccentChair(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = w / 2 - 0.005;
+  const seatZ = clamp(h * 0.5, 0.36, 0.45);
+  mb.with(m4.scaling(1, d / w, 1), () => {
+    // plinth + upholstered base
+    mb.cylinder(M.legs, [0, 0, 0], R * 0.7, R * 0.7, 0.03, 24);
+    mb.cylinder(M.body, [0, 0, 0.03], R * 0.86, R * 0.92, seatZ - 0.12 - 0.03, 28);
+    // seat cushion
+    softBox(mb, M.body, 0, -0.04, seatZ - 0.12, R * 1.55, R * 1.5, 0.12, R * 0.7, 0.04);
+    // curved backrest wrapping around +Y
+    const span = (125 * Math.PI) / 180;
+    const N = 18;
+    const tb = Math.min(0.13, R * 0.35);
+    const armZ = seatZ + 0.17;
+    const sec = (k: number): Vec3[] => {
+      const t = k / N;
+      const a = Math.PI / 2 - span + 2 * span * t;
+      const ht = armZ + (h - armZ) * Math.pow(Math.sin(Math.PI * t), 0.8);
+      const c = Math.cos(a), sn = Math.sin(a);
+      const ro = R, ri = R - tb, rb = 0.035;
+      const z0 = 0.03;
+      return [
+        [c * ro, sn * ro, z0],
+        [c * ro, sn * ro, ht - rb],
+        [c * (ro - rb * 0.4), sn * (ro - rb * 0.4), ht - rb * 0.2],
+        [c * (ro - tb / 2), sn * (ro - tb / 2), ht],
+        [c * (ri + rb * 0.4), sn * (ri + rb * 0.4), ht - rb * 0.2],
+        [c * ri, sn * ri, ht - rb],
+        [c * ri, sn * ri, seatZ - 0.04],
+      ];
+    };
+    const secs = Array.from({ length: N + 1 }, (_, k) => sec(k));
+    for (let k = 0; k < N; k++) {
+      const A = secs[k], B = secs[k + 1];
+      const ref: Vec3 = [0, 0, 0];
+      for (const p of [...A, ...B]) { ref[0] += p[0] / 14; ref[1] += p[1] / 14; ref[2] += p[2] / 14; }
+      for (let i = 0; i < 7; i++) quadOut(mb, M.body, A[i], A[(i + 1) % 7], B[(i + 1) % 7], B[i], ref);
+    }
+    for (const k of [0, N]) {
+      const S = secs[k];
+      const tdir = v3.norm(v3.sub(secs[k === 0 ? 1 : N - 1][0], S[0]));
+      mb.polygon(M.body, S, v3.scale(tdir, -1));
+    }
+  });
+}
+
+function buildOttoman(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const style = optStr(s, "style", ["pouf", "round", "square"] as const, "pouf");
+  if (style === "pouf") {
+    mb.with(m4.scaling(1, d / w, 1), () => {
+      const R = w / 2;
+      lathe(mb, M.fabric, 0, 0, [[0, 0], [R * 0.78, 0], [R * 0.95, h * 0.15], [R, h * 0.5], [R * 0.95, h * 0.85], [R * 0.75, h], [R * 0.2, h], [0, h - 0.02]], 24);
+    });
+    return;
+  }
+  if (style === "round") {
+    const legH = 0.08;
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 4 + (i / 4) * TAU;
+      mb.rod(M.legs, [Math.cos(a) * w * 0.28, Math.sin(a) * d * 0.28, legH + 0.01], [Math.cos(a) * w * 0.36, Math.sin(a) * d * 0.36, 0.007], 0.014, 8);
+    }
+    softBox(mb, M.fabric, 0, 0, legH, w, d, h - legH, Math.min(w, d) / 2, 0.035);
+    mb.sphere(M.legs, [0, 0, h - 0.014], 0.01, 8, 5);
+    return;
+  }
+  const legH = 0.1;
+  legs4(mb, M.legs, w, d, 0.03, 0.035, 0, legH + 0.01, true, 0.7);
+  softBox(mb, M.fabric, 0, 0, legH, w, d, h - legH, 0.03, 0.03);
+}
+
+function buildDaybed(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const legH = 0.12, baseTop = 0.32, armW = 0.1, backD = 0.12;
+  const armTop = Math.min(h - 0.1, 0.62);
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.cylinder(M.legs, [sx * (w / 2 - 0.05), sy * (d / 2 - 0.05), 0], 0.016, 0.024, legH + 0.01, 10, { top: false });
+  softBox(mb, M.frame, 0, -backD / 2, legH, w - 2 * armW + 0.04, d - backD, baseTop - legH, 0.02, 0.015);
+  softBox(mb, M.frame, 0, d / 2 - backD / 2, legH, w, backD, h - legH, 0.04, 0.03);
+  for (const sx of [-1, 1]) {
+    softBox(mb, M.frame, sx * (w / 2 - armW / 2), -0.0, legH, armW, d, armTop - legH - 0.03, 0.03, 0.02);
+    mb.rod(M.frame, [sx * (w / 2 - armW / 2), -d / 2 + armW / 2, armTop - armW / 2], [sx * (w / 2 - armW / 2), d / 2 - backD, armTop - armW / 2], armW / 2 - 0.002, 12);
+  }
+  const iw = w - 2 * armW;
+  softBox(mb, M.mattress, 0, -backD / 2 + 0.005, baseTop, iw - 0.01, d - backD - 0.02, 0.14, 0.05, 0.03);
+  const zt = baseTop + 0.14;
+  // bolsters along the arms + pillows against the back
+  const br = Math.min(0.1, (h - zt) * 0.4);
+  for (const sx of [-1, 1]) mb.rod(M.pillows, [sx * (iw / 2 - br), -d / 2 + 0.06, zt + br - 0.01], [sx * (iw / 2 - br), d / 2 - backD - 0.04, zt + br - 0.01], br, 14);
+  const np = Math.max(1, Math.round((iw - 4 * br) / 0.55));
+  const pw = (iw - 4 * br) / np;
+  for (let i = 0; i < np; i++) {
+    const cx = -iw / 2 + 2 * br + pw * (i + 0.5);
+    const ph = Math.min(0.45, (h - zt - 0.03) / Math.cos(0.25) - 0.03);
+    mb.with(m4.mul(m4.translation(cx, d / 2 - backD - 0.06, zt - 0.01), m4.rotationX(-0.25)), () => pillow(mb, i % 2 ? M.pillows : M.cushions, 0, 0, ph / 2, Math.min(0.5, pw - 0.03), ph, 0.06));
+  }
+}
+
+function buildPlatformBed(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const ns = optBool(s, "nightstands", false);
+  const nsW = ns ? Math.min(0.5, (w - 1.0) / 2) : 0;
+  const bw = w - 2 * nsW;
+  const hbT = 0.08;
+  const platTop = 0.26;
+  // recessed plinth makes the platform float
+  mb.box(M.frame, [-bw / 2 + 0.12, -d / 2 + 0.15, 0], [bw / 2 - 0.12, d / 2 - hbT - 0.1, 0.08], { skip: ["+z"] });
+  softBox(mb, M.frame, 0, -hbT / 2, 0.08, bw, d - hbT, platTop - 0.08, 0.015, 0.008);
+  // low wide headboard (full width, panel)
+  softBox(mb, M.headboard, 0, d / 2 - hbT / 2, 0.08, w, hbT, h - 0.08, 0.02, 0.015, false);
+  if (ns)
+    for (const sx of [-1, 1]) {
+      const cx = sx * (w / 2 - nsW / 2);
+      mb.box(M.frame, [cx - nsW / 2 + 0.01, d / 2 - hbT - 0.38, 0.36], [cx + nsW / 2 - 0.01, d / 2 - hbT, 0.52]);
+      mb.box(M.handles, [cx - 0.08, d / 2 - hbT - 0.383, 0.43], [cx + 0.08, d / 2 - hbT - 0.38, 0.445]);
+    }
+  mattressSet(mb, M, -bw / 2 + 0.06, bw / 2 - 0.06, -d / 2 + 0.06, d / 2 - hbT - 0.02, platTop, Math.min(0.24, h * 0.3));
+}
+
+function buildCanopyBed(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const P = 0.05;
+  const px = w / 2 - P / 2, py = d / 2 - P / 2;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.block(M.frame, sx * px, sy * py, 0, P, P, h);
+  for (const sy of [-1, 1]) mb.box(M.frame, [-px + P / 2, sy * py - 0.015, h - 0.05], [px - P / 2, sy * py + 0.015, h]);
+  for (const sx of [-1, 1]) mb.box(M.frame, [sx * px - 0.015, -py + P / 2, h - 0.05], [sx * px + 0.015, py - P / 2, h]);
+  // bed frame + headboard between the back posts
+  mb.box(M.frame, [-px + P / 2, -py + P / 2, 0.18], [px - P / 2, py - P / 2, 0.3]);
+  softBox(mb, M.headboard, 0, py - 0.03, 0.3, w - 2 * P, 0.05, Math.min(1.25, h * 0.55), 0.02, 0.012, false);
+  mattressSet(mb, M, -px + P / 2, px - P / 2, -py + P / 2, py - 0.06, 0.3, 0.24);
+  if (optBool(s, "drapes", true)) {
+    const R = Math.min(0.09, P * 1.8);
+    for (const sx of [-1, 1])
+      for (const sy of [-1, 1]) {
+        const cx = sx * (px - R + P / 2 - 0.002) * 1, cy = sy * (py - R + P / 2 - 0.002);
+        lathe(mb, M.drapes, cx - sx * 0.0, cy, [[0, 0.01], [R * 0.9, 0.01], [R, 0.3], [R * 0.75, h * 0.42], [R * 0.4, h * 0.5], [R * 0.75, h * 0.6], [R * 0.85, h - 0.06], [0, h - 0.06]], 10);
+      }
+  }
+}
+
+function buildDiningBench(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const cushion = optBool(s, "cushion", false);
+  const t = 0.04;
+  const top = cushion ? h - 0.05 : h;
+  mb.box(M.top, [-w / 2, -d / 2, top - t], [w / 2, d / 2, top]);
+  if (cushion) softBox(mb, M.cushion, 0, 0, top, w - 0.02, d - 0.02, h - top, 0.03, 0.02);
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) mb.rod(M.legs, [sx * (w / 2 - 0.12), sy * (d / 2 - 0.08), top - t + 0.005], [sx * (w / 2 - 0.05), sy * (d / 2 - 0.03), 0.004], 0.02, 8);
+  for (const sx of [-1, 1]) mb.rod(M.legs, [sx * (w / 2 - 0.085), -(d / 2 - 0.055), top * 0.35], [sx * (w / 2 - 0.085), d / 2 - 0.055, top * 0.35], 0.012, 6);
+  mb.rod(M.legs, [-(w / 2 - 0.085), 0, top * 0.35], [w / 2 - 0.085, 0, top * 0.35], 0.012, 6);
+}
+
+function buildRoundDiningTable(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const t = 0.03;
+  ecyl(mb, M.top, 0, 0, h - t, w / 2, d / 2, t, 40);
+  const m = Math.min(w, d);
+  if (optStr(s, "base", ["tulip", "pedestal"] as const, "tulip") === "tulip") {
+    const rb = m * 0.28;
+    lathe(mb, M.base, 0, 0, [[0, 0], [rb, 0], [rb, 0.012], [rb * 0.82, 0.03], [rb * 0.45, 0.08], [rb * 0.2, 0.18], [0.045, 0.36], [0.042, h - t - 0.1], [0.07, h - t - 0.03], [0.16, h - t], [0, h - t]], 24);
+    return;
+  }
+  const rc = 0.06;
+  mb.cylinder(M.base, [0, 0, 0.04], rc, rc * 0.9, h - t - 0.1, 14, { bottom: false });
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + (i / 4) * TAU;
+    beam(mb, M.base, [0, 0, 0.025], [Math.cos(a) * m * 0.32, Math.sin(a) * m * 0.32, 0.025], 0.07, 0.05);
+  }
+  mb.box(M.base, [-0.08, -0.08, 0], [0.08, 0.08, 0.05]);
+  mb.cylinder(M.base, [0, 0, h - t - 0.06], rc * 0.9, rc * 2.2, 0.06, 14, { bottom: false });
+}
+
+function buildDressingTable(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const topZ = Math.min(0.76, h * 0.55);
+  const t = 0.025;
+  mb.box(M.body, [-w / 2, -d / 2, topZ - t], [w / 2, d / 2, topZ]);
+  const ap = 0.12;
+  const yFace = -d / 2 + 0.02 + FT + HP * 0.5;
+  mb.box(M.body, [-w / 2 + 0.03, yFace, topZ - t - ap], [w / 2 - 0.03, d / 2 - 0.03, topZ - t], { skip: ["+z"] });
+  front(mb, M.body, M.handles, -w * 0.3, w * 0.3, topZ - t - ap, topZ - t, yFace, "knob");
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) mb.cylinder(M.body, [sx * (w / 2 - 0.05), sy * (d / 2 - 0.05), 0], 0.014, 0.022, topZ - t - 0.005, 10, { top: false });
+  // mirror on two uprights at the back
+  const shape = optStr(s, "mirror", ["round", "arched", "rect"] as const, "round");
+  const mh = h - topZ - 0.03, mw = Math.min(w * 0.7, shape === "round" ? mh : mh * 0.75);
+  const yb = d / 2 - 0.035;
+  for (const sx of [-1, 1]) mb.box(M.body, [sx * (mw / 2 + 0.02) - 0.015, yb, topZ], [sx * (mw / 2 + 0.02) + 0.015, yb + 0.03, topZ + mh * 0.6]);
+  mb.with(m4.translation(0, 0, topZ + 0.03), () => framedPanel(mb, M.body, M.mirror, mirrorOutline(shape, mw, mh), Math.min(0.035, mw * 0.06), yb + 0.03, 0.025));
+  // a couple of things on top
+  vessel(mb, M.vase, -w / 2 + 0.1, 0, topZ, 0.035, 0.12, "bottle", 12);
+  bookPile(mb, [M.handles, M.body], "paper_white", w / 2 - 0.15, -0.03, topZ, 0.18, Math.min(0.14, d - 0.12), 2, rng(9));
+}
+
+function buildFilingCabinet(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const base = 0.04;
+  const yFace = -d / 2 + FRONT;
+  mb.box(M.body, [-w / 2 + 0.02, yFace + 0.02, 0], [w / 2 - 0.02, d / 2 - 0.01, base], { skip: ["+z"] });
+  mb.box(M.body, [-w / 2, yFace, base], [w / 2, d / 2, h]);
+  const n = Math.round(optNum(s, "drawers", clamp(Math.round((h - base) / 0.32), 1, 5), 1, 6));
+  const dh = (h - base) / n;
+  for (let i = 0; i < n; i++) {
+    const z0 = base + i * dh, z1 = z0 + dh;
+    front(mb, M.body, M.handles, -w / 2, w / 2, z0, z1, yFace, "bar_h", 0, z1 - dh * 0.32, Math.min(0.16, w * 0.4));
+    mb.box(M.handles, [-0.04, yFace - FT - 0.003, z1 - dh * 0.2], [0.04, yFace - FT, z1 - dh * 0.2 + 0.025], { skip: ["+y"] });
+  }
+}
+
+function buildCrib(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const P = 0.045;
+  const px = w / 2 - P / 2, py = d / 2 - P / 2;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.block(M.frame, sx * px, sy * py, 0, P, P, h);
+  const mz = clamp(h * 0.32, 0.15, 0.4);
+  const railLo = mz - 0.06;
+  // long sides: rails + slats
+  for (const sy of [-1, 1]) {
+    for (const z of [railLo, h - 0.05]) mb.box(M.frame, [-px + P / 2, sy * py - 0.015, z], [px - P / 2, sy * py + 0.015, z + 0.045]);
+    const n = Math.floor((w - 2 * P) / 0.065);
+    for (let i = 0; i < n; i++) {
+      const x = -px + P / 2 + ((w - 2 * P) * (i + 0.5)) / n;
+      mb.box(M.frame, [x - 0.012, sy * py - 0.011, railLo + 0.045], [x + 0.012, sy * py + 0.011, h - 0.05]);
+    }
+  }
+  // solid end panels with a curved top
+  for (const sx of [-1, 1]) {
+    const prof: Vec2[] = [[-py + P / 2, railLo], [py - P / 2, railLo], [py - P / 2, h - 0.08]];
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10;
+      prof.push([py - P / 2 - t * (2 * py - P), h - 0.08 + 0.05 * Math.sin(Math.PI * t)]);
+    }
+    prof.push([-py + P / 2, h - 0.08]);
+    mb.with(m4.fromBasis([0, 1, 0], [0, 0, 1], [1, 0, 0], [sx * px - 0.01, 0, 0]), () => mb.prism(M.frame, prof, 0, 0.02));
+  }
+  mb.box(M.frame, [-px + P / 2, -py + P / 2, mz - 0.04], [px - P / 2, py - P / 2, mz - 0.02]);
+  softBox(mb, M.mattress, 0, 0, mz - 0.02, w - 2 * P - 0.01, d - 2 * P - 0.01, 0.1, 0.03, 0.02);
+  softBox(mb, M.blanket, -w * 0.12, 0, mz + 0.08, w * 0.45, d - 2 * P - 0.03, 0.03, 0.04, 0.012);
+}
+
+function buildToyBox(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const open = optBool(s, "open", true);
+  const lt = 0.025;
+  const lidAng = open ? (70 * Math.PI) / 180 : 0;
+  const bh = open ? Math.max(0.2, h - d * Math.sin(lidAng) - 0.01) : h - lt;
+  const wall = 0.018;
+  const bw = w - 0.006;
+  rectLathe(mb, M.box, 0, 0, bw, d - 0.006, 0.015, [[0, 0], [0, bh], [wall, bh], [wall, bh * 0.35], [Math.min(bw, d), bh * 0.35]], 2);
+  for (const sx of [-1, 1]) mb.box(M.accent, [sx > 0 ? bw / 2 - 0.002 : -w / 2, -0.06, bh * 0.6], [sx > 0 ? w / 2 : -bw / 2 + 0.002, 0.06, bh * 0.68]);
+  const hy = d / 2 - lt * Math.sin(lidAng) - 0.003;
+  mb.with(m4.mul(m4.translation(0, hy, bh), m4.rotationX(-lidAng)), () => mb.box(M.box, [-w / 2, -(d - 0.006), 0], [w / 2, 0, lt]));
+  if (!open) return;
+  // toys peeking out
+  const tz = bh * 0.35;
+  const room = bh - tz;
+  mb.sphere(M.toy_a, [-w * 0.22, -d * 0.05, tz + Math.min(0.1, room * 0.7)], Math.min(0.1, room * 0.7, d / 2 - wall - 0.01), 14, 10);
+  for (let i = 0; i < 4; i++) {
+    const c = Math.min(0.07, room * 0.45);
+    const x = w * 0.05 + (i % 2) * c * 1.15, y = -d * 0.15 + Math.floor(i / 2) * c * 1.2;
+    mb.with(m4.mul(m4.translation(x, y, tz + (i === 3 ? c : 0) + c / 2), m4.rotationZ(i * 0.4)), () => mb.block([M.toy_b, M.toy_c, M.toy_a, M.toy_b][i], 0, 0, -c / 2, c, c, c));
+  }
+  mb.sphere(M.toy_c, [w * 0.32, d * 0.12, tz + room * 0.55], Math.min(0.07, room * 0.5), 12, 8);
+}
+
+function buildKidsBed(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const P = 0.045;
+  const px = w / 2 - P / 2, py = d / 2 - P / 2;
+  const roofRise = Math.min(w * 0.42, h * 0.35);
+  const wallH = h - roofRise;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) mb.block(M.frame, sx * px, sy * py, 0, P, P, wallH);
+  // gables (front & back) + ridge
+  for (const sy of [-1, 1]) {
+    for (const sx of [-1, 1]) beam(mb, M.frame, [sx * px, sy * py, wallH - 0.02], [0, sy * py, h - P * 0.7], P, P);
+  }
+  mb.box(M.frame, [-P / 2, -py - P / 2, h - P], [P / 2, py + P / 2, h]);
+  for (const sx of [-1, 1]) mb.box(M.frame, [sx * px - P / 2, -py + P / 2, wallH - P], [sx * px + P / 2, py - P / 2, wallH]);
+  // low frame + rails + mattress
+  mb.box(M.frame, [-px + P / 2, -py + P / 2, 0.08], [px - P / 2, py - P / 2, 0.16]);
+  for (const sy of [-1, 1]) mb.box(M.frame, [-px + P / 2, sy * py - 0.012, 0.16], [px - P / 2, sy * py + 0.012, 0.36]);
+  mattressSet(mb, M, -px + P / 2, px - P / 2, -py + P / 2, py - P / 2, 0.16, 0.13);
+}
+
+// ---- bathroom ----
+
+function buildTowelRail(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const r = 0.013;
+  const yr = d / 2 - Math.min(0.06, d * 0.5);
+  const xs = w / 2 - r - 0.005;
+  for (const sx of [-1, 1]) {
+    mb.cylinder(M.metal, [sx * xs, yr, 0.01], r, r, h - 0.02, 10);
+    for (const z of [0.12, h - 0.12]) mb.rod(M.metal, [sx * xs, yr, z], [sx * xs, d / 2, z], 0.008, 8);
+    for (const z of [0.12, h - 0.12]) mb.cylinder(M.metal, [sx * xs, d / 2 - 0.002, z - 0.025], 0.002, 0.002, 0.05, 4);
+  }
+  const n = Math.max(3, Math.round((h - 0.1) / 0.075));
+  for (let i = 0; i < n; i++) {
+    const z = 0.06 + ((h - 0.12) * i) / (n - 1);
+    mb.rod(M.metal, [-xs, yr, z], [xs, yr, z], 0.009, 8);
+  }
+  if (!optBool(s, "towel", true)) return;
+  // towel folded over the second bar from the top
+  const zb = 0.06 + ((h - 0.12) * (n - 2)) / (n - 1);
+  const tw = Math.min(w - 0.1, 0.42), tt = 0.012;
+  const yf = yr - 0.009 - tt / 2 - 0.001, yk = yr + 0.009 + tt / 2 + 0.001;
+  mb.rod(M.towel, [-tw / 2, yr, zb + 0.004], [tw / 2, yr, zb + 0.004], 0.009 + tt, 12);
+  softBox(mb, M.towel, 0, yf, Math.max(0.02, zb - h * 0.45), tw, tt, zb - Math.max(0.02, zb - h * 0.45), 0.004, 0.003);
+  softBox(mb, M.towel, 0, yk, Math.max(0.05, zb - h * 0.3), tw, tt, zb - Math.max(0.05, zb - h * 0.3), 0.004, 0.003);
+}
+
+function buildTowelHooks(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const ph = Math.min(0.09, h * 0.2);
+  const pt = 0.018;
+  mb.box(M.plate, [-w / 2, d / 2 - pt, h - ph], [w / 2, d / 2, h]);
+  const n = Math.max(2, Math.round(w / 0.16));
+  const hz = h - ph / 2;
+  const hookY = Math.max(-d / 2 + 0.012, d / 2 - pt - 0.05);
+  const xs = Array.from({ length: n }, (_, i) => -w / 2 + (w * (i + 0.5)) / n);
+  for (const x of xs) {
+    mb.rod(M.hooks, [x, d / 2 - pt, hz - 0.01], [x, hookY + 0.005, hz - 0.005], 0.006, 8);
+    mb.sphere(M.hooks, [x, hookY + 0.002, hz + 0.004], 0.011, 8, 6);
+  }
+  if (!optBool(s, "towels", true)) return;
+  const towels = [M.towel, M.towel_b];
+  [0, n - 1].forEach((k, i) => {
+    if (n < 2 && i) return;
+    const x = xs[k];
+    const tw = Math.min(0.26, w / n + 0.08), tt = 0.014;
+    const top = hz - 0.006, bot = Math.max(0.0, top - Math.min(0.55, h * 0.85));
+    const ty = hookY + 0.01;
+    // two hanging layers (front/back of the fold) with a rounded top
+    softBox(mb, towels[i % 2], clamp(x, -w / 2 + tw / 2, w / 2 - tw / 2), ty - tt / 2 - 0.002, bot, tw, tt, top - bot, 0.01, 0.004);
+    softBox(mb, towels[i % 2], clamp(x, -w / 2 + tw / 2, w / 2 - tw / 2), ty + tt / 2, bot + 0.04, tw * 0.94, tt, top - bot - 0.04, 0.01, 0.004);
+  });
+}
+
+function buildToiletRollHolder(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const rr = Math.min(0.055, (d - 0.02) / 2, h / 2 - 0.005);
+  const zc = h / 2;
+  const yc = d / 2 - 0.012 - rr;
+  mb.with(facingFront(-w / 2 + 0.03, d / 2, zc), () => mb.cylinder(M.metal, [0, 0, 0], 0.025, 0.025, 0.012, 14));
+  mb.rod(M.metal, [-w / 2 + 0.03, d / 2 - 0.012, zc], [-w / 2 + 0.03, yc, zc], 0.007, 8);
+  mb.rod(M.metal, [-w / 2 + 0.03, yc, zc], [w / 2 - 0.005, yc, zc], 0.007, 8);
+  const rl = Math.min(0.1, w - 0.06);
+  mb.with(axleX(-w / 2 + 0.045, yc, zc), () => {
+    tube(mb, M.paper, 0, 0, 0, rl, rr, rr, rr - 0.022, 24);
+    tube(mb, M.core, 0, 0, 0.001, rl - 0.001, 0.022, 0.022, 0.003, 12);
+  });
+}
+
+function buildBathMat(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  softBox(mb, M.main, 0, 0, 0, w, d, h * 0.6, 0.04, 0.004, false);
+  const n = Math.max(3, Math.round(d / 0.06));
+  for (let i = 0; i < n; i++) {
+    const y = -d / 2 + 0.04 + ((d - 0.08) * (i + 0.5)) / n;
+    softBox(mb, M.main, 0, y, h * 0.6 - 0.001, w - 0.08, (d - 0.08) / n - 0.012, h * 0.4 + 0.001, 0.008, 0.003, false);
+  }
+}
+
+function buildSoapDispenser(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const set = optBool(s, "set", true);
+  const x0 = set ? -w / 2 + 0.045 : 0;
+  const r = Math.min(0.04, d / 2 - 0.005);
+  const bh = h * 0.68;
+  lathe(mb, M.bottle, x0, 0, [[0, 0], [r * 0.95, 0], [r, 0.01], [r, bh * 0.9], [r * 0.7, bh], [0, bh]], 16);
+  mb.cylinder(M.pump, [x0, 0, bh], 0.012, 0.012, h * 0.12, 10, { bottom: false });
+  mb.cylinder(M.pump, [x0, 0, bh + h * 0.12], 0.016, 0.016, h - bh - h * 0.12 - 0.002, 10);
+  mb.rod(M.pump, [x0, 0, h - 0.012], [x0, -Math.min(0.045, d / 2 - 0.006), h - 0.016], 0.005, 6);
+  if (!set) return;
+  // tumbler with toothbrushes + soap dish
+  const tx = 0.01;
+  vessel(mb, M.tumbler, tx, 0, 0, Math.min(0.036, d / 2 - 0.01), h * 0.5, "jar", 16);
+  for (const [a, mat] of [[0.25, M.brush_a], [-0.3, M.brush_b]] as [number, string][]) {
+    const top: Vec3 = [tx + Math.sin(a) * 0.05, Math.cos(a) * 0.01, h - 0.02];
+    mb.rod(mat, [tx, 0, 0.02], top, 0.006, 6);
+    mb.box(mat, [top[0] - 0.005, top[1] - 0.012, top[2] - 0.02], [top[0] + 0.005, top[1] - 0.004, top[2] + 0.018]);
+  }
+  const sx = w / 2 - 0.05;
+  rectLathe(mb, M.bottle, sx, 0, 0.09, Math.min(0.07, d - 0.01), 0.02, [[0.01, 0], [0, 0.012], [0.006, 0.012], [0.006, 0.006], [0.05, 0.006]], 3);
+  softBox(mb, M.soap, sx, 0, 0.006, 0.065, Math.min(0.045, d - 0.03), 0.022, 0.015, 0.008);
+}
+
+function buildFreestandingBathtub(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const style = optStr(s, "style", ["modern", "clawfoot"] as const, "modern");
+  const r = d / 2 - 0.005;
+  if (style === "modern") {
+    rectLathe(mb, M.body, 0, 0, w, d, r, [[0.14, 0], [0.06, 0.06], [0.015, h * 0.45], [0, h - 0.01], [0.006, h], [0.05, h], [0.07, h - 0.04], [0.12, h * 0.4], [0.2, 0.1], [Math.min(w, d) / 2, 0.1]], 8);
+    mb.cylinder(M.faucet, [w * 0.25, 0, 0.1], 0.025, 0.025, 0.002, 12, { bottom: false });
+    return;
+  }
+  // clawfoot: roll-top tub on four feet, deck tap at the -X end
+  const z0 = 0.14, rim = h - 0.13;
+  rectLathe(mb, M.body, 0, 0, w, d, r, [[0.16, z0], [0.06, z0 + 0.08], [0.012, rim * 0.6], [0.006, rim - 0.04], [0, rim - 0.015], [0.006, rim], [0.03, rim + 0.005], [0.045, rim - 0.01], [0.07, rim - 0.06], [0.13, z0 + 0.2], [0.22, z0 + 0.05], [Math.min(w, d) / 2, z0 + 0.05]], 8);
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) {
+      const fx = sx * (w / 2 - 0.2), fy = sy * (d / 2 - 0.12);
+      mb.rod(M.feet, [fx * 0.94, fy * 0.85, z0 + 0.04], [fx, fy, 0.04], 0.022, 8);
+      mb.sphere(M.feet, [fx, fy, 0.035], 0.035, 10, 7, [1, 1, 1]);
+    }
+  const tx = -w / 2 + 0.06;
+  for (const sy of [-1, 1]) {
+    mb.cylinder(M.faucet, [tx, sy * 0.06, rim + 0.005], 0.012, 0.012, h - rim - 0.03, 8);
+    mb.cylinder(M.faucet, [tx, sy * 0.06, h - 0.025], 0.022, 0.018, 0.02, 8);
+  }
+  mb.rod(M.faucet, [tx, -0.06, h - 0.06], [tx, 0.06, h - 0.06], 0.01, 8);
+  mb.rod(M.faucet, [tx, 0, h - 0.06], [tx + 0.09, 0, h - 0.08], 0.011, 8);
+}
+
+function buildShowerCurtain(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const rodZ = h - 0.02;
+  mb.rod(M.rod, [-w / 2, 0, rodZ], [w / 2, 0, rodZ], 0.012, 10);
+  const amp = Math.min(d / 2 - 0.01, 0.035);
+  const n = Math.max(4, Math.round(w / 0.08)) * 2;
+  const front: Vec2[] = [];
+  for (let i = 0; i <= n; i++) front.push([-w / 2 + 0.01 + ((w - 0.02) * i) / n, i % 2 ? amp : -amp]);
+  const prof: Vec2[] = [...front, ...front.map((p) => [p[0], p[1] + 0.004] as Vec2).reverse()];
+  mb.prism(M.fabric, prof, 0.03, rodZ - 0.06);
+  for (let i = 0; i <= n; i += 2) torus(mb, M.rod, [clamp(front[i][0], -w / 2 + 0.03, w / 2 - 0.03), 0, rodZ - 0.025], 0.025, 0.003, "y", 10, 4);
+}
+
+// ---- kitchen counter decor ----
+
+function buildKettle(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(d / 2 - 0.005, (w - 0.14) / 2);
+  const cx = 0;
+  mb.cylinder(M.accent, [cx, 0, 0], R * 1.02, R, 0.016, 20);
+  const bh = h - 0.03;
+  lathe(mb, M.body, cx, 0, [[0, 0.016], [R * 0.92, 0.016], [R, 0.04], [R * 0.94, bh * 0.75], [R * 0.72, bh], [0, bh]], 22);
+  mb.cylinder(M.accent, [cx, 0, bh - 0.002], R * 0.25, R * 0.22, h - bh + 0.002 - 0.004, 12);
+  // handle (+X) and spout (-X)
+  const hx = Math.min(w / 2 - 0.012, cx + R + 0.06);
+  beam(mb, M.accent, [cx + R * 0.85, 0, bh * 0.85], [hx, 0, bh * 0.85], 0.03, 0.022);
+  beam(mb, M.accent, [hx, 0, bh * 0.86], [hx, 0, bh * 0.3], 0.025, 0.03);
+  beam(mb, M.accent, [hx, 0, bh * 0.3], [cx + R * 0.9, 0, bh * 0.25], 0.03, 0.02);
+  mb.rod(M.body, [cx - R * 0.8, 0, bh * 0.55], [Math.max(-w / 2 + 0.012, cx - R - 0.06), 0, bh * 0.82], 0.012, 8);
+}
+
+function buildCoffeeMachine(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const yb = -d / 2 + d * 0.38;
+  // back tower + top overhang + drip tray base
+  softBox(mb, M.body, 0, (yb + d / 2) / 2, 0, w, d / 2 - yb, h, 0.02, 0.008);
+  softBox(mb, M.body, 0, (-d / 2 + 0.03 + yb) / 2 + 0.01, h * 0.68, w, yb + d / 2 - 0.03 + 0.02, h * 0.32, 0.02, 0.008);
+  mb.box(M.body, [-w / 2 + 0.01, -d / 2 + 0.02, 0], [w / 2 - 0.01, yb + 0.01, 0.035]);
+  mb.box(M.accent, [-w / 2 + 0.03, -d / 2 + 0.03, 0.035], [w / 2 - 0.03, yb, 0.038]);
+  // group head + portafilter
+  const gy = (-d / 2 + 0.03 + yb) / 2;
+  mb.cylinder(M.metal, [0, gy, h * 0.6], 0.04, 0.045, h * 0.08, 16, { top: false });
+  mb.cylinder(M.metal, [0, gy, h * 0.53], 0.042, 0.04, h * 0.07, 16);
+  beam(mb, M.accent, [0, gy - 0.03, h * 0.56], [0, -d / 2 + 0.005, h * 0.53], 0.022, 0.03);
+  // cup
+  lathe(mb, M.cup, 0, gy, [[0, 0.038], [0.024, 0.038], [0.032, 0.09], [0.028, 0.09], [0.026, 0.06], [0, 0.06]], 14);
+  // steam wand, gauge, buttons
+  mb.rod(M.metal, [w / 2 - 0.04, gy + 0.01, h * 0.68], [w / 2 - 0.035, gy - 0.02, h * 0.2], 0.005, 6);
+  mb.with(facingFront(0, -d / 2 + 0.03, h * 0.84), () => {
+    mb.cylinder(M.metal, [0, 0, 0], 0.03, 0.03, 0.008, 18, { bottom: false });
+    mb.cylinder(M.cup, [0, 0, 0.008], 0.025, 0.025, 0.001, 18, { bottom: false });
+  });
+  for (const x of [-w * 0.32, -w * 0.2, w * 0.2]) mb.with(facingFront(x, -d / 2 + 0.03, h * 0.84), () => mb.cylinder(M.accent, [0, 0, 0], 0.01, 0.01, 0.006, 10, { bottom: false }));
+}
+
+function buildFruitBowl(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, d) / 2;
+  const bh = Math.min(h * 0.55, R * 0.5);
+  vessel(mb, M.bowl, 0, 0, 0, R, bh, "bowl", 24);
+  const fz = bh * 0.22;
+  const fr = Math.min(0.04, (h - fz) / 2 - 0.002, R * 0.3);
+  const fruit = (x: number, y: number, z: number, mat: string, k = 1, stem = true) => {
+    mb.sphere(mat, [x, y, z + fr * k], fr * k, 12, 9, [1, 1, 0.92]);
+    if (stem) mb.rod(M.stem, [x, y, z + fr * k * 1.8], [x + 0.004, y, z + fr * k * 2 + 0.01], 0.0025, 4);
+  };
+  const ring = R * 0.42;
+  fruit(ring, 0, fz, M.fruit_a);
+  fruit(-ring * 0.5, ring * 0.86, fz, M.fruit_b, 1.05, false);
+  fruit(-ring * 0.5, -ring * 0.86, fz, M.fruit_a);
+  fruit(0, 0, fz + fr * 0.9, M.fruit_b, 1.0, false);
+  mb.sphere(M.fruit_c, [ring * 0.2, -ring * 0.3, fz + fr * 1.7 + 0.004], fr * 0.75, 12, 8, [1.3, 0.85, 0.85]);
+  // two bananas lying across the fruit, curving up at both ends
+  const br = Math.min(0.017, (h - fz - fr * 1.9) / 3);
+  for (let b = 0; b < 2; b++) {
+    const pts: Vec3[] = [], rad: number[] = [];
+    const n = 9;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      pts.push([-R * 0.6 + R * 1.15 * t, R * 0.18 - b * br * 2.1 - 0.02 * Math.sin(Math.PI * t), fz + fr * 1.9 + br + 0.055 * Math.pow(2 * t - 1, 2) * (R / 0.16) * 0.5 + b * br * 0.6]);
+      rad.push(i === n ? 0.004 : br * Math.pow(Math.sin(Math.PI * (0.06 + 0.88 * t)), 0.5));
+    }
+    sweepTube(mb, M.fruit_c, pts.map((p) => [p[0], p[1], Math.min(p[2], h - br)] as Vec3), rad, 7);
+    mb.rod(M.stem, pts[n], v3.add(pts[n], [0.012, 0, 0.012]), 0.004, 5);
+  }
+}
+
+function buildCuttingBoards(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const t = 0.018;
+  // each board: outline in (x, z) with a hanging hole, extruded along -Y and leaned against the wall
+  const board = (mat: string, cx: number, bw: number, bh: number, round: boolean, lean: number, yBack: number) => {
+    const hr = 0.012;
+    const body = round ? ellipse(cx, bh * 0.4, bw / 2, bh * 0.4, 28) : roundRect(cx, bh * 0.38, bw, bh * 0.76, 0.03, 3);
+    const tabW = Math.min(0.08, bw * 0.35);
+    const tab = roundRect(cx, bh * 0.85, tabW, bh * 0.3, tabW * 0.45, 3);
+    const hole = ellipse(cx, bh * 0.9, hr, hr, 12);
+    const c = Math.cos(lean), sn = Math.sin(lean);
+    mb.with(m4.mul(m4.translation(0, yBack - t * c - bh * sn, t * sn), m4.mul(m4.rotationX(-lean), m4.fromBasis([1, 0, 0], [0, 0, 1], [0, -1, 0], [0, t, 0]))), () => {
+      mb.prism(mat, body, 0, t);
+      loft(mb, mat, tab, 0, tab, t);
+      mb.flat(mat, tab, t, false, [hole]);
+      mb.flat(mat, tab, 0, true, [hole]);
+      loft(mb, mat, hole, 0, hole, t, true);
+    });
+  };
+  const L = (bh: number, yb: number) => Math.asin(clamp((yb + d / 2 - t - 0.006) / bh, 0, 0.3));
+  const y2 = d / 2 - Math.min(0.022, d * 0.15), y3 = d / 2 - Math.min(0.045, d * 0.3);
+  board(M.board_a, -w * 0.12, w * 0.62, h, false, L(h, d / 2), d / 2);
+  board(M.board_b, w * 0.18, w * 0.55, h * 0.82, true, L(h * 0.82, y2) * 0.75, y2);
+  board(M.board_c, -w * 0.25, w * 0.4, h * 0.55, false, L(h * 0.55, y3) * 0.5, y3);
+}
+
+function buildUtensilJar(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, d) / 2 - 0.004;
+  const jh = Math.min(h * 0.5, 0.18);
+  vessel(mb, M.jar, 0, 0, 0, R, jh, "jar", 18);
+  const items: [number, number, string][] = [[0.3, 0.2, "spoon"], [-0.25, 0.7, "spatula"], [0.1, 2.4, "ladle"], [-0.15, 4, "spoon"], [0.2, 5.2, "whisk"]];
+  for (const [tilt, az, kind] of items) {
+    const top: Vec3 = [Math.cos(az) * Math.sin(tilt) * (h - jh) * 0.55, Math.sin(az) * Math.sin(tilt) * (h - jh) * 0.55, h - 0.005];
+    const base: Vec3 = [Math.cos(az) * R * 0.3, Math.sin(az) * R * 0.3, 0.04];
+    const dir = v3.norm(v3.sub(top, base));
+    const tipLen = 0.07;
+    const neck = v3.sub(top, v3.scale(dir, tipLen));
+    const mat = kind === "spoon" || kind === "spatula" ? M.wood : M.metal;
+    mb.rod(mat, base, neck, 0.005, 6);
+    const x = v3.norm(v3.cross([0, 0, 1], dir));
+    const frame = m4.fromBasis(x, v3.cross(dir, x), dir, neck);
+    mb.with(frame, () => {
+      if (kind === "spoon") mb.sphere(mat, [0, 0, tipLen * 0.5], 0.022, 10, 7, [1, 0.35, 1.5]);
+      else if (kind === "spatula") mb.block(mat, 0, 0, 0, 0.05, 0.006, tipLen);
+      else if (kind === "ladle") mb.sphere(mat, [0, 0, tipLen * 0.55], 0.03, 10, 7, [1, 1, 0.9]);
+      else for (let k = 0; k < 3; k++) mb.with(m4.rotationZ((k / 3) * Math.PI), () => torus(mb, mat, [0, 0, tipLen * 0.45], 0.022, 0.0018, "y", 14, 4));
+    });
+  }
+}
+
+function buildPlantHerbs(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const tray = 0.015;
+  softBox(mb, M.tray, 0, 0, 0, w, d, tray, 0.02, 0.004);
+  const n = 3;
+  const pr = Math.min(d / 2 - 0.01, w / (2 * n) - 0.01);
+  const ph = Math.min(0.11, h * 0.45);
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + (w * (i + 0.5)) / n;
+    vessel(mb, M.pot, x, 0, tray, pr, ph, "pot", 14);
+    mb.cylinder(M.soil, [x, 0, tray + ph * 0.86], pr * 0.92, pr * 0.92, 0.003, 14, { bottom: false });
+    const z0 = tray + ph * 0.84, top = h - 0.005;
+    if (i === 1) {
+      const rnd = rng(11);
+      for (let k = 0; k < 14; k++) {
+        const a = rnd() * TAU, rr = rnd() * pr * 0.6;
+        blade(mb, M.foliage, [x + Math.cos(a) * rr, Math.sin(a) * rr, z0], [Math.cos(a) * 0.15, Math.sin(a) * 0.15, 1], (top - z0) * (0.6 + 0.4 * rnd()), 0.004, { n: 3, th: 0.002, cup: 0, side: [-Math.sin(a), Math.cos(a), 0], shape: (t) => 1 - t * 0.8 });
+      }
+    } else foliage(mb, M.foliage, x, 0, z0, Math.min(pr * 2.4, w / n), Math.min(pr * 2.4, d), top - z0, 5, 21 + i, 8);
+  }
+}
+
+// ---- entry & laundry ----
+
+function buildCoatRack(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, d) / 2;
+  for (let i = 0; i < 3; i++) {
+    const a = Math.PI / 2 + (i / 3) * TAU;
+    mb.rod(M.wood, [0, 0, 0.32], [Math.cos(a) * (R - 0.02), Math.sin(a) * (R - 0.02), 0.012], 0.014, 8);
+  }
+  mb.cylinder(M.wood, [0, 0, 0.2], 0.02, 0.016, h - 0.25, 10);
+  mb.sphere(M.wood, [0, 0, h - 0.035], 0.03, 10, 7);
+  const hooks: Vec3[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU + 0.3;
+    const z = i % 2 ? h - 0.22 : h - 0.32;
+    const tip: Vec3 = [Math.cos(a) * 0.13, Math.sin(a) * 0.13, z + 0.08];
+    mb.rod(M.wood, [0, 0, z], tip, 0.008, 6);
+    mb.sphere(M.wood, tip, 0.014, 8, 6);
+    hooks.push(tip);
+  }
+  if (!optBool(s, "coats", true)) return;
+  // a coat and a tote hanging from two hooks
+  const hangCoat = (hk: Vec3, mat: string, len: number, cw: number) => {
+    const a = Math.atan2(hk[1], hk[0]);
+    const rr = Math.min(0.17, R - cw / 2 - 0.02);
+    const cx = Math.cos(a) * rr, cy = Math.sin(a) * rr;
+    mb.with(m4.mul(m4.translation(cx, cy, 0), m4.rotationZ(a + Math.PI / 2)), () => {
+      const top = hk[2] - 0.02;
+      const shoulders = roundRect(0, 0, cw * 0.55, 0.06, 0.025, 2), chest = roundRect(0, 0, cw, 0.11, 0.05, 2), hem = roundRect(0, 0.01, cw * 1.08, 0.14, 0.06, 2);
+      loft(mb, mat, chest, top - 0.12, shoulders, top);
+      loft(mb, mat, hem, top - len, chest, top - 0.12);
+      mb.flat(mat, shoulders, top);
+      mb.flat(mat, hem, top - len, true);
+      for (const sx of [-1, 1]) mb.rod(mat, [sx * cw * 0.42, 0, top - 0.1], [sx * cw * 0.5, 0.02, top - len * 0.75], 0.035, 8);
+    });
+  };
+  const cw = Math.min(0.4, w * 0.6);
+  hangCoat(hooks[1], M.coat, Math.min(0.95, h * 0.55), cw);
+  hangCoat(hooks[4], M.coat_b, Math.min(0.8, h * 0.45), cw * 0.9);
+  const hk = hooks[2];
+  lathe(mb, M.hat, hk[0], hk[1], [[0, hk[2] - 0.005], [0.15, hk[2] - 0.005], [0.15, hk[2] + 0.002], [0.09, hk[2] + 0.004], [0.085, Math.min(h - 0.01, hk[2] + 0.1)], [0, Math.min(h - 0.01, hk[2] + 0.1)]].map(([r, z]) => [Math.min(r, R - Math.hypot(hk[0], hk[1]) - 0.01), z] as Vec2), 18);
+}
+
+function buildShoeCabinet(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const legH = 0.08, t = 0.022;
+  const yFace = -d / 2 + FRONT;
+  mb.box(M.top, [-w / 2, -d / 2, h - t], [w / 2, d / 2, h]);
+  mb.box(M.body, [-w / 2 + 0.005, yFace, legH], [w / 2 - 0.005, d / 2, h - t], { skip: ["+z"] });
+  legs4(mb, M.top, w, d, 0.03, 0.03, 0, legH, true, 0.7);
+  const n = Math.round(optNum(s, "flaps", clamp(Math.round((h - legH) / 0.3), 1, 5), 1, 6));
+  const fh = (h - t - legH) / n;
+  for (let i = 0; i < n; i++) {
+    const z0 = legH + i * fh;
+    front(mb, M.body, M.handles, -w / 2 + 0.005, w / 2 - 0.005, z0, z0 + fh, yFace, "bar_h", 0, z0 + fh - 0.035, Math.min(0.2, w * 0.3));
+  }
+}
+
+function buildUmbrellaStand(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const R = Math.min(w, d) / 2 - 0.004;
+  const sh = Math.min(0.5, h * 0.5);
+  lathe(mb, M.stand, 0, 0, [[0, 0], [R, 0], [R * 0.96, sh], [R * 0.88, sh], [R * 0.9, 0.02], [0, 0.02]], 20);
+  const umbrella = (a: number, mat: string, len: number) => {
+    const tilt = 0.08;
+    const dir = v3.norm([Math.cos(a) * tilt, Math.sin(a) * tilt, 1]);
+    const base: Vec3 = [-Math.cos(a) * R * 0.4, -Math.sin(a) * R * 0.4, 0.025];
+    const x = v3.norm(v3.cross([0, 0, 1], dir));
+    mb.with(m4.fromBasis(x, v3.cross(dir, x), dir, base), () => {
+      mb.cylinder(M.shaft, [0, 0, 0], 0.004, 0.004, len - 0.1, 6);
+      lathe(mb, mat, 0, 0, [[0, 0.05], [0.035, len * 0.18], [0.03, len * 0.55], [0.012, len * 0.68], [0, len * 0.68]], 8);
+      mb.cylinder(M.shaft, [0, 0, len - 0.1], 0.006, 0.006, 0.02, 6);
+      torus(mb, M.handle, [0.035, 0, len - 0.075], 0.035, 0.009, "y", 10, 6, 0, Math.PI);
+    });
+  };
+  umbrella(0.5, M.umbrella, Math.min(0.9, (h - 0.03) / Math.cos(0.08) - 0.01));
+  umbrella(3.6, M.umbrella_b, Math.min(0.8, (h - 0.03) / Math.cos(0.08) - 0.05));
+}
+
+function buildLaundryBasket(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const bh = h * 0.85;
+  const r = Math.min(w, d) * 0.3;
+  rectLathe(mb, M.basket, 0, 0, w, d, r, [[0.04, 0], [0, bh], [0.012, bh], [0.05, 0.02], [Math.min(w, d) / 2, 0.02]], 6);
+  // liner fold over the rim
+  rectLathe(mb, M.liner, 0, 0, w - 0.002, d - 0.002, r, [[0.003, bh - 0.06], [0.0, bh - 0.002], [0.008, bh + 0.008], [0.016, bh - 0.002], [0.016, bh - 0.05]], 6);
+  // laundry heap
+  const rnd = rng(19);
+  const mats = [M.laundry_a, M.laundry_b, M.laundry_c];
+  for (let i = 0; i < 6; i++) {
+    const rx = (w - 0.12) * (0.2 + rnd() * 0.12), ry = (d - 0.12) * (0.25 + rnd() * 0.15), rz = 0.05;
+    const x = (rnd() - 0.5) * (w - 0.12 - 2 * rx), y = (rnd() - 0.5) * (d - 0.12 - 2 * ry);
+    mb.sphere(mats[i % 3], [x, y, Math.min(h - rz, bh - 0.02 + rnd() * 0.04)], rx, 10, 6, [1, ry / rx, rz / rx]);
+  }
+}
+
+function buildIroningBoard(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const t = 0.03;
+  const L = w, B = d;
+  const outline: Vec2[] = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = -Math.PI / 2 + (i / 12) * Math.PI;
+    outline.push([L / 2 - B / 2 + Math.cos(a) * B / 2, Math.sin(a) * B / 2]);
+  }
+  for (let i = 0; i <= 12; i++) {
+    const a = Math.PI / 2 + (i / 12) * Math.PI;
+    outline.push([-L / 2 + B * 0.9 + Math.cos(a) * B * 0.9, Math.sin(a) * (B / 2) * 0.98]);
+  }
+  const withIron = optBool(s, "iron", true);
+  const top = withIron ? h - 0.055 : h;
+  mb.prism(M.cover, outline.map(([x, y]) => [x, y * 0.995] as Vec2), top - t, top);
+  // X legs
+  for (const sy of [-1, 1]) {
+    mb.rod(M.frame, [-L * 0.3, sy * (B / 2 - 0.05), 0.01], [L * 0.2, sy * (B / 2 - 0.05), top - t], 0.011, 6);
+    mb.rod(M.frame, [L * 0.2, sy * (B / 2 - 0.05), 0.01], [-L * 0.3, sy * (B / 2 - 0.05), top - t], 0.011, 6);
+  }
+  for (const x of [-L * 0.3, L * 0.2]) mb.rod(M.frame, [x, -(B / 2 - 0.05), 0.012], [x, B / 2 - 0.05, 0.012], 0.012, 6);
+  if (!withIron) return;
+  const ix = L / 2 - 0.2;
+  const iron: Vec2[] = [[ix - 0.12, -0.05], [ix + 0.06, -0.055], [ix + 0.13, 0], [ix + 0.06, 0.055], [ix - 0.12, 0.05]];
+  const z0 = top;
+  mb.prism(M.iron_plate, iron, z0, z0 + 0.015);
+  mb.prism(M.iron, iron.map(([x, y]) => [x - 0.005 * Math.sign(x - ix), y * 0.85] as Vec2), z0 + 0.015, z0 + 0.05);
+  void z0;
+}
+
+// ---------------------------------------------------------------------------
 // registry
 // ---------------------------------------------------------------------------
 
@@ -2756,6 +4615,386 @@ export const FURNITURE: Record<string, FurnitureType> = {
     defaults: { width: 0.25, depth: 0.5, height: 1.2 },
     slots: { box: "metal_black", post: "wood_painted_white", flag: "car_paint_red" },
     build: buildMailbox,
+  }),
+  // ---- interior decor (wall-mounted ones: back flat at +Y = d/2, built z = 0..h, set elevation) ----
+  wall_art: def({
+    description: "Framed print / canvas (WALL-MOUNTED: back at +Y, set elevation). frame thin_black|oak|gold|none (none = canvas), art abstract|landscape|geometric|botanical; recolor via art_a..art_e/canvas slots.",
+    defaults: { width: 0.6, depth: 0.03, height: 0.8 },
+    slots: ART_SLOTS,
+    options: {
+      frame: { description: "thin_black | oak | gold | none (gallery-wrapped canvas)", default: "thin_black" },
+      art: { description: "abstract | landscape | geometric | botanical", default: "abstract" },
+      mat: { description: "White mat board inside the frame (default on for thin_black/oak)", default: "auto" },
+      seed: { description: "Variation number (shifts shapes/colors)", default: 1 },
+    },
+    build: buildWallArt,
+  }),
+  gallery_wall: def({
+    description: "Arrangement of 7 framed artworks filling the box (WALL-MOUNTED: back at +Y, set elevation ~1.0).",
+    defaults: { width: 1.6, depth: 0.03, height: 1.1 },
+    slots: ART_SLOTS,
+    options: {
+      frame: { description: "mixed | thin_black | oak | gold | none", default: "mixed" },
+      seed: { description: "Variation number", default: 1 },
+    },
+    build: buildGalleryWall,
+  }),
+  floating_shelf: def({
+    description: "Floating wall shelf; height includes decor on it (WALL-MOUNTED: back at +Y, elevation = shelf underside).",
+    defaults: { width: 0.9, depth: 0.22, height: 0.32 },
+    slots: { shelf: "wood_oak", ...DECOR_SLOTS },
+    options: { decor: { description: "Books, vase and a small plant on the shelf", default: true } },
+    build: buildFloatingShelf,
+  }),
+  wall_shelves: def({
+    description: "Floor-standing shelving against a wall: style ladder (leaning, shelves get shallower) or grid (cube unit), with decor.",
+    defaults: { width: 0.8, depth: 0.35, height: 1.8 },
+    slots: { shelf: "wood_oak", basket: "wicker", ...DECOR_SLOTS },
+    options: {
+      style: { description: "ladder | grid", default: "ladder" },
+      decor: { description: "Books, vases, plants, baskets", default: true },
+    },
+    build: buildWallShelves,
+  }),
+  vase: def({
+    description: "Decorative vase; height includes stems (branches = eucalyptus, flowers, pampas). Put on tables via elevation.",
+    defaults: { width: 0.24, depth: 0.24, height: 0.55 },
+    slots: { vase: "ceramic_white", stems: "wood_walnut", foliage: "plant_olive", flowers: "petal_pink" },
+    options: {
+      shape: { description: "bottle | bulb | cylinder", default: "bulb" },
+      stems: { description: "none | branches | flowers | pampas", default: "branches" },
+    },
+    build: buildVase,
+  }),
+  books_stack: def({
+    description: "Stack of coffee-table books with an object or candle on top.",
+    defaults: { width: 0.26, depth: 0.2, height: 0.16 },
+    slots: { book_a: "art_navy", book_b: "art_cream", book_c: "art_terracotta", pages: "paper_white", topper: "metal_brass" },
+    options: { topper: { description: "none | object | candle", default: "object" } },
+    build: buildBooksStack,
+  }),
+  decor_bowl: def({
+    description: "Wide decorative bowl (wood by default), optionally with three orbs.",
+    defaults: { width: 0.34, depth: 0.34, height: 0.1 },
+    slots: { bowl: "wood_walnut", orbs: "metal_brass", orbs_b: "ceramic_white" },
+    options: { contents: { description: "none | orbs", default: "none" } },
+    build: buildDecorBowl,
+  }),
+  candle_set: def({
+    description: "Three pillar candles of different heights on a small tray, lit by default.",
+    defaults: { width: 0.3, depth: 0.12, height: 0.24 },
+    slots: { wax: "wax", flame: "emissive_light", tray: "marble_white" },
+    options: { lit: { description: "Glowing flames", default: true }, tray: { description: "Marble tray", default: true } },
+    build: buildCandleSet,
+  }),
+  cushion: def({
+    description: "Throw pillow standing upright, leaning back (front -Y); size via width/height (0.45 std, 0.55 large, 0.55x0.3 lumbar). Place on sofas with elevation = seat height.",
+    defaults: { width: 0.45, depth: 0.16, height: 0.45 },
+    slots: { fabric: "velvet_rust", piping: "fabric_beige" },
+    options: {
+      style: { description: "plain | piped | tufted", default: "plain" },
+      shape: { description: "square | round", default: "square" },
+    },
+    build: buildCushion,
+  }),
+  throw_blanket: def({
+    description: "Knit throw. draped: hangs over a support running along Y (sofa arm / chair back) whose top is at h; folded: folded runner on top (bed end, h = mattress top) with a flap over -Y.",
+    defaults: { width: 0.4, depth: 0.7, height: 0.65 },
+    slots: { fabric: "knit_cream" },
+    options: { style: { description: "draped | folded", default: "draped" } },
+    build: buildThrowBlanket,
+  }),
+  wall_clock: def({
+    description: "Round wall clock (WALL-MOUNTED: back at +Y, set elevation ~1.8).",
+    defaults: { width: 0.4, depth: 0.05, height: 0.4 },
+    slots: { frame: "metal_black", face: "plastic_white", hands: "metal_black" },
+    build: buildWallClock,
+  }),
+  sculpture: def({
+    description: "Abstract tabletop sculpture on a plinth: form ring | pebbles | twist.",
+    defaults: { width: 0.24, depth: 0.16, height: 0.42 },
+    slots: { main: "ceramic_white", base: "marble_black" },
+    options: { form: { description: "ring | pebbles | twist", default: "ring" } },
+    build: buildSculpture,
+  }),
+  tray_with_decor: def({
+    description: "Decorative tray with candle, bud vase and a small book stack (coffee tables, ottomans).",
+    defaults: { width: 0.45, depth: 0.28, height: 0.2 },
+    slots: { tray: "wood_walnut", wax: "wax", vase: "ceramic_black", book_a: "art_sage", book_b: "art_cream", pages: "paper_white" },
+    build: buildTrayWithDecor,
+  }),
+  lantern: def({
+    description: "Decorative glass lantern with a lit candle (floor or table).",
+    defaults: { width: 0.24, depth: 0.24, height: 0.48 },
+    slots: { frame: "metal_black", glass: "glass", wax: "wax", flame: "emissive_light" },
+    build: buildLantern,
+  }),
+  plant_large: def({
+    description: "Large indoor plant in a nice pot (footprint = foliage spread): species fiddle_leaf | monstera | snake_plant | olive_tree | palm; pot round | cylinder | tapered | square | basket.",
+    defaults: { width: 0.75, depth: 0.75, height: 1.6 },
+    slots: { pot: "ceramic_white", basket: "wicker", soil: "dirt", stem: "bark", foliage: "plant_green", foliage_alt: "plant_olive" },
+    options: {
+      species: { description: "fiddle_leaf | monstera | snake_plant | olive_tree | palm", default: "fiddle_leaf" },
+      pot: { description: "round | cylinder | tapered | square | basket", default: "round" },
+    },
+    build: buildPlantLarge,
+  }),
+  hanging_plant: def({
+    description: "Hanging pot with trailing vines on cords; z = h is the ceiling hook (like ceiling_light).",
+    defaults: { width: 0.45, depth: 0.45, height: 0.9 },
+    slots: { pot: "ceramic_white", cord: "fabric_beige", foliage: "plant_green" },
+    build: buildHangingPlant,
+  }),
+  mirror_round: def({
+    description: "Round (oval if w != h) framed wall mirror (WALL-MOUNTED: back at +Y, set elevation).",
+    defaults: { width: 0.7, depth: 0.03, height: 0.7 },
+    slots: { frame: "metal_brass", mirror: "mirror" },
+    options: { frame_width: { description: "Frame width in meters", default: 0.025 } },
+    build: (mb, s) => buildShapedMirror(mb, s, "round"),
+  }),
+  mirror_arched: def({
+    description: "Arched (rounded top) framed wall mirror (WALL-MOUNTED: back at +Y, set elevation).",
+    defaults: { width: 0.7, depth: 0.03, height: 1.1 },
+    slots: { frame: "metal_brass", mirror: "mirror" },
+    options: { frame_width: { description: "Frame width in meters", default: 0.025 } },
+    build: (mb, s) => buildShapedMirror(mb, s, "arched"),
+  }),
+  mirror_full_length: def({
+    description: "Full-length floor mirror leaning against the wall (+Y); lean=false hangs it flat (back at +Y).",
+    defaults: { width: 0.6, depth: 0.12, height: 1.75 },
+    slots: { frame: "metal_black", mirror: "mirror" },
+    options: { lean: { description: "Lean against the wall (bottom out at the front)", default: true }, frame_width: { description: "Frame width in meters", default: 0.03 } },
+    build: (mb, s) => buildShapedMirror(mb, s, "rect"),
+  }),
+  console_table: def({
+    description: "Slim console table: wood top on a thin metal frame with a lower shelf (entries, behind sofas).",
+    defaults: { width: 1.2, depth: 0.35, height: 0.8 },
+    slots: { top: "wood_walnut", frame: "metal_brass", shelf: "wood_walnut" },
+    options: { shelf: { description: "Lower shelf", default: true } },
+    build: buildConsoleTable,
+  }),
+  sideboard: def({
+    description: "Mid-century credenza on splayed legs with fluted (or plain) doors.",
+    defaults: { width: 1.8, depth: 0.45, height: 0.75 },
+    slots: { body: "wood_walnut", legs: "wood_walnut", handles: "metal_brass" },
+    options: {
+      fronts: { description: "fluted | plain", default: "fluted" },
+      doors: { description: "Number of doors (auto ~0.45 m)", default: "auto" },
+    },
+    build: buildSideboard,
+  }),
+  bar_cart: def({
+    description: "Brass bar cart with two glass shelves, wheels at -X, bottles and glasses.",
+    defaults: { width: 0.8, depth: 0.45, height: 0.85 },
+    slots: { frame: "metal_brass", shelves: "glass", wheels: "rubber_black", bottles: "glass_amber", bottles_b: "glass_green", book_a: "art_navy", book_b: "art_cream", pages: "paper_white" },
+    build: buildBarCart,
+  }),
+  lounge_chair: def({
+    description: "Mid-century lounge chair: plywood shells with leather cushions on a swivel star base.",
+    defaults: { width: 0.85, depth: 0.85, height: 0.85 },
+    slots: { shell: "wood_walnut", cushions: "leather_black", base: "metal_black" },
+    build: buildLoungeChair,
+  }),
+  wingback_chair: def({
+    description: "Wingback armchair with rolled arms, tall back and wings, on turned legs.",
+    defaults: { width: 0.85, depth: 0.9, height: 1.15 },
+    slots: { body: "velvet_emerald", legs: "wood_walnut" },
+    build: buildWingbackChair,
+  }),
+  accent_chair: def({
+    description: "Curved barrel accent chair (boucle) with wraparound back on a plinth.",
+    defaults: { width: 0.75, depth: 0.72, height: 0.75 },
+    slots: { body: "fabric_boucle", legs: "wood_oak" },
+    build: buildAccentChair,
+  }),
+  ottoman: def({
+    description: "Ottoman / pouf: style pouf (knit, round) | round (upholstered drum on legs) | square.",
+    defaults: { width: 0.5, depth: 0.5, height: 0.42 },
+    slots: { fabric: "knit_cream", legs: "wood_oak" },
+    options: { style: { description: "pouf | round | square", default: "pouf" } },
+    build: buildOttoman,
+  }),
+  daybed: def({
+    description: "Upholstered daybed: back along +Y, rolled arms, mattress, bolsters and pillows.",
+    defaults: { width: 2.0, depth: 0.95, height: 0.8 },
+    slots: { frame: "fabric_beige", legs: "wood_walnut", mattress: "linen_white", pillows: "fabric_white", cushions: "velvet_rust" },
+    build: buildDaybed,
+  }),
+  platform_bed: def({
+    description: "Low floating platform bed with wide headboard (+Y); nightstands=true builds integrated side shelves (width then includes them, e.g. 2.6).",
+    defaults: { width: 1.8, depth: 2.2, height: 0.9 },
+    slots: { frame: "wood_oak", headboard: "fabric_beige", handles: "metal_brass", mattress: "linen_white", duvet: "fabric_beige", pillows: "fabric_white" },
+    options: { nightstands: { description: "Integrated floating nightstands on both sides", default: false } },
+    build: buildPlatformBed,
+  }),
+  canopy_bed: def({
+    description: "Four-poster canopy bed with top rails, headboard and gathered drapes at the posts.",
+    defaults: { width: 1.8, depth: 2.2, height: 2.1 },
+    slots: { frame: "metal_black", headboard: "fabric_beige", mattress: "linen_white", duvet: "fabric_gray", pillows: "linen_white", drapes: "linen_white" },
+    options: { drapes: { description: "Gathered drapes at each post", default: true } },
+    build: buildCanopyBed,
+  }),
+  dining_bench: def({
+    description: "Dining bench: thick wood slab on splayed legs (optional cushion).",
+    defaults: { width: 1.4, depth: 0.38, height: 0.46 },
+    slots: { top: "wood_oak", legs: "wood_oak", cushion: "fabric_beige" },
+    options: { cushion: { description: "Upholstered pad", default: false } },
+    build: buildDiningBench,
+  }),
+  round_dining_table: def({
+    description: "Round (oval if w != d) dining table on a tulip or pedestal base.",
+    defaults: { width: 1.2, depth: 1.2, height: 0.75 },
+    slots: { top: "wood_oak", base: "plastic_white" },
+    options: { base: { description: "tulip | pedestal", default: "tulip" } },
+    build: buildRoundDiningTable,
+  }),
+  dressing_table: def({
+    description: "Vanity / dressing table with a drawer and a mirror on uprights; height includes the mirror.",
+    defaults: { width: 1.0, depth: 0.45, height: 1.45 },
+    slots: { body: "wood_painted_white", handles: "metal_brass", mirror: "mirror", vase: "ceramic_blush" },
+    options: { mirror: { description: "round | arched | rect", default: "round" } },
+    build: buildDressingTable,
+  }),
+  filing_cabinet: def({
+    description: "Metal filing cabinet with drawers, bar handles and label holders.",
+    defaults: { width: 0.47, depth: 0.62, height: 1.02 },
+    slots: { body: "plastic_gray", handles: "chrome" },
+    options: { drawers: { description: "Number of drawers (auto ~0.32 m)", default: "auto" } },
+    build: buildFilingCabinet,
+  }),
+  crib: def({
+    description: "Baby crib: slatted long sides (front -Y), solid curved end panels, mattress and blanket.",
+    defaults: { width: 1.3, depth: 0.7, height: 0.95 },
+    slots: { frame: "wood_painted_white", mattress: "linen_white", blanket: "knit_cream" },
+    build: buildCrib,
+  }),
+  toy_box: def({
+    description: "Toy chest with hinged lid (open shows toys) and side handles.",
+    defaults: { width: 0.75, depth: 0.42, height: 0.85 },
+    slots: { box: "wood_painted_white", accent: "rubber_black", toy_a: "car_paint_red", toy_b: "car_paint_blue", toy_c: "art_mustard" },
+    options: { open: { description: "Lid open with toys peeking out (height includes the raised lid)", default: true } },
+    build: buildToyBox,
+  }),
+  kids_bed: def({
+    description: "Montessori house bed: low frame and mattress inside a house-shaped frame with a gable roof.",
+    defaults: { width: 1.0, depth: 2.0, height: 1.6 },
+    slots: { frame: "wood_pine", mattress: "linen_white", duvet: "art_sky", pillows: "fabric_white" },
+    build: buildKidsBed,
+  }),
+  towel_rail: def({
+    description: "Heated ladder towel rail with a folded towel (WALL-MOUNTED: back at +Y, set elevation ~0.15).",
+    defaults: { width: 0.5, depth: 0.12, height: 0.9 },
+    slots: { metal: "chrome", towel: "towel_white" },
+    options: { towel: { description: "Towel over a bar", default: true } },
+    build: buildTowelRail,
+  }),
+  towel_hook_set: def({
+    description: "Wooden hook rail with hanging towels; plate at the top of the box (WALL-MOUNTED: back at +Y, elevation ~1.1).",
+    defaults: { width: 0.5, depth: 0.08, height: 0.6 },
+    slots: { plate: "wood_oak", hooks: "metal_black", towel: "towel_white", towel_b: "towel_gray" },
+    options: { towels: { description: "Hang towels on the outer hooks", default: true } },
+    build: buildTowelHooks,
+  }),
+  toilet_roll_holder: def({
+    description: "Toilet roll holder with roll (WALL-MOUNTED: back at +Y, elevation ~0.65).",
+    defaults: { width: 0.18, depth: 0.13, height: 0.13 },
+    slots: { metal: "chrome", paper: "paper_white", core: "art_cream" },
+    build: buildToiletRollHolder,
+  }),
+  bath_mat: def({
+    description: "Ribbed bath mat (flat on the floor).",
+    defaults: { width: 0.8, depth: 0.5, height: 0.015 },
+    slots: { main: "towel_white" },
+    build: buildBathMat,
+  }),
+  soap_dispenser: def({
+    description: "Pump soap dispenser; set=true adds a toothbrush tumbler and soap dish (place on a vanity via elevation).",
+    defaults: { width: 0.3, depth: 0.1, height: 0.2 },
+    slots: { bottle: "ceramic_black", pump: "metal_brass", tumbler: "ceramic_black", brush_a: "plastic_white", brush_b: "art_sage", soap: "art_cream" },
+    options: { set: { description: "Add tumbler with toothbrushes and soap dish", default: true } },
+    build: buildSoapDispenser,
+  }),
+  freestanding_bathtub: def({
+    description: "Freestanding bathtub: style modern (seamless stadium tub) | clawfoot (roll-top on four feet with deck tap).",
+    defaults: { width: 1.7, depth: 0.8, height: 0.6 },
+    slots: { body: "ceramic_white", feet: "metal_brass", faucet: "chrome" },
+    options: { style: { description: "modern | clawfoot", default: "modern" } },
+    build: buildFreestandingBathtub,
+  }),
+  shower_curtain: def({
+    description: "Shower curtain on a rod with rings; width = rod length.",
+    defaults: { width: 1.6, depth: 0.1, height: 2.0 },
+    slots: { fabric: "linen_white", rod: "chrome" },
+    build: buildShowerCurtain,
+  }),
+  kettle: def({
+    description: "Electric kettle on its base (spout -X, handle +X); place on counters via elevation.",
+    defaults: { width: 0.26, depth: 0.17, height: 0.25 },
+    slots: { body: "metal_steel", accent: "plastic_black" },
+    build: buildKettle,
+  }),
+  coffee_machine: def({
+    description: "Espresso machine with group head, portafilter, drip tray, gauge and cup (front -Y).",
+    defaults: { width: 0.3, depth: 0.38, height: 0.38 },
+    slots: { body: "metal_steel", accent: "plastic_black", metal: "chrome", cup: "ceramic_white" },
+    build: buildCoffeeMachine,
+  }),
+  fruit_bowl: def({
+    description: "Bowl of fruit: apples, oranges, a lemon and bananas.",
+    defaults: { width: 0.32, depth: 0.32, height: 0.17 },
+    slots: { bowl: "ceramic_white", fruit_a: "fruit_red", fruit_b: "fruit_orange", fruit_c: "fruit_yellow", stem: "wood_walnut" },
+    build: buildFruitBowl,
+  }),
+  cutting_boards: def({
+    description: "Three cutting boards leaning against the backsplash (+Y).",
+    defaults: { width: 0.45, depth: 0.1, height: 0.45 },
+    slots: { board_a: "wood_oak", board_b: "wood_walnut", board_c: "marble_white" },
+    build: buildCuttingBoards,
+  }),
+  utensil_jar: def({
+    description: "Ceramic crock with wooden spoons, spatula, ladle and whisk.",
+    defaults: { width: 0.13, depth: 0.13, height: 0.34 },
+    slots: { jar: "ceramic_white", wood: "wood_oak", metal: "metal_steel" },
+    build: buildUtensilJar,
+  }),
+  plant_herbs: def({
+    description: "Three potted kitchen herbs on a small tray (windowsill / counter).",
+    defaults: { width: 0.42, depth: 0.14, height: 0.26 },
+    slots: { pot: "terracotta", soil: "dirt", foliage: "plant_green", tray: "wood_oak" },
+    build: buildPlantHerbs,
+  }),
+  coat_rack: def({
+    description: "Standing coat tree on a tripod with hooks; coats=true hangs a coat, a jacket and a hat.",
+    defaults: { width: 0.6, depth: 0.6, height: 1.8 },
+    slots: { wood: "wood_walnut", coat: "fabric_beige", coat_b: "art_navy", hat: "leather_tan" },
+    options: { coats: { description: "Hang coats and a hat", default: true } },
+    build: buildCoatRack,
+  }),
+  shoe_cabinet: def({
+    description: "Slim entry shoe cabinet with tilt-out flaps on short legs.",
+    defaults: { width: 0.8, depth: 0.26, height: 1.0 },
+    slots: { body: "wood_painted_white", top: "wood_oak", handles: "metal_brass" },
+    options: { flaps: { description: "Number of flaps (auto)", default: "auto" } },
+    build: buildShoeCabinet,
+  }),
+  umbrella_stand: def({
+    description: "Umbrella stand with two closed umbrellas (height includes the umbrellas).",
+    defaults: { width: 0.26, depth: 0.26, height: 0.95 },
+    slots: { stand: "metal_black", umbrella: "art_navy", umbrella_b: "art_terracotta", shaft: "chrome", handle: "wood_walnut" },
+    build: buildUmbrellaStand,
+  }),
+  laundry_basket: def({
+    description: "Woven laundry basket with a liner and a heap of clothes.",
+    defaults: { width: 0.48, depth: 0.36, height: 0.55 },
+    slots: { basket: "wicker", liner: "linen_white", laundry_a: "fabric_blue", laundry_b: "fabric_white", laundry_c: "fabric_gray" },
+    build: buildLaundryBasket,
+  }),
+  ironing_board: def({
+    description: "Ironing board on X legs with an iron resting on it (length along X).",
+    defaults: { width: 1.3, depth: 0.38, height: 0.9 },
+    slots: { cover: "fabric_blue", frame: "metal_steel", iron: "plastic_white", iron_plate: "metal_steel" },
+    options: { iron: { description: "Iron on the board (board top at h - 0.055)", default: true } },
+    build: buildIroningBoard,
   }),
 };
 

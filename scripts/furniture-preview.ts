@@ -39,6 +39,14 @@ const COLORS: Record<string, [number, number, number]> = {
   wood_teak: [163, 113, 63], wicker: [199, 154, 98], wicker_gray: [138, 135, 132], bark: [80, 60, 44],
   plant_dark_green: [44, 90, 46], glass_tinted: [90, 110, 118], metal_aluminum: [205, 208, 212], fabric_white: [240, 238, 232],
   dirt: [122, 92, 64], water: [61, 107, 128], wood_dark: [62, 42, 31], plastic_gray: [140, 141, 144],
+  art_cream: [241, 233, 216], art_terracotta: [196, 100, 63], art_navy: [32, 54, 81], art_mustard: [216, 162, 58], art_sage: [154, 174, 140],
+  art_blush: [230, 185, 168], art_charcoal: [52, 55, 59], art_sky: [168, 198, 219], ceramic_black: [35, 35, 37], ceramic_sage: [163, 180, 154],
+  ceramic_blush: [226, 184, 170], terracotta: [192, 106, 67], glass_amber: [168, 100, 30], glass_green: [62, 110, 74], wax: [242, 235, 220],
+  paper_white: [244, 241, 232], fabric_boucle: [236, 229, 216], knit_cream: [233, 225, 208], velvet_emerald: [31, 90, 72], velvet_rust: [162, 79, 44],
+  velvet_blush: [217, 167, 154], towel_white: [243, 242, 238], towel_gray: [163, 165, 166], plant_olive: [127, 143, 104], petal_pink: [232, 161, 176],
+  petal_white: [246, 242, 234], pampas: [226, 211, 181], fruit_red: [179, 38, 42], fruit_orange: [236, 138, 30], fruit_yellow: [241, 210, 63],
+  fruit_green: [141, 187, 60], metal_gold: [240, 201, 106], paint_white: [245, 245, 243], leather_tan: [168, 112, 63], wood_pine: [217, 182, 128],
+  fabric_green: [94, 127, 85],
 };
 function colorOf(mat: string): [number, number, number] {
   if (COLORS[mat]) return COLORS[mat];
@@ -272,6 +280,15 @@ const variants: [string, Record<string, unknown>][] = [
   ["car", { style: "suv" }], ["car", { style: "hatchback" }], ["car", { style: "pickup" }], ["tree", { kind: "conifer" }], ["tree", { kind: "palm" }],
   ["fence", { style: "panel" }], ["fence", { style: "slats" }], ["bbq", { style: "kettle" }], ["parasol", { open: false }], ["outdoor_table", { round: true }],
   ["sun_lounger", { cushion: false }],
+  ["wall_art", { frame: "oak", art: "landscape" }], ["wall_art", { frame: "gold", art: "geometric" }], ["wall_art", { frame: "none", art: "botanical" }],
+  ["vase", { shape: "bottle", stems: "flowers" }], ["vase", { shape: "cylinder", stems: "pampas" }], ["vase", { stems: "none" }],
+  ["cushion", { style: "piped" }], ["cushion", { style: "tufted", shape: "round" }], ["throw_blanket", { style: "folded" }],
+  ["sculpture", { form: "pebbles" }], ["sculpture", { form: "twist" }], ["plant_large", { species: "monstera", pot: "basket" }],
+  ["plant_large", { species: "snake_plant", pot: "square" }], ["plant_large", { species: "olive_tree", pot: "tapered" }], ["plant_large", { species: "palm", pot: "cylinder" }],
+  ["mirror_full_length", { lean: false }], ["sideboard", { fronts: "plain" }], ["ottoman", { style: "round" }], ["ottoman", { style: "square" }],
+  ["platform_bed", { nightstands: true }], ["round_dining_table", { base: "pedestal" }], ["dressing_table", { mirror: "arched" }],
+  ["freestanding_bathtub", { style: "clawfoot" }], ["toy_box", { open: false }], ["wall_shelves", { style: "grid" }], ["decor_bowl", { contents: "orbs" }],
+  ["books_stack", { topper: "candle" }], ["gallery_wall", { frame: "gold" }],
 ];
 let bad = 0;
 const check = (type: string, dims: { width: number; depth: number; height: number }, opts: Record<string, unknown>, label: string) => {
@@ -337,11 +354,14 @@ console.log("wrote out/furniture.obj, out/furniture.mtl");
 savePng(render(grid, fitView(grid, FL, 1.02), 2400, 1500), path.join(OUT, "furniture.png"));
 
 // 3) contact sheets
-const sheet = (dir: Vec3, file: string, stretch?: Vec3) => {
+const sheetArg = process.argv.find((a) => a.startsWith("--sheet="));
+const sheetTypes = sheetArg ? sheetArg.slice(8).split(",").filter((t) => FURNITURE[t]) : null;
+const sheet = (dir: Vec3, file: string, stretch?: Vec3, list = types) => {
   const T = 300, LH = 22, cols = 8;
-  const rows = Math.ceil(types.length / cols);
+  const types_ = list;
+  const rows = Math.ceil(types_.length / cols);
   const img = new Img(cols * T, rows * (T + LH), [250, 250, 250]);
-  types.forEach((type, i) => {
+  types_.forEach((type, i) => {
     const d0 = FURNITURE[type].defaults;
     const dims = stretch ? { width: d0.width * stretch[0], depth: d0.depth * stretch[1], height: d0.height * stretch[2] } : d0;
     const tris = trisOf(buildType(type, dims));
@@ -356,9 +376,13 @@ const sheet = (dir: Vec3, file: string, stretch?: Vec3) => {
 sheet(FL, "furniture_sheet.png");
 sheet(BR, "furniture_sheet_back.png");
 sheet(FL, "furniture_sheet_stretched.png", [1.6, 0.8, 1.25]);
+if (sheetTypes) {
+  sheet(FL, "furniture_sheet_custom.png", undefined, sheetTypes);
+  sheet(BR, "furniture_sheet_custom_back.png", undefined, sheetTypes);
+}
 
 // 4) close-ups
-const closeTypes = process.argv.slice(2);
+const closeTypes = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 for (const arg of closeTypes) {
   const [type, optStr] = arg.split(":");
   if (!FURNITURE[type]) { console.log("unknown type", type); continue; }

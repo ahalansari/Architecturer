@@ -5,6 +5,7 @@ import { generateTextures } from "./materials/textures.js";
 import type { MaterialDef, TextureSet } from "./materials/types.js";
 import { parseProject, type Project } from "./schema/schema.js";
 import { checkLayout } from "./validate/layout.js";
+import { applyStyles } from "./elements/styles.js";
 
 export interface Compiled {
   ok: boolean;
@@ -31,7 +32,8 @@ const MISSING: MaterialDef = {
 /** Parse, validate, build geometry and resolve materials. Mesh UVs end up in texture-tile units. */
 export function compile(input: unknown): Compiled {
   const empty = { levels: [], materials: new Map(), warnings: [], stats: { triangles: 0, meshes: 0, nodes: 0, materials: 0 } };
-  const parsed = parseProject(input);
+  // style presets fill in unset materials; they must see the raw plan to tell explicit values from defaults
+  const parsed = parseProject(applyStyles(input));
   if (!parsed.ok || !parsed.project) return { ok: false, errors: parsed.errors, ...empty };
   const project = parsed.project;
   let built;

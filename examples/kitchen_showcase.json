@@ -1,0 +1,168 @@
+{
+  "name": "Casework showcase",
+  "description": "Built-in cabinetry: an L-shaped kitchen with a tall appliance column, glass wall cabinets, chimney hood and a waterfall island with seating; a window seat and a floating media wall in the living room; a floor-to-ceiling sliding wardrobe in the bedroom; a wall-hung double vanity in the bathroom.",
+  "defaults": { "exteriorWallThickness": 0.3, "wallThickness": 0.12, "exteriorMaterial": "stucco", "doorMaterial": "wood_oak" },
+  "site": { "margin": 4 },
+  "levels": [
+    {
+      "id": "ground",
+      "name": "Ground floor",
+      "height": 2.9,
+      "walls": [
+        { "id": "ext", "points": [[0, 0], [12, 0], [12, 9], [0, 9]], "closed": true },
+        { "id": "wa", "points": [[7.5, 0], [7.5, 9]] },
+        { "id": "wb", "points": [[7.5, 3.6], [12, 3.6]] }
+      ],
+      "openings": [
+        { "id": "entry", "type": "door", "at": [2.4, 0], "width": 1.0, "swing": "in" },
+        { "id": "w_living", "type": "window", "at": [4.9, 0], "width": 2.2, "height": 1.5, "sill": 0.7, "style": "grid" },
+        { "id": "w_seat", "type": "window", "at": [0, 2.2], "width": 1.6, "height": 1.3, "sill": 0.95 },
+        { "id": "w_sink", "type": "window", "at": [1.7, 9], "width": 1.2, "height": 1.1, "sill": 1.05 },
+        { "id": "w_dining", "type": "window", "at": [6.1, 9], "width": 1.4, "height": 1.4, "sill": 0.8 },
+        { "id": "d_bed", "type": "door", "at": [7.5, 4.3], "hinge": "left", "swing": "out" },
+        { "id": "d_bath", "type": "door", "at": [8.3, 3.6], "hinge": "left", "swing": "out" },
+        { "id": "w_bed", "type": "window", "at": [9.8, 9], "width": 1.6, "height": 1.4, "sill": 0.8 },
+        { "id": "w_bath", "type": "window", "at": [10.4, 0], "width": 0.9, "height": 0.8, "sill": 1.35, "style": "fixed" }
+      ],
+      "rooms": [
+        { "id": "living", "name": "Kitchen & Living", "polygon": [[0, 0], [7.5, 0], [7.5, 9], [0, 9]], "floorMaterial": "wood_floor_oak" },
+        { "id": "bedroom", "name": "Bedroom", "polygon": [[7.5, 3.6], [12, 3.6], [12, 9], [7.5, 9]], "floorMaterial": "wood_floor_light" },
+        { "id": "bath", "name": "Bathroom", "polygon": [[7.5, 0], [12, 0], [12, 3.6], [7.5, 3.6]], "floorMaterial": "tiles_floor_large" }
+      ],
+      "casework": [
+        {
+          "id": "kitchen",
+          "type": "kitchen",
+          "path": [[0.15, 4.6], [0.15, 8.85], [5.0, 8.85]],
+          "doorStyle": "shaker",
+          "handle": "bar",
+          "materials": { "front": "lacquer_sage", "worktop": "quartz_white", "backsplash": "tiles_subway", "handle": "metal_brass", "tap": "metal_brass" },
+          "modules": [
+            { "id": "pantry", "kind": "pantry" },
+            { "id": "fridge", "kind": "fridge" },
+            { "id": "ovens", "kind": "tall_oven" },
+            { "id": "drawers1", "kind": "base_drawers", "width": 0.8 },
+            { "id": "cups", "kind": "base_doors", "width": "auto", "topDrawer": true },
+            { "kind": "corner" },
+            { "id": "bins", "kind": "base_doors", "width": 0.45 },
+            { "id": "sink", "kind": "sink", "width": 0.9, "sinkStyle": "farmhouse", "bowls": 1 },
+            { "id": "dw", "kind": "dishwasher" },
+            { "id": "drawers2", "kind": "base_drawers" },
+            { "id": "hob", "kind": "hob", "width": 0.9 },
+            { "id": "pans", "kind": "base_drawers", "width": "auto", "drawers": 2 }
+          ],
+          "uppers": [
+            { "kind": "upper_doors", "width": "auto" },
+            { "kind": "upper_doors", "width": "auto" },
+            { "kind": "corner" },
+            { "id": "glass1", "kind": "upper_glass", "width": "auto" },
+            { "kind": "gap", "over": "sink", "width": 1.3 },
+            { "id": "glass2", "kind": "upper_glass", "width": "auto" },
+            { "id": "hood", "kind": "hood", "over": "hob" },
+            { "kind": "upper_lift", "width": "auto" }
+          ]
+        },
+        {
+          "id": "island",
+          "type": "kitchen",
+          "position": [3.2, 6.73],
+          "facing": "north",
+          "length": 2.4,
+          "doorStyle": "fluted",
+          "handle": "knob",
+          "materials": { "front": "wood_walnut", "worktop": "quartz_white", "handle": "metal_brass" },
+          "island": { "seating": 0.3, "waterfall": "both" },
+          "modules": [
+            { "kind": "base_drawers", "width": 0.8 },
+            { "kind": "wine_rack", "width": 0.3 },
+            { "kind": "base_doors", "width": 0.6 },
+            { "kind": "base_drawers", "width": "auto", "drawers": 2 }
+          ]
+        },
+        {
+          "id": "window_seat",
+          "type": "bench",
+          "wall": "ext",
+          "from": 38.8,
+          "to": 40.8,
+          "materials": { "front": "lacquer_white", "worktop": "wood_oak", "cushion": "fabric_beige" },
+          "handle": "edge",
+          "modules": [
+            { "kind": "bench", "width": "auto", "drawers": 1 },
+            { "kind": "bench", "width": "auto", "drawers": 1 }
+          ]
+        },
+        {
+          "id": "media",
+          "type": "media",
+          "wall": "wa",
+          "side": "left",
+          "from": 0.3,
+          "to": 3.5,
+          "handle": "push",
+          "materials": { "front": "wood_walnut", "accent": "wood_walnut" },
+          "modules": [
+            { "kind": "tall_open", "width": 0.7 },
+            { "kind": "base_drawers", "width": "auto", "drawers": 1 },
+            { "kind": "base_doors", "width": "auto", "doors": 2 },
+            { "kind": "tall_open", "width": 0.7 }
+          ]
+        },
+        {
+          "id": "wardrobe",
+          "type": "wardrobe",
+          "wall": "ext",
+          "from": 15.66,
+          "to": 18.5,
+          "toCeiling": true,
+          "slidingDoors": true,
+          "slidingOpen": [0],
+          "doorStyle": "shaker",
+          "materials": { "front": "lacquer_greige", "handle": "metal_brass" },
+          "modules": [
+            { "kind": "wardrobe", "width": "auto", "interior": "double_hanging" },
+            { "kind": "wardrobe", "width": "auto", "interior": "mixed" },
+            { "kind": "wardrobe", "width": "auto", "interior": "shelves" }
+          ]
+        },
+        {
+          "id": "vanity",
+          "type": "vanity",
+          "wall": "ext",
+          "from": 12.8,
+          "to": 14.5,
+          "doorStyle": "fluted",
+          "handle": "push",
+          "materials": { "front": "wood_oak", "worktop": "marble_white", "tap": "metal_black" },
+          "modules": [
+            { "kind": "basin", "width": "auto" },
+            { "kind": "basin", "width": "auto" }
+          ]
+        }
+      ],
+      "furniture": [
+        { "id": "stool1", "type": "counter_stool", "position": [2.5, 5.98], "facing": "north" },
+        { "id": "stool2", "type": "counter_stool", "position": [3.2, 5.98], "facing": "north" },
+        { "id": "stool3", "type": "counter_stool", "position": [3.9, 5.98], "facing": "north" },
+        { "id": "herbs", "type": "plant_herbs", "position": [0.85, 8.72], "facing": "south", "elevation": 0.9 },
+        { "id": "kettle", "type": "kettle", "position": [3.0, 8.55], "facing": "south", "elevation": 0.9 },
+        { "id": "fruit", "type": "fruit_bowl", "position": [3.6, 6.85], "elevation": 0.9 },
+        { "id": "dining", "type": "table", "position": [6.1, 6.3], "width": 1.6, "depth": 0.9, "rotation": 90 },
+        { "id": "chair1", "type": "chair", "position": [5.55, 5.9], "facing": "east" },
+        { "id": "chair2", "type": "chair", "position": [5.55, 6.7], "facing": "east" },
+        { "id": "chair3", "type": "chair", "position": [6.65, 5.9], "facing": "west" },
+        { "id": "chair4", "type": "chair", "position": [6.65, 6.7], "facing": "west" },
+        { "id": "sofa", "type": "sofa", "position": [3.9, 1.95], "facing": "east", "width": 2.2 },
+        { "id": "coffee", "type": "coffee_table", "position": [5.15, 1.95], "facing": "east", "width": 1.1, "depth": 0.6 },
+        { "id": "rug", "type": "rug", "position": [4.9, 1.95], "width": 2.4, "depth": 3.0, "facing": "east" },
+        { "id": "tv", "type": "tv", "position": [7.38, 1.9], "facing": "west", "width": 1.4, "elevation": 1.05, "options": { "mount": "wall" }, "depth": 0.06 },
+        { "id": "bed", "type": "bed", "position": [8.61, 6.9], "facing": "east" },
+        { "id": "ns1", "type": "nightstand", "position": [7.81, 5.75], "facing": "east" },
+        { "id": "ns2", "type": "nightstand", "position": [7.81, 8.05], "facing": "east" },
+        { "id": "shower", "type": "shower", "position": [8.06, 0.65], "facing": "north", "width": 1.0, "depth": 1.0 },
+        { "id": "toilet", "type": "toilet", "position": [10.0, 3.19], "facing": "south" },
+        { "id": "mirror", "type": "mirror", "position": [11.83, 1.65], "facing": "west", "width": 1.4, "height": 0.8, "elevation": 1.15 }
+      ]
+    }
+  ]
+}

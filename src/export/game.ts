@@ -11,7 +11,7 @@ export interface GameOptions {
 }
 
 /** Nodes that keep their own pivot so games can move/animate them. */
-const MOVABLE = new Set(["furniture", "door_leaf"]);
+const MOVABLE = new Set(["furniture", "door_leaf", "light_fixture"]);
 /** Flat or overhead items that shouldn't block movement. */
 const NO_COLLIDER = new Set(["rug", "door_mat", "ceiling_light", "curtain"]);
 
@@ -49,7 +49,7 @@ function aabb(meshes: MeshData[]): { min: Vec3; max: Vec3 } | null {
 
 /** Box collider child for a movable node (in the node's local space). */
 function boxCollider(n: SceneNode): SceneNode | null {
-  if (NO_COLLIDER.has(String(n.extras?.type))) return null;
+  if (NO_COLLIDER.has(String(n.extras?.type)) || n.kind === "light_fixture") return null;
   const meshes = [...n.meshes, ...n.children.flatMap((c) => (c.translation || c.rotationZ ? [] : c.meshes))];
   const b = aabb(meshes);
   if (!b || b.max[2] - b.min[2] < 0.05) return null;
@@ -124,6 +124,9 @@ export function prepareForGame(root: SceneNode, opts: GameOptions): SceneNode {
         children.push({ name: "furniture", kind: "group", meshes: [], children: furniture.map((x) => rehome(x.node, x.world, !!opts.collision)) });
       if (doors.length)
         children.push({ name: "doors", kind: "group", meshes: [], children: doors.map((x) => rehome(x.node, x.world, !!opts.collision)) });
+      const fixtures = col.movable.filter((x) => x.node.kind === "light_fixture");
+      if (fixtures.length)
+        children.push({ name: "lights", kind: "group", meshes: [], children: fixtures.map((x) => rehome(x.node, x.world, false)) });
     } else {
       // keep the original hierarchy, just attach box colliders to movable nodes
       const attach = (n: SceneNode): SceneNode => {

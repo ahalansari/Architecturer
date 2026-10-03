@@ -125,6 +125,15 @@ server.registerTool(
 );
 
 server.registerTool(
+  "list_styles",
+  { description: "Interior style presets (scandinavian, japandi, industrial, ...) with the material each assigns to every role. Use as project.style or room.style.", inputSchema: {} },
+  async () => {
+    const { listStyles } = await import("../elements/styles.js");
+    return ok(text(JSON.stringify(listStyles(), null, 1)));
+  },
+);
+
+server.registerTool(
   "list_furniture",
   { description: "Furniture/fixture types with default sizes, material slots and options.", inputSchema: {} },
   async () => ok(text(JSON.stringify(listFurniture(), null, 1))),
@@ -277,17 +286,27 @@ server.registerTool(
       radius: z.number().positive().optional().describe("Meters around `focus` to show (default 3)"),
       zoom: z.number().positive().optional().describe(">1 moves the camera closer, <1 further away"),
       cutHeight: z.number().positive().optional().describe("With `level`: cutaway height above the floor (default min(0.75*height, 2.2))"),
+      room: z.string().optional().describe("Interior review: eye-level wide shot of this room (id or name) from a corner"),
+      corner: z.number().int().min(0).optional().describe("With room: which corner to shoot from (0 = farthest from the centre)"),
+      elevation: z.string().optional().describe("Interior review: square-on orthographic view of this wall id (kitchen runs, wardrobes, tiling, art)"),
+      elevationRoom: z.string().optional().describe("With elevation: which room's side of the wall"),
+      lighting: z
+        .enum(["day", "night", "dusk", "both"])
+        .default("day")
+        .describe("night / dusk: lit only by the plan's light fixtures and lamps (walls block light) — use to judge a lighting design; both = day + night images"),
       eye: z.tuple([z.number(), z.number(), z.number()]).optional(),
       target: z.tuple([z.number(), z.number(), z.number()]).optional(),
       width: z.number().int().min(200).max(2000).default(1024),
       height: z.number().int().min(200).max(2000).default(700),
     },
   },
-  guard(async ({ path, view, level, focus, radius, zoom, cutHeight, eye, target, width, height }) => {
+  guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, width, height }) => {
     const c = compile(await load(path));
     if (!c.root) return fail(summary(c));
-    const png = renderViewPNG(c, { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, width, height });
-    return ok({ type: "image", data: png.toString("base64"), mimeType: "image/png" }, text(summary(c)));
+    const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, width, height, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
+    const modes = lighting === "both" ? (["day", "night"] as const) : ([lighting] as const);
+    const images = modes.map((m) => ({ type: "image" as const, data: renderViewPNG(c, { ...opts, lighting: m }).toString("base64"), mimeType: "image/png" }));
+    return ok(...images, text(summary(c)));
   }),
 );
 

@@ -20,6 +20,17 @@ export const TEXTURE_PATTERNS = [
   "paving",
   "siding",
   "disks",
+  "herringbone",
+  "chevron",
+  "parquet",
+  "terrazzo",
+  "hex_tiles",
+  "mosaic",
+  "zellige",
+  "wallpaper",
+  "fluted",
+  "microcement",
+  "grasscloth",
 ] as const;
 export type TexturePattern = (typeof TEXTURE_PATTERNS)[number];
 

@@ -7,7 +7,7 @@ import { listMaterials } from "../materials/library.js";
 import { loadAndCompile } from "../io.js";
 import type { Compiled } from "../pipeline.js";
 import { renderPlanSVG, svgToPng } from "../render/plan.js";
-import { VIEW_PRESETS, type ViewPreset } from "../render/raster.js";
+import { LIGHTING_MODES, VIEW_PRESETS, type LightingMode, type ViewPreset } from "../render/raster.js";
 import { renderViewPNG } from "../render/view.js";
 import { projectJsonSchema } from "../schema/schema.js";
 import { STARTER_PROJECT } from "../templates.js";
@@ -87,6 +87,11 @@ const COMMANDS: Record<string, Command> = {
       { name: "target", arg: "x,y,z", desc: "point the explicit camera looks at" },
       { name: "fov", arg: "degrees", desc: "vertical field of view for --eye (default 45)" },
       { name: "size", arg: "WxH", desc: "image size in pixels (default 1280x800)" },
+      { name: "room", arg: "name|id", desc: "interior: eye-level wide shot of a room from a corner" },
+      { name: "corner", arg: "n", desc: "with --room: which corner to shoot from (0 = farthest, 1, 2...)" },
+      { name: "elevation", arg: "wall-id", desc: "interior: square-on orthographic view of a wall (kitchens, wardrobes, tiling, art)" },
+      { name: "elevation-room", arg: "name|id", desc: "with --elevation: which room's side of the wall to look at" },
+      { name: "lighting", arg: "day|night|dusk|both", desc: "night/dusk: lit by the plan's light fixtures and lamps (judge a lighting design); both = day + night images" },
       OUT,
     ],
     async run(file, f) {
@@ -94,8 +99,11 @@ const COMMANDS: Record<string, Command> = {
       const view = (f.view as ViewPreset) ?? "iso";
       if (!VIEW_PRESETS.includes(view)) throw new Error(`unknown view '${view}' (${VIEW_PRESETS.join(", ")})`);
       const [width, height] = f.size ? nums(f.size, "size", 2, "x") : [undefined, undefined];
-      const out = (f.o as string) ?? `${base(file)}.${view}${f.level ? "." + f.level : ""}.png`;
-      const png = renderViewPNG(c, {
+      const tag = f.room ? `room-${String(f.room).replace(/\W+/g, "_")}` : f.elevation ? `elev-${f.elevation}` : view;
+      const out = (f.o as string) ?? `${base(file)}.${tag}${f.level ? "." + f.level : ""}.png`;
+      const lighting = (f.lighting as string | undefined) ?? "day";
+      if (![...LIGHTING_MODES, "both"].includes(lighting)) throw new Error(`--lighting must be day, night, dusk or both (got '${lighting}')`);
+      const viewOpts = {
         view,
         level: f.level as string | undefined,
         width,
@@ -107,8 +115,19 @@ const COMMANDS: Record<string, Command> = {
         eye: f.eye ? (nums(f.eye, "eye", 3) as [number, number, number]) : undefined,
         target: f.target ? (nums(f.target, "target", 3) as [number, number, number]) : undefined,
         fov: f.fov ? num(f.fov, "fov") : undefined,
-      });
-      await write(out, png);
+        interior:
+          f.room || f.elevation
+            ? {
+                room: f.room as string | undefined,
+                corner: f.corner ? num(f.corner, "corner") : undefined,
+                elevation: f.elevation as string | undefined,
+                elevationRoom: f["elevation-room"] as string | undefined,
+              }
+            : undefined,
+      };
+      if (lighting === "both")
+        for (const m of ["day", "night"] as const) await write(out.replace(/(\.png)?$/i, `.${m}.png`), renderViewPNG(c, { ...viewOpts, lighting: m }));
+      else await write(out, renderViewPNG(c, { ...viewOpts, lighting: lighting as LightingMode }));
     },
   },
   build: {
@@ -170,6 +189,18 @@ const COMMANDS: Record<string, Command> = {
     flags: [],
     async run() {
       for (const m of listMaterials()) console.log(`${m.name.padEnd(22)} ${m.pattern.padEnd(12)} ${m.description}`);
+    },
+  },
+  styles: {
+    usage: "arch styles",
+    desc: "List interior style presets (project/room `style`) and the materials they assign to each role",
+    flags: [],
+    async run() {
+      const { listStyles } = await import("../elements/styles.js");
+      for (const st of listStyles()) {
+        console.log(`${st.name.padEnd(16)} ${st.description}`);
+        console.log(`${"".padEnd(16)} ${Object.entries(st.palette).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+      }
     },
   },
   furniture: {
