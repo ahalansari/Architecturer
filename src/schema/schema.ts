@@ -369,6 +369,20 @@ export const ProjectSchema = z
       })
       .prefault({}),
     materials: z.record(z.string(), CustomMaterialSchema).default({}).describe("Custom materials by name"),
+    costs: z
+      .object({
+        currency: z.string().default("KWD").describe("Bill currency"),
+        scope: z.enum(["fitout", "full"]).default("fitout").describe("fitout: interior fit-out of an existing shell; full: adds slabs, exterior walls and roofs"),
+        rates: z.record(z.string(), z.number().min(0)).default({}).describe("Unit-rate overrides by key, e.g. {'floor:wood_herringbone_oak': 28, 'paint': 3, 'door:single': 150, 'point:double_socket': 14} (arch estimate lists every key used)"),
+        exchange: z.record(z.string(), z.number().positive()).default({}).describe("Currency → bill currency, e.g. {USD: 0.307}"),
+        preliminaries: z.number().min(0).max(50).default(4).describe("% on trades: site setup, protection, cleaning"),
+        overheadProfit: z.number().min(0).max(50).default(12).describe("Contractor overhead & profit, % on trades (not on retail furniture)"),
+        contingency: z.number().min(0).max(50).default(7.5).describe("% on everything"),
+        designFee: z.number().min(0).max(50).default(0).describe("% on everything"),
+        vat: z.number().min(0).max(50).default(0).describe("% (Kuwait: 0)"),
+      })
+      .prefault({})
+      .describe("Cost estimate settings (arch estimate / MCP cost_estimate)"),
     products: z.array(ProductSchema).default([]).describe("Vendor / library items (import_product) placed with furniture.product; shopping_list totals them"),
     site: z
       .object({

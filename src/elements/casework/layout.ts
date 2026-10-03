@@ -184,14 +184,20 @@ export function rowOf(kind: ModuleKind, inUppers: boolean): Row {
   return inUppers ? "upper" : "base";
 }
 
+/** IKEA METOD: 80 cm frames on 8 cm legs + 3.8 cm worktop, 60 cm frames + fronts, wall cabinets 37 × 80 cm topping out with 220 cm high cabinets on legs. */
+const METOD = { height: 0.918, depth: 0.62, plinth: 0.08, tall: 2.28, upperHeight: 0.8, upperDepth: 0.37, wt: 0.038, overhang: 0.015 };
+export const METOD_WIDTHS = [0.2, 0.3, 0.4, 0.6, 0.8];
+
 export function resolveDims(run: Casework, ctx: CaseCtx): Dims {
-  const t = TYPE_DEFAULTS[run.type];
+  const base = TYPE_DEFAULTS[run.type];
+  const metod = run.system === "ikea_metod" && (run.type === "kitchen" || run.type === "vanity");
+  const t = metod ? { ...base, height: METOD.height, depth: METOD.depth, plinth: METOD.plinth, tall: METOD.tall, wt: METOD.wt } : base;
   const elevation = run.elevation ?? t.elevation;
   const height = run.height ?? t.height;
   const toCeiling = run.toCeiling ?? false;
   const ceiling = ctx.ceiling - 0.012; // the cabinets stop just under the ceiling finish
   const tallTop = toCeiling ? ceiling : run.tallHeight ?? t.tall;
-  const upperHeight = run.upperHeight ?? 0.72;
+  const upperHeight = run.upperHeight ?? (metod ? METOD.upperHeight : 0.72);
   const upperTop = toCeiling ? ceiling : tallTop;
   const upperBottom = run.upperBottom ?? upperTop - upperHeight;
   const bs = run.backsplash ?? t.backsplash;
@@ -203,11 +209,11 @@ export function resolveDims(run: Casework, ctx: CaseCtx): Dims {
     tallTop,
     upperBottom,
     upperTop: run.upperBottom !== undefined && run.upperHeight !== undefined ? run.upperBottom + run.upperHeight : Math.max(upperTop, upperBottom + 0.2),
-    upperDepth: run.upperDepth ?? 0.35,
+    upperDepth: run.upperDepth ?? (metod ? METOD.upperDepth : 0.35),
     plinth: run.plinth ?? t.plinth,
     elevation,
     wt: run.worktopThickness ?? t.wt,
-    overhang: run.overhang ?? 0.02,
+    overhang: run.overhang ?? (metod ? METOD.overhang : 0.02),
     backsplash: bs === "none" ? 0 : bs === "upstand" ? 0.1 : bs,
     doorStyle: run.doorStyle ?? "slab",
     handle: run.handle ?? "bar",
@@ -800,6 +806,14 @@ export function resolveRun(run: Casework, index: number, ctx: CaseCtx): Resolved
       if ((isl.waterfall === "right" || isl.waterfall === "both") && sp.x1 >= leg.end - 0.01) sp.waterfallR = true;
     }
   }
+  // METOD: every cabinet must exist in the range (corners, fillers, panels and gaps are cut to fit)
+  if (run.system === "ikea_metod")
+    for (const p of [...res.base, ...res.uppers]) {
+      if (["corner", "filler", "end_panel", "gap"].includes(p.kind) || p.auto) continue;
+      const w = p.x1 - p.x0;
+      if (!METOD_WIDTHS.some((m) => Math.abs(m - w) < 0.006))
+        warnings.push(`${where}: ${p.row} '${p.id}' is ${Math.round(w * 100)} cm wide — METOD cabinets come in ${METOD_WIDTHS.map((m) => m * 100).join("/")} cm; set a METOD width and take up the rest with a filler`);
+    }
   return res;
 }
 

@@ -525,6 +525,33 @@ server.registerTool(
 );
 
 server.registerTool(
+  "cost_estimate",
+  {
+    description:
+      "Cost estimate / bill of quantities for a plan, measured from the model: partitions, floor / wall / ceiling finishes by material, doors, windows and treatments, built-in joinery (products like IKEA METOD at their real prices, custom runs per metre), electrical points, fixtures and circuits, plumbing fixtures and pipe runs, furniture (vendor prices or allowances), terraces; plus preliminaries, overhead & profit, contingency, fees, VAT. " +
+      "Rates are indicative Kuwait fit-out rates in KWD; override any line with project.costs.rates (keys are listed) and set currency / percentages in project.costs. Optionally writes the bill as .html / .md / .csv / .json.",
+    inputSchema: { path: PathArg, output: z.string().optional().describe("Write the full bill here (.html printable, .md, .csv, .json)"), lines: z.boolean().default(false).describe("Include every line in the reply (default: section totals)") },
+  },
+  guard(async ({ path, output, lines }) => {
+    const c = await build(path, await load(path));
+    if (!c.root) return fail(summary(c));
+    const { estimate } = await import("../cost/estimate.js");
+    const fmt = await import("../cost/format.js");
+    const bill = estimate(c);
+    let wrote = "";
+    if (output) {
+      const out = abs(output);
+      await mkdir(dirname(out), { recursive: true });
+      const ext = extname(out).toLowerCase();
+      await writeFile(out, ext === ".html" ? fmt.billHtml(bill) : ext === ".csv" ? fmt.billCsv(bill) : ext === ".json" ? JSON.stringify(bill, null, 1) : fmt.billMarkdown(bill));
+      wrote = `\nWrote ${out}`;
+    }
+    const keys = Object.entries(bill.ratesUsed).map(([k, v]) => `${k}=${v}`).join(", ");
+    return ok(text(fmt.billMarkdown(bill, { lines }) + wrote + `\n\nRate keys used (override in project.costs.rates): ${keys}`));
+  }),
+);
+
+server.registerTool(
   "shopping_list",
   { description: "Bill of materials for the products placed in a plan: quantities, unit prices and totals per vendor, with links.", inputSchema: { path: PathArg } },
   guard(async ({ path }) => {

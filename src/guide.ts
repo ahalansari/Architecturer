@@ -125,6 +125,15 @@ Call get_schema for every field; this guide covers conventions and good practice
   The type still drives layout checks and services; size comes from the model unless width/depth/height are given
   (fit contain|stretch|none); modelRotation fixes models whose front does not face -y.
 - Vendor models are for visualising designs (licence "vendor"); exports list every asset in <model>.credits.md.
+- IKEA METOD kitchens: casework {"system":"ikea_metod", ...} uses METOD sizes (worktop 0.918, wall cabinets 37 deep,
+  tall 220/240 + legs: set tallHeight / upperHeight to match) and warns when a module is not 20/30/40/60/80 cm (fill the
+  rest with {"kind":"filler","width":"auto"}). Link each module to its real combination ("product":"<id>") and put
+  worktops, sink, tap, appliances, legs, plinths, panels and handles in the run's "products": [{product, qty}].
+
+## Cost estimate
+- cost_estimate (arch estimate -o bill.html): bill of quantities measured from the model, vendor items at their prices,
+  the rest at indicative rates (KWD). project.costs: {currency, scope fitout|full, rates:{key:rate}, exchange,
+  preliminaries, overheadProfit, contingency, designFee, vat}. The reply lists every rate key used.
 
 ## Lighting design (level.lights) and window treatments
 - Fixtures: pendant (shade dome|globe|cone|drum|cluster, hangHeight = bottom above the floor), chandelier, ceiling

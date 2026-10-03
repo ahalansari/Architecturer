@@ -80,6 +80,7 @@ export const CaseModuleSchema = z
     doorStyle: z.enum(DOOR_STYLES).optional().describe("Override the run's door style for this module"),
     open: z.boolean().optional().describe("Pose this module open (doors swung 95°, drawers pulled out) in renders and exports — for showing interiors"),
     materials: CaseMaterials.partial().optional().describe("Per-module material overrides"),
+    product: Id.optional().describe("project.products id of the real cabinet this module is (e.g. an IKEA METOD/MAXIMERA combination): priced in the shopping list and cost estimate"),
   })
   .describe("One cabinet module in a casework run. Modules are listed LEFT to RIGHT as seen standing in front of the run, facing it.");
 
@@ -143,6 +144,14 @@ export const CaseworkSchema = z
     slidingDoors: z.boolean().optional().describe("Wardrobes: sliding panels across all tall modules instead of hinged doors (default false)"),
     slidingOpen: z.array(z.number().int().min(0)).default([]).describe("Sliding panels (0 = leftmost) posed open in renders"),
     materials: CaseMaterials.prefault({}),
+    system: z
+      .enum(["custom", "ikea_metod"])
+      .default("custom")
+      .describe("ikea_metod: IKEA METOD sizes (80 cm frames on 8 cm legs, worktop 3.8 cm → top 0.918; depth 0.62; wall cabinets 37 deep × 80 high under a 2.28 top; tall units 220 + legs) and a check that every cabinet is a METOD width (20/30/40/60/80 cm)"),
+    products: z
+      .array(z.object({ product: Id, qty: z.number().positive().default(1) }))
+      .default([])
+      .describe("Products for the run as a whole: worktops, sink, tap, appliances, handles, legs, plinths, cover panels (priced in the shopping list and cost estimate)"),
   })
   .describe(
     "Built-in cabinetry run (kitchen, wardrobe, vanity, media wall, shelving, desk, bench) with worktop, plinth, backsplash, appliances, interiors and openable doors/drawers. Place it with wall+from/to, a back-edge path, or position+facing (islands).",

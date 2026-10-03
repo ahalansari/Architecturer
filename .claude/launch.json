@@ -52,6 +52,18 @@
         "5179"
       ],
       "port": 5179
+    },
+    {
+      "name": "out-files",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5199",
+        "--directory",
+        "out/apt"
+      ],
+      "port": 5199
     }
   ]
 }

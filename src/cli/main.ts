@@ -283,6 +283,24 @@ const COMMANDS: Record<string, Command> = {
       for (const t of totals) console.log(`${t.vendor}: ${t.items} item(s), ${t.total} ${t.currency}`);
     },
   },
+  estimate: {
+    usage: "arch estimate <plan.json> [-o bill.html|bill.md|bill.csv|bill.json] [--summary]",
+    desc: "Cost estimate / bill of quantities measured from the model: finishes, ceilings, doors & windows, joinery (IKEA METOD at real prices), electrical, plumbing, furniture, totals",
+    file: true,
+    flags: [OUT, { name: "summary", desc: "print the section totals only" }],
+    async run(file, f) {
+      const c = await compiled(file);
+      const { estimate } = await import("../cost/estimate.js");
+      const fmt = await import("../cost/format.js");
+      const bill = estimate(c);
+      const out = f.o as string | undefined;
+      if (out) {
+        const ext = extname(out).toLowerCase();
+        await write(out, ext === ".html" ? fmt.billHtml(bill) : ext === ".csv" ? fmt.billCsv(bill) : ext === ".json" ? JSON.stringify(bill, null, 1) : fmt.billMarkdown(bill));
+      }
+      console.log(fmt.billMarkdown(bill, { lines: !f.summary && !out }));
+    },
+  },
   fetch: {
     usage: "arch fetch <plan.json>",
     desc: "Download / import every online material and model the plan uses into the cache (then it builds offline)",

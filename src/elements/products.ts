@@ -70,6 +70,12 @@ export function applyProducts(input: unknown): { input: unknown; errors: string[
   const p = input as Json;
   const products = Array.isArray(p.products) ? (p.products as Json[]) : [];
   const levels = Array.isArray(p.levels) ? (p.levels as Json[]) : [];
+  const ids = new Set(products.map((x) => x.id));
+  for (const lv of levels)
+    for (const [ci, cw] of ((lv.casework as Json[]) ?? []).entries()) {
+      const refs = [...(((cw.modules as Json[]) ?? []).map((m) => m.product)), ...(((cw.uppers as Json[]) ?? []).map((m) => m.product)), ...(((cw.products as Json[]) ?? []).map((x) => x.product))];
+      for (const r of refs) if (r !== undefined && !ids.has(r)) errors.push(`level '${lv.id}': casework '${cw.id ?? ci}': unknown product '${r}'`);
+    }
   if (!levels.some((l) => Array.isArray(l.furniture) && (l.furniture as Json[]).some((f) => f && f.product))) return { input, errors };
   const out: Json = { ...p, materials: { ...((p.materials as Json) ?? {}) }, levels: levels.map((l) => ({ ...l })) };
   const mats = out.materials as Json;
@@ -126,18 +132,28 @@ export interface ShoppingLine {
 }
 
 /** Bill of materials for the products placed in a (parsed or raw) plan. */
-export function shoppingList(project: { products?: Product[]; levels: { id: string; furniture: { product?: string }[] }[] }): { lines: ShoppingLine[]; totals: { vendor: string; currency: string; total: number; items: number }[] } {
+type CaseRef = { product?: string };
+type CaseRun = { modules?: CaseRef[]; uppers?: CaseRef[]; products?: { product: string; qty?: number }[] };
+
+export function shoppingList(project: { products?: Product[]; levels: { id: string; furniture?: { product?: string }[]; casework?: CaseRun[] }[] }): { lines: ShoppingLine[]; totals: { vendor: string; currency: string; total: number; items: number }[] } {
   const lines = new Map<string, ShoppingLine>();
-  for (const lv of project.levels)
-    for (const f of lv.furniture) {
-      if (!f.product) continue;
-      const p = project.products?.find((x) => x.id === f.product);
-      if (!p) continue;
-      const l = lines.get(p.id) ?? { product: p.id, name: p.name, vendor: p.vendor ?? "—", sku: p.sku, url: p.url, quantity: 0, unitPrice: p.price, currency: p.currency, levels: [] };
-      l.quantity++;
-      if (!l.levels.includes(lv.id)) l.levels.push(lv.id);
-      lines.set(p.id, l);
+  const add = (lvId: string, id: string | undefined, qty: number) => {
+    if (!id) return;
+    const p = project.products?.find((x) => x.id === id);
+    if (!p) return;
+    const l = lines.get(p.id) ?? { product: p.id, name: p.name, vendor: p.vendor ?? "—", sku: p.sku, url: p.url, quantity: 0, unitPrice: p.price, currency: p.currency, levels: [] };
+    l.quantity += qty;
+    if (!l.levels.includes(lvId)) l.levels.push(lvId);
+    lines.set(p.id, l);
+  };
+  for (const lv of project.levels) {
+    for (const f of lv.furniture ?? []) add(lv.id, f.product, 1);
+    // built-in cabinetry: each module that is a real cabinet, plus the run's worktops, appliances and fittings
+    for (const cw of lv.casework ?? []) {
+      for (const m of [...(cw.modules ?? []), ...(cw.uppers ?? [])]) add(lv.id, m.product, 1);
+      for (const x of cw.products ?? []) add(lv.id, x.product, x.qty ?? 1);
     }
+  }
   const out = [...lines.values()]
     .map((l) => ({ ...l, total: l.unitPrice !== undefined ? Math.round(l.unitPrice * l.quantity * 100) / 100 : undefined }))
     .sort((a, b) => a.vendor.localeCompare(b.vendor) || a.name.localeCompare(b.name));

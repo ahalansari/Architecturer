@@ -22,6 +22,10 @@
   "clay_paint": {
    "base": "plaster_beige",
    "color": "#d8c4ad"
+  },
+  "voxtorp_oak_effect": {
+   "base": "wood_ash",
+   "color": "#f3ead9"
   }
  },
  "products": [
@@ -456,6 +460,236 @@
    "depth": 2,
    "height": 0.22,
    "color": "#4e5449"
+  },
+  {
+   "id": "metod_fridge_cab_240",
+   "name": "METOD High cab f fridge/freezer w 3 doors - white/Voxtorp oak effect 60x60x240 cm",
+   "vendor": "IKEA",
+   "sku": "895.378.75",
+   "price": 205.5,
+   "currency": "KWD",
+   "type": "fridge",
+   "url": "https://www.ikea.com/kw/en/p/metod-high-cab-f-fridge-freezer-w-3-doors-white-voxtorp-oak-effect-s89537875/"
+  },
+  {
+   "id": "metod_oven_cab_240",
+   "name": "METOD / MAXIMERA High cabinet f oven+door/2 drawers - white/Voxtorp oak effect 60x60x240 cm",
+   "vendor": "IKEA",
+   "sku": "395.382.69",
+   "price": 236,
+   "currency": "KWD",
+   "type": "tall_oven",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-high-cabinet-f-oven-door-2-drawers-white-voxtorp-oak-effect-s39538269/"
+  },
+  {
+   "id": "metod_drawers_80",
+   "name": "METOD / MAXIMERA Base cb 4 frnts/2 low/3 md drwrs - white/Voxtorp oak effect 80x60 cm",
+   "vendor": "IKEA",
+   "sku": "095.378.98",
+   "price": 221,
+   "currency": "KWD",
+   "type": "base_drawers",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-base-cb-4-frnts-2-low-3-md-drwrs-white-voxtorp-oak-effect-s09537898/"
+  },
+  {
+   "id": "metod_drawers_60",
+   "name": "METOD / MAXIMERA Base cb 2 fronts/2 high drawers - white/Voxtorp oak effect 60x60 cm",
+   "vendor": "IKEA",
+   "sku": "995.390.82",
+   "price": 120.5,
+   "currency": "KWD",
+   "type": "base_drawers",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-base-cb-2-fronts-2-high-drawers-white-voxtorp-oak-effect-s99539082/"
+  },
+  {
+   "id": "metod_drawers_40",
+   "name": "METOD / MAXIMERA Base cb 3 frnts/2 low/1 md/1 hi drw - white/Voxtorp oak effect 40x60 cm",
+   "vendor": "IKEA",
+   "sku": "495.382.83",
+   "price": 128.25,
+   "currency": "KWD",
+   "type": "base_drawers",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-base-cb-3-frnts-2-low-1-md-1-hi-drw-white-voxtorp-oak-effect-s49538283/"
+  },
+  {
+   "id": "metod_dishwasher_fronts",
+   "name": "METOD 2 fronts for dishwasher - Voxtorp oak effect 60 cm",
+   "vendor": "IKEA",
+   "sku": "695.392.53",
+   "price": 50,
+   "currency": "KWD",
+   "type": "dishwasher",
+   "url": "https://www.ikea.com/kw/en/p/metod-2-fronts-for-dishwasher-voxtorp-oak-effect-s69539253/"
+  },
+  {
+   "id": "metod_sink_cab_80",
+   "name": "METOD / MAXIMERA Base cab f sink+2 fronts/2 drawers - white/Voxtorp oak effect 80x60 cm",
+   "vendor": "IKEA",
+   "sku": "995.379.07",
+   "price": 139,
+   "currency": "KWD",
+   "type": "sink",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-base-cab-f-sink-2-fronts-2-drawers-white-voxtorp-oak-effect-s99537907/"
+  },
+  {
+   "id": "metod_corner_base",
+   "name": "METOD / MAXIMERA Corner base cab w drawer and shelf - white/Voxtorp oak effect 128x68 cm",
+   "vendor": "IKEA",
+   "sku": "095.857.47",
+   "price": 122,
+   "currency": "KWD",
+   "type": "corner",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-corner-base-cab-w-drawer-and-shelf-white-voxtorp-oak-effect-s09585747/"
+  },
+  {
+   "id": "metod_hob_cab_80",
+   "name": "METOD / MAXIMERA Base cab f hob/3 fronts/3 drawers - white/Voxtorp oak effect 80x60 cm",
+   "vendor": "IKEA",
+   "sku": "495.381.03",
+   "price": 183,
+   "currency": "KWD",
+   "type": "hob",
+   "url": "https://www.ikea.com/kw/en/p/metod-maximera-base-cab-f-hob-3-fronts-3-drawers-white-voxtorp-oak-effect-s49538103/"
+  },
+  {
+   "id": "metod_wall_80x100",
+   "name": "METOD Wall cabinet with shelves/2 doors - white/Voxtorp oak effect 80x100 cm",
+   "vendor": "IKEA",
+   "sku": "295.390.47",
+   "price": 108,
+   "currency": "KWD",
+   "type": "upper_doors",
+   "url": "https://www.ikea.com/kw/en/p/metod-wall-cabinet-with-shelves-2-doors-white-voxtorp-oak-effect-s29539047/"
+  },
+  {
+   "id": "metod_wall_40x100",
+   "name": "METOD Wall cabinet with shelves/2 doors - white/Voxtorp oak effect 40x100 cm",
+   "vendor": "IKEA",
+   "sku": "495.380.61",
+   "price": 78.5,
+   "currency": "KWD",
+   "type": "upper_doors",
+   "url": "https://www.ikea.com/kw/en/p/metod-wall-cabinet-with-shelves-2-doors-white-voxtorp-oak-effect-s49538061/"
+  },
+  {
+   "id": "metod_hood_cab_80x100",
+   "name": "METOD Wall cb f extr hood w shlf/door - white/Voxtorp oak effect 80x100 cm",
+   "vendor": "IKEA",
+   "sku": "995.378.94",
+   "price": 112,
+   "currency": "KWD",
+   "type": "hood",
+   "url": "https://www.ikea.com/kw/en/p/metod-wall-cb-f-extr-hood-w-shlf-door-white-voxtorp-oak-effect-s99537894/"
+  },
+  {
+   "id": "ekbacken_worktop",
+   "name": "EKBACKEN Worktop - white marble effect/laminate 186x2.8 cm",
+   "vendor": "IKEA",
+   "sku": "206.090.30",
+   "price": 27,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/ekbacken-worktop-white-marble-effect-laminate-20609030/"
+  },
+  {
+   "id": "kilsviken_sink",
+   "name": "KILSVIKEN Inset sink, 1 bowl - grey-beige quartz composite 56x46 cm",
+   "vendor": "IKEA",
+   "sku": "795.903.97",
+   "price": 95,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/kilsviken-inset-sink-1-bowl-grey-beige-quartz-composite-s79590397/"
+  },
+  {
+   "id": "sallsjon_tap",
+   "name": "SALLSJÖN Kitchen mixer tap pull down w spray - black",
+   "vendor": "IKEA",
+   "sku": "206.104.77",
+   "price": 70,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/sallsjoen-kitchen-mixer-tap-pull-down-w-spray-black-20610477/"
+  },
+  {
+   "id": "lagan_oven",
+   "name": "LAGAN Oven - stainless steel colour",
+   "vendor": "IKEA",
+   "sku": "206.139.18",
+   "price": 99.99,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/lagan-oven-stainless-steel-colour-20613918/"
+  },
+  {
+   "id": "matmassig_hob",
+   "name": "MATMÄSSIG Induction hob - IKEA 300 black 59 cm",
+   "vendor": "IKEA",
+   "sku": "504.672.51",
+   "price": 149,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/matmaessig-induction-hob-ikea-300-black-50467251/"
+  },
+  {
+   "id": "forsnas_fridge",
+   "name": "FORSNÄS Fridge - IKEA 700 integrated 310 l",
+   "vendor": "IKEA",
+   "sku": "106.110.81",
+   "price": 279,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/forsnaes-fridge-ikea-700-integrated-10611081/"
+  },
+  {
+   "id": "metod_leg",
+   "name": "METOD Leg for cabinet 8 cm",
+   "vendor": "IKEA",
+   "sku": "705.560.67",
+   "price": 4,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/metod-leg-for-cabinet-70556067/"
+  },
+  {
+   "id": "vedhamn_plinth",
+   "name": "VEDHAMN Plinth - oak effect 220x8 cm",
+   "vendor": "IKEA",
+   "sku": "405.010.81",
+   "price": 26,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/vedhamn-plinth-oak-effect-40501081/"
+  },
+  {
+   "id": "voxtorp_cover_panel",
+   "name": "VOXTORP Cover panel - oak effect 62x80 cm",
+   "vendor": "IKEA",
+   "sku": "905.591.21",
+   "price": 20,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/voxtorp-cover-panel-oak-effect-90559121/"
+  },
+  {
+   "id": "billsbro_handle",
+   "name": "BILLSBRO Handle - anthracite 320 mm",
+   "vendor": "IKEA",
+   "sku": "005.761.82",
+   "price": 3.5,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/billsbro-handle-anthracite-00576182/"
+  },
+  {
+   "id": "metod_island_frame",
+   "name": "METOD Floor anchoring frame f ktchn islnd 210 cm",
+   "vendor": "IKEA",
+   "sku": "805.570.33",
+   "price": 22,
+   "currency": "KWD",
+   "type": "box",
+   "url": "https://www.ikea.com/kw/en/p/metod-floor-anchoring-frame-f-ktchn-islnd-80557033/"
   }
  ],
  "site": {
@@ -2073,65 +2307,172 @@
        3.3
       ]
      ],
+     "system": "ikea_metod",
      "doorStyle": "slab",
-     "handle": "gola",
+     "handle": "bar",
+     "tallHeight": 2.48,
+     "upperHeight": 1.0,
+     "upperBottom": 1.48,
+     "worktopThickness": 0.028,
+     "height": 0.908,
      "materials": {
-      "front": "wood_oak",
-      "worktop": "style_japandi_stone",
-      "backsplash": "tiles_zellige_white"
+      "front": "voxtorp_oak_effect",
+      "worktop": "marble_white",
+      "backsplash": "tiles_zellige_white",
+      "handle": "metal_gunmetal"
      },
      "modules": [
       {
+       "id": "fridge",
        "kind": "fridge",
-       "width": 0.7
+       "width": 0.6,
+       "product": "metod_fridge_cab_240"
       },
       {
-       "kind": "tall_oven"
+       "id": "oven",
+       "kind": "tall_oven",
+       "width": 0.6,
+       "product": "metod_oven_cab_240"
       },
       {
-       "kind": "base_drawers",
-       "width": "auto"
-      },
-      {
-       "kind": "dishwasher"
+       "id": "dw",
+       "kind": "dishwasher",
+       "width": 0.6,
+       "product": "metod_dishwasher_fronts"
       },
       {
        "id": "sink",
        "kind": "sink",
-       "width": 0.9
+       "width": 0.8,
+       "product": "metod_sink_cab_80"
       },
       {
-       "kind": "corner"
+       "id": "d1",
+       "kind": "base_drawers",
+       "width": 0.4,
+       "drawers": 3,
+       "product": "metod_drawers_40"
+      },
+      {
+       "kind": "filler",
+       "width": "auto"
+      },
+      {
+       "kind": "corner",
+       "product": "metod_corner_base"
       },
       {
        "id": "hob",
        "kind": "hob",
-       "width": 0.9
+       "width": 0.8,
+       "drawers": 3,
+       "product": "metod_hob_cab_80"
       },
       {
+       "id": "d2",
        "kind": "base_drawers",
+       "width": 0.8,
+       "drawers": 4,
+       "product": "metod_drawers_80"
+      },
+      {
+       "id": "d3",
+       "kind": "base_drawers",
+       "width": 0.4,
+       "drawers": 3,
+       "product": "metod_drawers_40"
+      },
+      {
+       "id": "d4",
+       "kind": "base_drawers",
+       "width": 0.4,
+       "drawers": 3,
+       "product": "metod_drawers_40"
+      },
+      {
+       "kind": "filler",
        "width": "auto"
       }
      ],
      "uppers": [
       {
-       "kind": "upper_glass",
-       "width": "auto"
+       "kind": "upper_open",
+       "over": "dw"
       },
       {
        "kind": "upper_doors",
-       "width": "auto"
+       "over": "sink",
+       "product": "metod_wall_80x100"
+      },
+      {
+       "kind": "upper_doors",
+       "over": "d1",
+       "product": "metod_wall_40x100"
       },
       {
        "kind": "corner"
       },
       {
        "kind": "hood",
-       "over": "hob"
+       "over": "hob",
+       "hood": "integrated",
+       "product": "metod_hood_cab_80x100"
       },
       {
        "kind": "upper_open",
-       "width": "auto"
+       "over": "d2"
+      },
+      {
+       "kind": "upper_doors",
+       "over": "d3",
+       "product": "metod_wall_40x100"
+      },
+      {
+       "kind": "upper_doors",
+       "over": "d4",
+       "product": "metod_wall_40x100"
+      }
+     ],
+     "products": [
+      {
+       "product": "ekbacken_worktop",
+       "qty": 4
+      },
+      {
+       "product": "kilsviken_sink",
+       "qty": 1
+      },
+      {
+       "product": "sallsjon_tap",
+       "qty": 1
+      },
+      {
+       "product": "lagan_oven",
+       "qty": 1
+      },
+      {
+       "product": "matmassig_hob",
+       "qty": 1
+      },
+      {
+       "product": "forsnas_fridge",
+       "qty": 1
+      },
+      {
+       "product": "metod_leg",
+       "qty": 10
+      },
+      {
+       "product": "vedhamn_plinth",
+       "qty": 4
+      },
+      {
+       "product": "voxtorp_cover_panel",
+       "qty": 2
+      },
+      {
+       "product": "billsbro_handle",
+       "qty": 35
       }
      ],
      "lighting": true
@@ -2145,10 +2486,19 @@
      ],
      "facing": "north",
      "length": 2.4,
-     "handle": "gola",
+     "system": "ikea_metod",
+     "doorStyle": "slab",
+     "handle": "bar",
+     "tallHeight": 2.48,
+     "upperHeight": 1.0,
+     "upperBottom": 1.48,
+     "worktopThickness": 0.028,
+     "height": 0.908,
      "materials": {
-      "front": "wood_walnut",
-      "worktop": "style_japandi_stone"
+      "front": "voxtorp_oak_effect",
+      "worktop": "marble_white",
+      "backsplash": "tiles_zellige_white",
+      "handle": "metal_gunmetal"
      },
      "island": {
       "seating": 0.3,
@@ -2157,15 +2507,39 @@
      "modules": [
       {
        "kind": "base_drawers",
-       "width": "auto"
-      },
-      {
-       "kind": "base_doors",
-       "width": "auto"
+       "width": 0.8,
+       "drawers": 4,
+       "product": "metod_drawers_80"
       },
       {
        "kind": "base_drawers",
-       "width": "auto"
+       "width": 0.8,
+       "drawers": 4,
+       "product": "metod_drawers_80"
+      },
+      {
+       "kind": "base_drawers",
+       "width": 0.8,
+       "drawers": 4,
+       "product": "metod_drawers_80"
+      }
+     ],
+     "products": [
+      {
+       "product": "ekbacken_worktop",
+       "qty": 3
+      },
+      {
+       "product": "metod_leg",
+       "qty": 3
+      },
+      {
+       "product": "metod_island_frame",
+       "qty": 1
+      },
+      {
+       "product": "billsbro_handle",
+       "qty": 12
       }
      ]
     },
