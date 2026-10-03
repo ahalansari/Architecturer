@@ -43,6 +43,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".csv": "text/csv; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".json": "application/json",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
 export interface RemoteServer {

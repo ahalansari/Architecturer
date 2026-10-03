@@ -213,6 +213,14 @@ test("OAuth flow, tools over HTTP, sandbox, links, refresh and revoke", async ()
     assert.equal(res.headers.get("content-type"), "model/gltf-binary");
     assert.ok((await res.arrayBuffer()).byteLength > 20_000);
     assert.match((await call("export_status")).content[0].text!, /cabin → exports\/cabin\.glb — done/);
+
+    r = await call("generate_contract", { path: "cabin", package: "main", formats: ["docx"] });
+    assert.ok(!r.isError, r.content[0].text);
+    const docxLink = /DOCX: (\S+)/.exec(r.content[0].text!)![1];
+    assert.match(docxLink, /\/files\/w\/exports\/contracts\/cabin-main-supply\.docx\?/);
+    res = await fetch(docxLink);
+    assert.equal(res.status, 200);
+    assert.equal((await res.arrayBuffer()).byteLength > 5000, true);
   } finally {
     await client.close();
   }

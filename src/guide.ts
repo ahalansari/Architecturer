@@ -141,7 +141,17 @@ Call get_schema for every field; this guide covers conventions and good practice
 ## Cost estimate
 - cost_estimate (arch estimate -o bill.html): bill of quantities measured from the model, vendor items at their prices,
   the rest at indicative rates (KWD). project.costs: {currency, scope fitout|full, rates:{key:rate}, exchange,
-  preliminaries, overheadProfit, contingency, designFee, vat}. The reply lists every rate key used.
+  preliminaries, overheadProfit, contingency, designFee, vat}. The reply lists every rate key used. Use scope "full" for
+  a new build (structure: concrete, rebar, formwork, blockwork). Products without a price are allowances: research
+  their prices and set them with import_product {id, price, currency}.
+
+## Works contracts
+- generate_contract (arch contract): bilingual contract (English, then Arabic, Arabic prevails) per trade package as
+  .docx + print-ready .html: main, structure (هيكل أسود), blockwork, plaster, waterproofing, tiling, painting, ceilings,
+  doors_windows, electrical, plumbing, joinery, external. mode labour (مصنعية فقط, owner supplies materials) or supply.
+  Quantities come from the full-scope bill; pass the contractor's labour prices as rates {"labour:<key>": rate}.
+  Owner and site address: project.contract {owner, location, retention, defectsMonths, delayPenaltyPerDay}.
+  Ask the user for the parties' details (names, civil IDs, phones) or leave them as blanks to fill in by hand.
 
 ## Lighting design (level.lights) and window treatments
 - Fixtures: pendant (shade dome|globe|cone|drum|cluster, hangHeight = bottom above the floor), chandelier, ceiling

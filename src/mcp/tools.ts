@@ -15,6 +15,7 @@ import { readJson } from "../io.js";
 import { listMaterials } from "../materials/library.js";
 import { PLAN_SHEETS } from "../render/plan.js";
 import { VIEW_PRESETS, type ViewPreset } from "../render/raster.js";
+import { PACKAGE_IDS } from "../contracts/packages.js";
 import { ELEMENT_KINDS, projectJsonSchema } from "../schema/schema.js";
 import { STARTER_PROJECT } from "../templates.js";
 import type { Engine } from "./engine.js";
@@ -746,6 +747,76 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
       if (!r.ok) return fail(r.summary);
       const wrote = out ? (remote ? `\nDownload: ${remote.fileLink(out)}` : `\nWrote ${out}`) : "";
       return ok(text(r.text! + wrote));
+    }),
+  );
+
+  const Party = z
+    .object({
+      name: z.string().optional(),
+      nameAr: z.string().optional().describe("Name in Arabic"),
+      company: z.string().optional(),
+      companyAr: z.string().optional(),
+      representative: z.string().optional().describe("Who signs for the company"),
+      representativeAr: z.string().optional(),
+      nationality: z.string().optional(),
+      nationalityAr: z.string().optional(),
+      civilId: z.string().optional(),
+      commercialLicence: z.string().optional(),
+      phone: z.string().optional(),
+      email: z.string().optional(),
+      address: z.string().optional(),
+      addressAr: z.string().optional(),
+    })
+    .describe("Anything left out is printed as a blank line to fill in by hand");
+  tool(
+    "generate_contract",
+    {
+      title: "Generate a works contract",
+      description:
+        "Bilingual works contract (English, then Arabic; the Arabic text prevails) for one trade package of the plan, as Word (.docx) and print-ready HTML (save as PDF). " +
+        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, joinery (kitchens, wardrobes), external (terraces, balustrades). " +
+        "mode 'labour' = labour only (مصنعية فقط: the owner supplies materials, listed in the contract); 'supply' = supply and installation. The schedule of quantities is measured from the model (full-scope cost estimate); labour-only rates come from researched Kuwait labour rates, otherwise they are estimated as a share of the supply & install rate and marked * (pass rates {'labour:<key>': rate} with the contractor's prices). " +
+        "Includes scope steps, specification, materials split, payment stages tied to the work (per slab for structural work), programme, delay penalty, retention, defects period (and decennial liability for structural work), variations, safety, termination and Kuwaiti law. Owner and site address default to project.contract. " +
+        (remote ? "Returns download links." : "Writes the files next to the plan (contracts/) unless `output` is given."),
+      inputSchema: {
+        path: PathArg,
+        package: z.enum(PACKAGE_IDS),
+        mode: z.enum(["labour", "supply"]).optional().describe("Default: supply for main, doors_windows and joinery (always supply & install); labour for the other trades"),
+        contractor: Party.optional(),
+        owner: Party.optional().describe("Default: project.contract.owner"),
+        location: z
+          .object({ governorate: z.string(), area: z.string(), block: z.string(), street: z.string(), avenue: z.string(), plot: z.string(), house: z.string(), paci: z.string() })
+          .partial()
+          .optional()
+          .describe("Site address; default project.contract.location"),
+        date: z.string().optional().describe("Contract date YYYY-MM-DD (default today)"),
+        startDate: z.string().optional().describe("Start of works YYYY-MM-DD (default a week after the contract date)"),
+        durationDays: z.number().int().positive().optional().describe("Default: from the package and building size"),
+        retention: z.number().min(0).max(20).optional(),
+        defectsMonths: z.number().int().min(0).max(60).optional(),
+        delayPenaltyPerDay: z.number().min(0).optional(),
+        delayPenaltyCap: z.number().min(0).max(100).optional(),
+        rates: z.record(z.string(), z.number().min(0)).optional().describe("Rate overrides: {'labour:wall:cement_plaster': 1.45} (labour) or {'<key>': rate}"),
+        includeJoinery: z.boolean().optional().describe("main: include kitchens and built-in joinery (default false: let separately)"),
+        extraTerms: z.array(z.object({ en: z.string(), ar: z.string() })).optional().describe("Extra special conditions, each in English and Arabic"),
+        formats: z.array(z.enum(["docx", "html"])).default(["docx", "html"]),
+        output: z.string().optional().describe("Base file name without extension (default contracts/<project>-<package>-<mode>)"),
+      },
+      annotations: OUTPUT,
+    },
+    guard(async (a, extra) => {
+      const { packageById } = await import("../contracts/packages.js");
+      const pkg = packageById(a.package);
+      const mode = a.mode ?? pkg.modes[0];
+      const file = ws.plan(a.path);
+      const base = (a.output ?? `contracts/${basename(file, extname(file))}-${pkg.id}-${mode}`).replace(/\.(docx|html)$/i, "");
+      const where = (ext: string) => (remote ? ws.output(`${base}${ext}`, [ext]) : ws.output(base.startsWith("/") ? `${base}${ext}` : `${dirname(file)}/${base}${ext}`, [ext]));
+      const out = { docx: a.formats.includes("docx") ? where(".docx") : undefined, html: a.formats.includes("html") ? where(".html") : undefined };
+      const options = { ...a, path: undefined, formats: undefined, output: undefined, package: pkg.id, mode };
+      const r = await job(file, await load(file), { op: "contract", options, out }, extra, "Writing the contract");
+      if (!r.ok) return fail(r.summary);
+      const files = [out.docx, out.html].filter((x): x is string => !!x).map((f) => (remote ? `${extname(f).slice(1).toUpperCase()}: ${remote.fileLink(f)}` : `Wrote ${f}`));
+      return ok(text(`${r.text}\n${files.join("\n")}\nThe contract is a draft: have it reviewed before signing.`));
     }),
   );
 

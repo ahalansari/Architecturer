@@ -48,6 +48,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch product <url> --add plan.json --at x,y` | Import a vendor product (IKEA, Wayfair...) with its 3D model, price and size |
 | `arch bom plan.json [--csv]` | Shopping list of placed products |
 | `arch estimate plan.json -o bill.html` | Cost estimate / bill of quantities measured from the model (also `.md`, `.csv`, `.json`) |
+| `arch contract plan.json --package plaster --labour` | Bilingual works contract (English then Arabic) as `.docx` and print-ready `.html`, see [docs/CONTRACTS.md](docs/CONTRACTS.md) |
 | `arch fetch plan.json` | Download all online assets into the cache (then builds work offline) |
 | `arch mcp [--http]` | MCP server over stdio, or `--http` for the remote server ([docs/REMOTE_MCP.md](docs/REMOTE_MCP.md)) |
 | `arch token create --name n` / `list` / `revoke --id g` | Personal tokens and connected apps of the remote server |
@@ -84,6 +85,7 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 | `validate` | Errors and warnings |
 | `render_plan`, `render_view` | Return PNG images so the model can see its work |
 | `search_assets`, `search_products`, `import_product`, `shopping_list`, `cost_estimate` | Scanned CC0 materials / models, IKEA catalogue search, vendor product import with 3D models, bill of materials, cost estimate |
+| `generate_contract` | Works contract per trade package, English and Arabic, Word + HTML |
 | `export_model` | `.glb` / `.gltf` for game engines (`export_status` on the remote server) |
 
 ### Remote MCP server

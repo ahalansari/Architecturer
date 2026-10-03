@@ -9,6 +9,7 @@ import { dirname, extname } from "node:path";
 import { exportGLB, exportGLTF, type ExportOptions } from "../export/gltf.js";
 import { compileWithAssets, vendorNotice, type Compiled } from "../pipeline.js";
 import { renderPlanSVG, svgToPng, type PlanSheet } from "../render/plan.js";
+import type { ContractOptions } from "../contracts/contract.js";
 import type { CostScope } from "../cost/estimate.js";
 import type { LightingMode } from "../render/raster.js";
 import { renderViewPNG, type ViewOptions } from "../render/view.js";
@@ -30,7 +31,9 @@ export type JobRequest =
   | (Base & { op: "info" })
   | (Base & { op: "plan_svg"; level?: string; sheet?: PlanSheet })
   | (Base & { op: "glb"; opts: ExportOptions })
-  | (Base & { op: "bill"; format: "html" | "csv"; scope?: CostScope });
+  | (Base & { op: "bill"; format: "html" | "csv"; scope?: CostScope })
+  // works contract (Word and/or HTML) for a trade package
+  | (Base & { op: "contract"; options: ContractOptions; out: { docx?: string; html?: string } });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -131,6 +134,25 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
       const fmt = await import("../cost/format.js");
       const bill = estimate(c, { scope: req.scope });
       return { ok: true, summary: sum, text: req.format === "csv" ? fmt.billCsv(bill) : fmt.billHtml(bill) };
+    }
+    case "contract": {
+      const { buildContract, contractDocument } = await import("../contracts/contract.js");
+      const { contractDocx, contractHtml } = await import("../contracts/render.js");
+      const k = buildContract(c, req.options);
+      const doc = contractDocument(k);
+      if (req.out.docx) await writeAtomic(req.out.docx, await contractDocx(doc));
+      if (req.out.html) await writeAtomic(req.out.html, contractHtml(doc));
+      const money = (x: number) => x.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+      const text = [
+        `${k.id}: ${k.pkg.title.en} / ${k.pkg.title.ar} (${k.mode === "labour" ? "labour only — مصنعية فقط" : "supply and installation — توريد وتركيب"})`,
+        `Contract value ${money(k.value)} ${k.currency} from ${k.items.length} item(s); ${k.durationDays} days (${k.startDate} → ${k.endDate}); retention ${k.retention}% for ${k.defectsMonths} months; delay penalty ${money(k.penaltyPerDay)} ${k.currency}/day up to ${k.penaltyCap}%.`,
+        "Payments:",
+        ...k.payments.map((p) => `  ${p.no}. ${p.label.en} — ${p.pct}% = ${money(p.amount)} ${k.currency}`),
+        ...k.notes.map((n) => `note: ${n}`),
+        ...(!k.owner.name && !k.owner.nameAr ? ["note: owner details are blank lines (set project.contract.owner or pass owner)."] : []),
+        ...(!k.contractor.name && !k.contractor.company ? ["note: contractor details are blank lines (pass contractor)."] : []),
+      ].join("\n");
+      return { ok: true, summary: sum, text };
     }
     case "cost": {
       const { estimate } = await import("../cost/estimate.js");

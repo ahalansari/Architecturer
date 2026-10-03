@@ -63,6 +63,13 @@ test("MCP server: create, edit, validate, render, export", async () => {
     assert.ok(!/PRODUCTS WITHOUT A PRICE/.test(r.content[0].text!));
     assert.match(r.content[0].text!, /Lamp X \| 1 \| no \| 25\.00/);
 
+    r = await call("generate_contract", { path: plan, package: "plaster", contractor: { company: "Test Co" } });
+    assert.ok(!r.isError, r.content[0].text);
+    assert.match(r.content[0].text!, /labour only — مصنعية فقط/);
+    assert.ok(existsSync(join(dir, "contracts", "plan-plaster-labour.docx")) && existsSync(join(dir, "contracts", "plan-plaster-labour.html")));
+    r = await call("generate_contract", { path: plan, package: "joinery", mode: "labour" });
+    assert.ok(r.isError);
+
     const out = join(dir, "plan.glb");
     r = await call("export_model", { path: plan, output: out, textureSize: 128 });
     assert.ok(!r.isError, r.content[0].text);

@@ -352,6 +352,26 @@ export const ElevatorSchema = z
   })
   .describe("Connects levels for circulation checks (rooms reached only by elevator). Model the shaft and doors with walls/openings/shapes");
 
+/** A party to a works contract (owner or contractor). Arabic fields are used in the Arabic text. */
+export const PartySchema = z
+  .object({
+    name: z.string().optional().describe("Person or company name (English text)"),
+    nameAr: z.string().optional().describe("Name in Arabic (Arabic text; falls back to name)"),
+    company: z.string().optional().describe("Contractor's company, if the party is a company"),
+    companyAr: z.string().optional(),
+    representative: z.string().optional().describe("Who signs for the company"),
+    representativeAr: z.string().optional(),
+    nationality: z.string().optional(),
+    nationalityAr: z.string().optional(),
+    civilId: z.string().optional().describe("Kuwaiti civil ID number"),
+    commercialLicence: z.string().optional().describe("Commercial licence (company)"),
+    phone: z.string().optional(),
+    email: z.string().optional(),
+    address: z.string().optional(),
+    addressAr: z.string().optional(),
+  })
+  .describe("Party details; anything left out becomes a blank line to fill in by hand");
+
 export const ProjectSchema = z
   .object({
     $schema: z.string().optional(),
@@ -390,6 +410,29 @@ export const ProjectSchema = z
       .prefault({})
       .describe("Cost estimate settings (arch estimate / MCP cost_estimate)"),
     products: z.array(ProductSchema).default([]).describe("Vendor / library items (import_product) placed with furniture.product; shopping_list totals them"),
+    contract: z
+      .object({
+        owner: PartySchema.optional().describe("First party (the owner); generate_contract fills it in every contract"),
+        location: z
+          .object({
+            governorate: z.string().optional(),
+            area: z.string().optional().describe("Area / district, e.g. Salwa"),
+            block: z.string().optional(),
+            street: z.string().optional(),
+            avenue: z.string().optional(),
+            plot: z.string().optional().describe("Plot (قسيمة) number"),
+            house: z.string().optional(),
+            paci: z.string().optional().describe("PACI number"),
+          })
+          .optional()
+          .describe("Site address (Arabic or English text, used in both languages)"),
+        retention: z.number().min(0).max(20).default(5).describe("% held from each payment until the end of the defects period"),
+        defectsMonths: z.number().int().min(0).max(60).default(12).describe("Defects liability period after handover"),
+        delayPenaltyPerDay: z.number().min(0).optional().describe("Per calendar day of delay, bill currency (default 0.1% of the contract value)"),
+        delayPenaltyCap: z.number().min(0).max(100).default(10).describe("Maximum delay penalty, % of the contract value"),
+      })
+      .prefault({})
+      .describe("Defaults for generated works contracts (generate_contract / arch contract)"),
     site: z
       .object({
         ground: z.boolean().default(true).describe("Add a ground plane around the building"),

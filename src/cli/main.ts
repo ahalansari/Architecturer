@@ -423,6 +423,46 @@ const COMMANDS: Record<string, Command> = {
       for (const t of totals) console.log(`${t.vendor}: ${t.items} item(s), ${t.total} ${t.currency}`);
     },
   },
+  contract: {
+    usage: "arch contract <plan.json> --package <id> [--labour|--supply] [-o base] [--contractor name] [--start YYYY-MM-DD] [--days n]",
+    desc: "Bilingual works contract (English, then Arabic) for a trade package, as .docx and print-ready .html: main, structure, blockwork, plaster, waterproofing, tiling, painting, ceilings, doors_windows, electrical, plumbing, joinery, external",
+    file: true,
+    flags: [
+      { name: "package", arg: "id", desc: "trade package (see above)" },
+      { name: "labour", desc: "labour only (مصنعية فقط): the owner supplies the materials" },
+      { name: "supply", desc: "supply and installation" },
+      { name: "o", arg: "base", desc: "output path without extension (default contracts/<plan>-<package>-<mode> next to the plan)" },
+      { name: "contractor", arg: "name", desc: "contractor's company name (other details: project.contract or the MCP tool)" },
+      { name: "start", arg: "date", desc: "start of works, YYYY-MM-DD" },
+      { name: "days", arg: "n", desc: "programme in calendar days" },
+      { name: "format", arg: "docx|html|both", desc: "default both" },
+    ],
+    async run(file, f) {
+      const { PACKAGE_IDS, packageById } = await import("../contracts/packages.js");
+      if (typeof f.package !== "string") throw new Error(`--package is required (${PACKAGE_IDS.join(", ")})`);
+      if (f.labour && f.supply) throw new Error("--labour or --supply, not both");
+      const pkg = packageById(f.package);
+      const mode = f.labour ? "labour" : f.supply ? "supply" : pkg.modes[0];
+      const c = await compiled(file);
+      const { buildContract, contractDocument } = await import("../contracts/contract.js");
+      const { contractDocx, contractHtml } = await import("../contracts/render.js");
+      const k = buildContract(c, {
+        package: pkg.id,
+        mode,
+        contractor: typeof f.contractor === "string" ? { company: f.contractor } : undefined,
+        startDate: typeof f.start === "string" ? f.start : undefined,
+        durationDays: f.days ? num(f.days, "days") : undefined,
+      });
+      const doc = contractDocument(k);
+      const outBase = typeof f.o === "string" ? f.o.replace(/\.(docx|html)$/i, "") : `${dirname(file)}/contracts/${base(file).split("/").pop()}-${pkg.id}-${mode}`;
+      const fmt = typeof f.format === "string" ? f.format : "both";
+      if (!["docx", "html", "both"].includes(fmt)) throw new Error("--format must be docx, html or both");
+      if (fmt !== "html") await write(`${outBase}.docx`, await contractDocx(doc));
+      if (fmt !== "docx") await write(`${outBase}.html`, contractHtml(doc));
+      console.log(`${k.id}: ${k.value.toFixed(3)} ${k.currency}, ${k.items.length} items, ${k.durationDays} days, ${k.payments.length} payments`);
+      for (const n of k.notes) console.error(`note: ${n}`);
+    },
+  },
   estimate: {
     usage: "arch estimate <plan.json> [--scope fitout|full] [-o bill.html|bill.md|bill.csv|bill.json] [--summary]",
     desc: "Cost estimate / bill of quantities measured from the model: finishes, ceilings, doors & windows, joinery (IKEA METOD at real prices), electrical, plumbing, furniture, totals; --scope full adds the structure (foundations, RC concrete, rebar, formwork, blockwork, plaster, roof)",

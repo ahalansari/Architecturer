@@ -64,6 +64,8 @@ export interface Bill {
   coverage: Record<"vendor" | "override" | "market" | "indicative", number>;
   /** Products with no vendor price, billed as allowances instead (worth researching). */
   unpriced: { id: string; name: string; url?: string; allowance: number }[];
+  /** Built-up area: ground plus suspended floor slabs, m². */
+  floorArea: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -682,6 +684,7 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
     ].sort((a, b) => a.key.localeCompare(b.key)),
     coverage: Object.fromEntries(Object.entries(coverage).map(([k, v]) => [k, round(v)])) as Bill["coverage"],
     unpriced: [...unpriced.values()],
+    floorArea: round(gfa),
   };
 }
 
