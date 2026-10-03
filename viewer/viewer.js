@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+import { WalkMode } from "./walk.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view");
@@ -38,6 +39,7 @@ const gltfLoader = new GLTFLoader().setKTX2Loader(ktx2);
 
 let model = null;
 let levels = [];
+let elevators = [];
 let bounds = new THREE.Box3();
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
 renderer.clippingPlanes = [];
@@ -85,6 +87,7 @@ async function loadInfo() {
     $("cut").append(opt);
   }
   $("cut").value = levels.some((l) => l.id === prevCut) ? prevCut : "";
+  elevators = info.elevators ?? [];
   return info;
 }
 
@@ -193,7 +196,8 @@ async function loadModel(keepCamera) {
   sc.far = r * 4;
   sc.updateProjectionMatrix();
   applyVisibility();
-  if (!keepCamera) frame("iso");
+  if (walk.active) walk.rebuild();
+  else if (!keepCamera) frame("iso");
   setStatus(`updated ${new Date().toLocaleTimeString()} · ${Math.round(performance.now() - t0)} ms`);
 }
 
@@ -202,6 +206,7 @@ const ray = new THREE.Raycaster();
 let downAt = null;
 canvas.addEventListener("pointerdown", (e) => (downAt = [e.clientX, e.clientY]));
 canvas.addEventListener("pointerup", (e) => {
+  if (walk.active) return;
   if (!model || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
   ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
   const hit = ray.intersectObject(model, true).find((h) => {
@@ -241,10 +246,106 @@ $("planBtn").onclick = () => {
 $("planClose").onclick = () => ($("plan").hidden = true);
 $("plan").onclick = (e) => e.target === $("plan") && ($("plan").hidden = true);
 
+// ---------------------------------------------------------------- walk mode
+const hud = {
+  show(on) {
+    $("walkHud").hidden = !on;
+    $("walkResume").style.display = "";
+    $("panel").style.display = on ? "none" : "";
+  },
+  setLocked(on) {
+    $("walkHud").classList.toggle("locked", on);
+  },
+  noLock() {
+    const b = $("walkResume");
+    b.textContent = "Drag to look around";
+    clearTimeout(b._t);
+    b._t = setTimeout(() => (b.style.display = "none"), 2500);
+  },
+  status(room, level) {
+    $("walkRoom").textContent = room;
+    $("walkLevel").textContent = level;
+  },
+  flash(text) {
+    const f = $("walkFlash");
+    f.textContent = text;
+    f.classList.add("on");
+    clearTimeout(f._t);
+    f._t = setTimeout(() => f.classList.remove("on"), 900);
+  },
+};
+let saved = null; // view state to restore after walking
+const walk = new WalkMode({
+  camera,
+  renderer,
+  dom: canvas,
+  getModel: () => model,
+  getLevels: () => levels,
+  getElevators: () => elevators,
+  hud,
+  onExit() {
+    // back to orbiting around the spot we were looking at
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    controls.target.copy(camera.position).addScaledVector(dir, 6);
+    camera.fov = 45;
+    camera.updateProjectionMatrix();
+    controls.enabled = true;
+    if (saved) {
+      $("cut").value = saved.cut;
+      applyVisibility();
+    }
+  },
+});
+
+/** Start walking at a floor point, looking toward the building's centre. */
+function startWalk(at) {
+  if (!model) return;
+  saved = { cut: $("cut").value };
+  // walk through the whole building: everything visible, no cutaway
+  $("cut").value = "";
+  for (const l of levels) l.visible = true;
+  document.querySelectorAll("#levels input").forEach((i) => (i.checked = true));
+  applyVisibility();
+  if (!at) {
+    // what's under the screen centre, else the first lift stop, else the middle of the building
+    ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const hit = ray.intersectObject(model, true).find((h) => h.face && h.face.normal.clone().transformDirection(h.object.matrixWorld).y > 0.7);
+    if (hit) at = hit.point;
+    else if (elevators[0]?.stops[0]) {
+      const st = elevators[0].stops[0];
+      const lv = levels.find((l) => l.id === st.level);
+      at = new THREE.Vector3(st.at[0], (lv?.elevation ?? 0) + 0.5, -st.at[1]);
+    } else at = bounds.getCenter(new THREE.Vector3()).setY(bounds.min.y + 0.5);
+  }
+  controls.enabled = false;
+  camera.fov = 70;
+  camera.updateProjectionMatrix();
+  walk.enter(at, bounds.getCenter(new THREE.Vector3()));
+}
+
+$("walkBtn").onclick = () => startWalk();
+// handy for scripting / debugging from the console
+window.architecturer = { walk, startWalk, camera };
+$("walkExit").onclick = () => walk.exit();
+$("walkResume").onclick = () => walk.lock();
+canvas.addEventListener("dblclick", (e) => {
+  if (walk.active || !model) return;
+  ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  const hit = ray.intersectObject(model, true).find((h) => {
+    for (let o = h.object; o; o = o.parent) if (!o.visible) return false;
+    return h.face && h.face.normal.clone().transformDirection(h.object.matrixWorld).y > 0.7;
+  });
+  if (hit) startWalk(hit.point);
+});
+
 new EventSource("/events").addEventListener("reload", () => loadModel(true).catch((e) => setStatus(String(e))));
 
+const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
-  controls.update();
+  const dt = clock.getDelta();
+  if (walk.active) walk.update(dt);
+  else controls.update();
   renderer.render(scene, camera);
 });
 

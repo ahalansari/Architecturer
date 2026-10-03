@@ -45,3 +45,22 @@ pre { white-space: pre-wrap; font-size: 11px; margin: 0; }
 @media (max-width: 600px) {
   #panel { width: auto; right: 12px; max-height: 45%; }
 }
+
+/* walk mode */
+#walkHud { position: fixed; inset: 0; pointer-events: none; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+#walkHud[hidden] { display: none; }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 2px rgba(0,0,0,.8); }
+#walkInfo { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); font-size: 15px; background: rgba(0,0,0,.35); padding: 4px 12px; border-radius: 14px; white-space: nowrap; max-width: calc(100% - 260px); overflow: hidden; text-overflow: ellipsis; }
+#walkHud.locked #walkInfo { max-width: calc(100% - 40px); }
+#walkInfo span { opacity: .8; margin-left: 8px; font-size: 13px; }
+#walkFlash { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 26px; font-weight: 600; opacity: 0; transition: opacity .4s; }
+#walkFlash.on { opacity: 1; transition: none; }
+#walkHelp { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 8px; white-space: nowrap; max-width: 96%; overflow: hidden; text-overflow: ellipsis; }
+#walkResume, #walkExit { pointer-events: auto; position: absolute; background: rgba(0,0,0,.55); color: #fff; border: 1px solid rgba(255,255,255,.4); }
+#walkResume { left: 50%; top: 55%; transform: translateX(-50%); font-size: 15px; padding: 8px 16px; }
+#walkExit { top: 12px; right: 12px; }
+#walkHud.locked #walkResume, #walkHud.locked #walkExit { display: none; }
+@media (max-width: 600px) {
+  #walkHelp { white-space: normal; }
+  #walkInfo { top: 56px; max-width: calc(100% - 24px); }
+}

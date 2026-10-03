@@ -6,7 +6,7 @@
     <title>Architecturer Viewer</title>
     <link rel="stylesheet" href="/viewer/viewer.css" />
     <script type="importmap">
-      { "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }
+      { "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/", "three-mesh-bvh": "/vendor/three-mesh-bvh/build/index.module.js" } }
     </script>
   </head>
   <body>
@@ -39,6 +39,7 @@
           <button data-view="south">South</button>
           <button data-view="east">East</button>
           <button id="planBtn">2D plan</button>
+          <button id="walkBtn" title="First-person walk (or double-click a floor)">🚶 Walk</button>
         </div>
         <a id="download" href="/model.glb" download="model.glb" class="button">Download GLB</a>
       </section>
@@ -53,6 +54,17 @@
     </aside>
     <div id="plan" hidden><img id="planImg" alt="floor plan" /><button id="planClose">Close</button></div>
     <div id="status"></div>
+    <div id="walkHud" hidden>
+      <div id="crosshair"></div>
+      <div id="walkInfo"><b id="walkRoom"></b><span id="walkLevel"></span></div>
+      <div id="walkFlash"></div>
+      <div id="walkHelp">
+        <b>W A S D</b> move · <b>mouse</b> look · <b>Shift</b> run · <b>Space</b> jump · <b>E</b> open door ·
+        <b>[ ]</b> floor down / up · <b>F</b> fly · <b>X</b> exit
+      </div>
+      <button id="walkResume">Click to look around</button>
+      <button id="walkExit">Exit walk</button>
+    </div>
     <script type="module" src="/viewer/viewer.js"></script>
   </body>
 </html>

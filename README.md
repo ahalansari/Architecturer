@@ -44,7 +44,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch plan plan.json --level ground -o plan.png` | 2D floor plan (`.svg` or `.png`) |
 | `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
 | `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png\|ktx2]` | Export; `.gltf` writes separate image files |
-| `arch serve plan.json` | Live viewer that reloads whenever the file is saved |
+| `arch serve plan.json` | Live viewer that reloads whenever the file is saved, with a first-person **walk mode** |
 | `arch schema` / `materials` / `furniture` | Reference |
 
 Every command has `--help`, and unknown options are errors. During development, `arch` is `npx tsx src/cli/main.ts`. After `npm run build` it is `node bin/arch.js`.
@@ -102,6 +102,16 @@ Examples:
   }]
 }
 ```
+
+## Walk mode
+
+In the viewer, click **🚶 Walk**, or double-click any floor, to explore the design in first person.
+
+- **Move:** W A S D, mouse to look (or drag when the browser can't capture the mouse), Shift to run, Space to jump.
+- **Doors:** E opens or closes the nearest one; walking into a closed door also opens it. Doors swing on their hinges, and sliding and garage doors slide or lift.
+- **Floors:** `[` and `]` change floor, taking the lift stops when the plan has elevators. F toggles fly mode. X exits.
+- **Physics:** you stay on floors under gravity, walk up stairs step by step, and walls, glass, railings and furniture block you. Collision uses a BVH, so large models stay smooth: the Kuwait Towers' 194k triangles take 0.04 ms per frame.
+- **Display:** the current room and floor are shown at the top.
 
 ## Using the models in a game engine
 

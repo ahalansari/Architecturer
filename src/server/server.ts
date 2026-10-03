@@ -57,6 +57,7 @@ export async function serve(planPath: string, opts: { port: number; textureSize?
       if (url.pathname === "/" || url.pathname === "/index.html") return sendFile(res, VIEWER, "index.html");
       if (url.pathname.startsWith("/viewer/")) return sendFile(res, VIEWER, url.pathname.slice(8));
       if (url.pathname.startsWith("/three/")) return sendFile(res, THREE, url.pathname.slice(7));
+      if (url.pathname.startsWith("/vendor/three-mesh-bvh/")) return sendFile(res, join(ROOT, "node_modules/three-mesh-bvh"), url.pathname.slice(23));
       if (url.pathname === "/events") {
         res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
         res.write(": hi\n\n");
@@ -77,6 +78,7 @@ export async function serve(planPath: string, opts: { port: number; textureSize?
             warnings: c.warnings,
             stats: c.stats,
             levels: c.levels.map((l) => ({ id: l.id, name: l.name, elevation: l.elevation, height: l.height })),
+            elevators: c.project?.elevators ?? [],
           }),
         );
         return;

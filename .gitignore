@@ -4,3 +4,4 @@ out
 *.glb
 !examples/**/*.glb
 .DS_Store
+.claude/scheduled_tasks.lock
