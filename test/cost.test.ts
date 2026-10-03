@@ -4,6 +4,7 @@ import { compile } from "../src/pipeline.js";
 import { estimate } from "../src/cost/estimate.js";
 import { billCsv, billHtml, billMarkdown } from "../src/cost/format.js";
 import { shoppingList } from "../src/elements/products.js";
+import { marketRate, marketRates } from "../src/cost/market.js";
 
 function flat(extra: Record<string, unknown> = {}, kitchen: Record<string, unknown> = {}) {
   return {
@@ -74,7 +75,14 @@ test("cost estimate: measured quantities, vendor prices, allowances, percentages
   const line = (re: RegExp) => bill.sections.flatMap((s) => s.lines).find((l) => re.test(l.description))!;
   // floors by room area
   assert.equal(line(/Floor finish: wood herringbone oak/).qty, 20);
-  assert.equal(line(/Floor finish: wood herringbone oak/).rate, 28);
+  // researched market rate, with its source in the appendix
+  const hb = line(/Floor finish: wood herringbone oak/);
+  assert.equal(hb.rateSource, "market");
+  assert.equal(hb.rate, marketRate("floor:herringbone")!.value);
+  assert.ok(bill.sources.some((m) => m.key === "floor:herringbone" && /^https?:\/\//.test(m.url)));
+  assert.equal(line(/^Test sofa/).rateSource, "vendor");
+  const cov = Object.values(bill.coverage).reduce((a, x) => a + x, 0);
+  assert.ok(Math.abs(cov - bill.trades - bill.retail) < 0.05, `coverage ${cov} vs ${bill.trades + bill.retail}`);
   // vendor prices, currency conversion (USD → KWD), casework products
   assert.equal(line(/^Test sofa/).amount, 300);
   assert.equal(line(/^Test lamp/).rate, 6.14);
@@ -90,15 +98,29 @@ test("cost estimate: measured quantities, vendor prices, allowances, percentages
   // furniture carries no overhead & profit; contingency on everything
   const op = bill.adjustments.find((a) => /overhead/.test(a.label))!;
   const prelim = bill.adjustments.find((a) => /Preliminaries/.test(a.label))!;
-  assert.ok(Math.abs(op.amount - (bill.trades + prelim.amount) * 0.12) < 0.02);
+  assert.ok(Math.abs(op.amount - (bill.trades + prelim.amount) * (op.percent / 100)) < 0.02);
   assert.ok(Math.abs(bill.total - (bill.trades + bill.retail + bill.adjustments.reduce((a, x) => a + x.amount, 0))) < 0.02);
   // overrides
   const c2 = compile({ ...flat(), costs: { rates: { "floor:herringbone": 40 }, contingency: 0, currency: "KWD" } });
   const b2 = estimate(c2);
-  assert.equal(b2.sections.flatMap((s) => s.lines).find((l) => /herringbone/.test(l.description))!.rate, 40);
+  const hb2 = b2.sections.flatMap((s) => s.lines).find((l) => /herringbone/.test(l.description))!;
+  assert.equal(hb2.rate, 40);
+  assert.equal(hb2.rateSource, "override");
   assert.ok(!b2.adjustments.some((a) => /Contingency/.test(a.label)));
   // formats
   assert.match(billMarkdown(bill), /\*\*Total\*\*/);
   assert.match(billCsv(bill), /^section,ref,description/);
   assert.match(billHtml(bill), /<title>Cost estimate — Cost test<\/title>/);
+});
+
+test("market rates: every researched rate is sourced and positive", () => {
+  const all = marketRates();
+  assert.ok(all.length > 100);
+  for (const m of all) {
+    assert.ok(m.value! > 0 || m.key === "vat", m.key);
+    assert.match(m.url, /^https?:\/\//, m.key);
+    assert.ok(m.source && m.accessed, m.key);
+  }
+  // window treatment types map onto the researched keys
+  assert.ok(marketRate("treatment:roller") && marketRate("treatment:roman") && marketRate("treatment:curtains_and_sheers"));
 });

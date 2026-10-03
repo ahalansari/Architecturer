@@ -138,7 +138,7 @@ Examples:
   - **Your own files:** `.glb` / `.gltf` / `.obj` models, and 3D-FUTURE (Alibaba) furniture. FBX and similar convert via `scripts/convert_to_glb.py`. Builds write `<model>.credits.md` with every asset's licence.
 - **Cost estimate** (`arch estimate`, MCP `cost_estimate`): a bill of quantities measured from the model.
   - **Measured:** partitions, floor, wall and ceiling finishes by material, doors, windows and treatments, joinery, electrical points and fixtures, plumbing fixtures and pipe runs, furniture.
-  - **Priced:** vendor items (for example IKEA METOD kitchens) at their real prices; everything else at indicative Kuwait fit-out rates, each overridable in `project.costs.rates`.
+  - **Priced:** vendor items (for example IKEA METOD kitchens) at their real prices; everything else at researched Kuwait market rates (about 150 rates, each with its source URL, quote, read date and confidence; see [docs/COST_RATES.md](docs/COST_RATES.md)), with built-in indicative rates as the fallback. Every rate can be overridden in `project.costs.rates`, and each bill line says which kind of rate it used.
   - **Totals:** preliminaries, overhead and profit, contingency, fees and VAT. The bill is written as printable HTML, Markdown, CSV or JSON.
 - **IKEA METOD kitchens:** set casework `system: "ikea_metod"` for METOD sizes and checks. Each module links to the real METOD/MAXIMERA product, and run `products` covers worktops, sink, tap, appliances and fittings.
 - **Electrical and plumbing** (`level.electrical`, `level.plumbing`, `level.services`):

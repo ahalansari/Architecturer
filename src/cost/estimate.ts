@@ -5,8 +5,9 @@
  * and circuits, plumbing fixtures, pipe runs, stacks and heaters, furniture (vendor products at their prices,
  * the rest as allowances) and outdoor works; then preliminaries, overhead & profit, contingency, fees and VAT.
  *
- * Unit rates are indicative Kuwait fit-out rates (supply + install, KWD, 2026) — every rate is keyed (e.g.
- * "floor:herringbone", "point:double_socket") and can be overridden in project.costs.rates.
+ * Unit rates are keyed (e.g. "floor:herringbone", "point:double_socket") and resolve in order: project.costs.rates
+ * override → researched Kuwait market rate (data/market-rates/kw, compiled to market_kw.ts, each with its source URL)
+ * → built-in indicative rate. Every line records which one it used.
  */
 import type { Compiled } from "../pipeline.js";
 import { FURNITURE } from "../elements/furniture.js";
@@ -15,6 +16,7 @@ import { pointInPolygon, polygonArea, v2, type Vec2 } from "../geometry/math.js"
 import { resolveMaterial } from "../materials/library.js";
 import { roomFinishBands } from "../render/plan-sheets.js";
 import type { Product } from "../elements/products.js";
+import { marketRate, type MarketRate } from "./market.js";
 
 export interface BillLine {
   code: string;
@@ -27,6 +29,8 @@ export interface BillLine {
   /** Rate key (override with project.costs.rates[key]). */
   key?: string;
   url?: string;
+  /** Where the rate came from: vendor product page, your override, researched market rate, or the built-in fallback. */
+  rateSource?: "vendor" | "override" | "market" | "indicative";
 }
 
 export interface BillSection {
@@ -49,6 +53,10 @@ export interface Bill {
   total: number;
   notes: string[];
   ratesUsed: Record<string, number>;
+  /** Researched market rates used, with sources. */
+  sources: MarketRate[];
+  /** Share of the measured bill (before percentages) by rate source. */
+  coverage: Record<"vendor" | "override" | "market" | "indicative", number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,9 +122,21 @@ export function estimate(c: Compiled): Bill {
   const costs = project.costs;
   const cur = costs.currency;
   const used: Record<string, number> = {};
+  const provenance: Record<string, { src: "override" | "market" | "indicative"; m?: MarketRate }> = {};
+  /** Override → researched market rate → built-in fallback, for the key then its fallback key. */
+  const lookup = (key: string): { v: number; src: "override" | "market" | "indicative"; m?: MarketRate } | undefined => {
+    if (costs.rates[key] !== undefined) return { v: costs.rates[key], src: "override" };
+    const m = marketRate(key);
+    if (m && m.value !== null) return { v: m.value, src: "market", m };
+    if (DEFAULT_RATES[key] !== undefined) return { v: DEFAULT_RATES[key], src: "indicative" };
+    return undefined;
+  };
   const rate = (key: string, fallback?: string): number => {
-    const r = costs.rates[key] ?? (fallback !== undefined ? costs.rates[fallback] : undefined) ?? DEFAULT_RATES[key] ?? (fallback !== undefined ? DEFAULT_RATES[fallback] : undefined) ?? 0;
-    used[costs.rates[key] !== undefined || DEFAULT_RATES[key] !== undefined || fallback === undefined ? key : fallback] = r;
+    const hit = lookup(key) ?? (fallback !== undefined ? lookup(fallback) : undefined);
+    const k = lookup(key) ? key : fallback ?? key;
+    const r = hit?.v ?? 0;
+    used[k] = r;
+    provenance[k] = { src: hit?.src ?? "indicative", m: hit?.m };
     return r;
   };
   const FX: Record<string, number> = { USD: 0.307, EUR: 0.33, GBP: 0.39, AED: 0.0836, SAR: 0.0818, QAR: 0.0843, BHD: 0.815, OMR: 0.798, KWD: 1, ...costs.exchange };
@@ -223,7 +243,8 @@ export function estimate(c: Compiled): Bill {
       } else doors.set("opening", (doors.get("opening") ?? 0) + 1);
       const t = o.op.treatment;
       if (t) {
-        const tk = (t as { type?: string }).type ?? "curtains";
+        const tt = (t as { type?: string }).type ?? "curtains";
+        const tk = ({ roller_blind: "roller", roman_blind: "roman" } as Record<string, string>)[tt] ?? tt;
         treatments.set(tk, (treatments.get(tk) ?? 0) + (o.width + 0.4) * (o.height + 0.3));
       }
     }
@@ -370,6 +391,9 @@ export function estimate(c: Compiled): Bill {
   };
   for (const [k, n] of [...points].sort((a, b) => b[1] - a[1])) add(F, { description: `${PN[k] ?? k} — wiring & device`, qty: n, unit: "no", rate: rate(`point:${k}`), basis: "count", key: `point:${k}` });
   for (const [k, n] of fixtures) add(F, { description: `Light fixture: ${k.replace(/_/g, " ")}`, qty: n, unit: "no", rate: rate(`fixture:${k}`), basis: "count", key: `fixture:${k}` });
+  // fixture prices are supply + fitting only: each fitting also needs its wiring point
+  const fixtureCount = [...fixtures.values()].reduce((a, n) => a + n, 0);
+  add(F, { description: "Lighting point wiring for the fixtures above (cable, conduit, box)", qty: fixtureCount, unit: "no", rate: rate("point:light_point"), basis: "count", key: "point:light_point" });
   add(F, { description: "Final circuits (cabling, containment)", qty: circuits, unit: "no", rate: rate("circuit"), basis: "count", key: "circuit" });
 
   const G = sec("G", "Plumbing & sanitary ware");
@@ -390,8 +414,10 @@ export function estimate(c: Compiled): Bill {
       add(H, { description: `${f.product.name}${f.product.sku ? ` (${f.product.vendor ?? ""} ${f.product.sku})` : ""}`, qty: f.qty, unit: "no", rate: fx(f.product.price ?? 0, f.product.currency), basis: "vendor", url: f.product.url });
     else {
       const k = `furniture:${f.type}`;
-      const r = costs.rates[k] ?? FURNITURE_ALLOWANCE[f.type] ?? Math.round(30 + 40 * ((FURNITURE[f.type]?.defaults.width ?? 0.5) * (FURNITURE[f.type]?.defaults.depth ?? 0.5)));
+      const hit = lookup(k);
+      const r = hit?.v ?? FURNITURE_ALLOWANCE[f.type] ?? Math.round(30 + 40 * ((FURNITURE[f.type]?.defaults.width ?? 0.5) * (FURNITURE[f.type]?.defaults.depth ?? 0.5)));
       used[k] = r;
+      provenance[k] = { src: hit?.src ?? "indicative", m: hit?.m };
       add(H, { description: `${f.type.replace(/_/g, " ")} (allowance)`, qty: f.qty, unit: "no", rate: r, basis: "allowance", key: k });
     }
   }
@@ -404,6 +430,24 @@ export function estimate(c: Compiled): Bill {
 
   // ---- totals ----
   const out = [...sections.values()].filter((s) => s.lines.length).sort((a, b) => a.code.localeCompare(b.code));
+  // where every line's rate came from
+  const coverage = { vendor: 0, override: 0, market: 0, indicative: 0 };
+  for (const s of out)
+    for (const l of s.lines) {
+      l.rateSource = l.basis === "vendor" ? "vendor" : l.key ? provenance[l.key]?.src ?? "indicative" : "indicative";
+      if (l.rateSource === "market" && !l.url) l.url = provenance[l.key!]?.m?.url;
+      coverage[l.rateSource] += l.amount;
+    }
+  const pctOf = (k: string, fb: number) => {
+    const m = marketRate(k);
+    return m && m.value !== null ? m.value : fb;
+  };
+  const P = {
+    preliminaries: costs.preliminaries ?? pctOf("pct:preliminaries", 4),
+    overheadProfit: costs.overheadProfit ?? pctOf("pct:overheadProfit", 12),
+    contingency: costs.contingency ?? pctOf("pct:contingency", 7.5),
+    vat: costs.vat ?? pctOf("vat", 0),
+  };
   for (const s of out) s.subtotal = round(s.lines.reduce((a, l) => a + l.amount, 0));
   const trades = round(out.filter((s) => !s.retail).reduce((a, s) => a + s.subtotal, 0));
   const retail = round(out.filter((s) => s.retail).reduce((a, s) => a + s.subtotal, 0));
@@ -411,22 +455,31 @@ export function estimate(c: Compiled): Bill {
   const pct = (labelText: string, percent: number, base: number) => {
     if (percent > 0) adjustments.push({ label: labelText, percent, amount: round((base * percent) / 100) });
   };
-  pct("Preliminaries & site setup (on trades)", costs.preliminaries, trades);
-  pct("Contractor overhead & profit (on trades)", costs.overheadProfit, trades + (adjustments[0]?.amount ?? 0));
+  pct("Preliminaries & site setup (on trades)", P.preliminaries, trades);
+  pct("Contractor overhead & profit (on trades)", P.overheadProfit, trades + (adjustments[0]?.amount ?? 0));
   const sub = trades + retail + adjustments.reduce((a, x) => a + x.amount, 0);
-  pct("Contingency", costs.contingency, sub);
+  pct("Contingency", P.contingency, sub);
   pct("Design & supervision fee", costs.designFee, sub);
   const beforeVat = trades + retail + adjustments.reduce((a, x) => a + x.amount, 0);
-  pct("VAT", costs.vat, beforeVat);
+  pct("VAT", P.vat, beforeVat);
   const total = round(trades + retail + adjustments.reduce((a, x) => a + x.amount, 0));
   notes.unshift(
-    "Quantities are measured from the model; unit rates are indicative fit-out rates (supply + install) unless a vendor price is shown — override any rate in project.costs.rates (keys in the rate table).",
+    "Quantities are measured from the model. Unit rates are researched Kuwait market prices (supply + install unless stated; source, quote and read date in Rates & sources) where one was found, otherwise indicative; vendor lines use the product page price. Override any rate in project.costs.rates.",
+    "Market rates are single quoted prices or mid-points of published ranges, not tenders — several are GCC (UAE/KSA) prices converted to KWD where no Kuwait price was published; check 'low' confidence lines with a local quote.",
+    "Preliminaries, overhead & profit and contingency default to published GCC percentages for contractor-led work; for a small owner-managed fit-out set project.costs.preliminaries / overheadProfit lower.",
     "Vendor prices are as read from the product pages; delivery, assembly by the vendor and promotions are not included.",
     "Excludes: HVAC (except listed AC units), permits, base-building works outside the scope, loose kitchenware and soft goods not modelled.",
   );
   return {
     project: project.name, currency: cur, date: new Date().toISOString().slice(0, 10), sections: out, trades, retail, adjustments, total,
     notes: [...new Set(notes)], ratesUsed: Object.fromEntries(Object.entries(used).sort()),
+    sources: [
+      ...new Map(
+        [...Object.values(provenance).filter((p) => p.src === "market" && p.m).map((p) => p.m!), ...["pct:preliminaries", "pct:overheadProfit", "pct:contingency", "vat", "benchmark:fitout_per_m2"].map(marketRate).filter((m): m is MarketRate => !!m)]
+          .map((m) => [m.key, m]),
+      ).values(),
+    ].sort((a, b) => a.key.localeCompare(b.key)),
+    coverage: Object.fromEntries(Object.entries(coverage).map(([k, v]) => [k, round(v)])) as Bill["coverage"],
   };
 }
 
