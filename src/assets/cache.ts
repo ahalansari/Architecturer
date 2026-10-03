@@ -8,6 +8,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, extname, join } from "node:path";
+import { checkUrl, sandboxed } from "../sandbox.js";
 
 export const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 Architecturer/1.0";
@@ -57,14 +58,22 @@ export async function download(url: string, o: FetchOptions = {}): Promise<Buffe
   const timer = setTimeout(() => ctl.abort(), o.timeoutMs ?? 60_000);
   try {
     let res: Response;
-    try {
-      res = await fetch(url, {
-        headers: { "user-agent": BROWSER_UA, accept: "*/*", "accept-language": "en-US,en;q=0.9", ...(o.headers ?? {}) },
-        redirect: "follow",
-        signal: ctl.signal,
-      });
-    } catch (e) {
-      throw new Error(`could not download ${url}: ${(e as Error).message} (offline, or the site blocks scripted requests)`);
+    // in the remote sandbox every redirect hop is checked too (a public page may redirect to a LAN address)
+    for (let hop = 0, next = url; ; hop++) {
+      await checkUrl(next);
+      try {
+        res = await fetch(next, {
+          headers: { "user-agent": BROWSER_UA, accept: "*/*", "accept-language": "en-US,en;q=0.9", ...(o.headers ?? {}) },
+          redirect: sandboxed() ? "manual" : "follow",
+          signal: ctl.signal,
+        });
+      } catch (e) {
+        throw new Error(`could not download ${url}: ${(e as Error).message} (offline, or the site blocks scripted requests)`);
+      }
+      const loc = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!loc || !sandboxed()) break;
+      if (hop >= 5) throw new Error(`could not download ${url}: too many redirects`);
+      next = new URL(loc, next).href;
     }
     if (!res.ok) throw new Error(`could not download ${url}: HTTP ${res.status}${res.status === 403 || res.status === 503 ? " (the site blocks scripted requests; pass the product details / model file directly)" : ""}`);
     const len = Number(res.headers.get("content-length") ?? 0);

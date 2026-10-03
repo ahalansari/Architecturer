@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>architecturer</Name>
+  <Repository>aalansari/architecturer:latest</Repository>
+  <Registry>https://hub.docker.com/r/aalansari/architecturer</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/ahalansari/Architecturer/issues</Support>
+  <Project>https://github.com/ahalansari/Architecturer</Project>
+  <Overview>Architecturer: AI-first 3D architecture modeler as a remote MCP server. AI apps (Claude web/desktop/mobile, ChatGPT, LM Studio, Claude Code) design buildings from JSON plans, render them and export textured GLB models. Includes OAuth login, personal tokens, a live 3D viewer per project and download links.[br][br]
+Put it behind a Cloudflare Tunnel: public hostname -> http://[UNRAID-IP]:5178, and a Cloudflare Access application covering only the paths /authorize, /admin, /view and /login. Leave /mcp, /.well-known, /register, /token, /revoke and /files unchallenged so Claude and ChatGPT can reach them. Full guide: docs/REMOTE_MCP.md in the project.[br][br]
+Memory: a big furnished plan can need ~3.5 GB per render worker while exporting (the template limits the container to 4 GB with 1 worker). No GPU needed.[br][br]
+Data: if appdata is not an exclusive (pool-only) share, map /data to a pool path such as /mnt/cache/appdata/architecturer so the viewer's live reload sees file changes.</Overview>
+  <Category>Productivity: Tools: Other:</Category>
+  <WebUI>http://[IP]:[PORT:5178]/admin</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/ahalansari/Architecturer/main/unraid/architecturer.xml</TemplateURL>
+  <Icon/>
+  <ExtraParams>--memory=4g --cpus=2</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>A Cloudflare Tunnel (or another HTTPS reverse proxy) with a public hostname, and Cloudflare Access or an admin password for login.</Requires>
+  <Config Name="Port" Target="5178" Default="5178" Mode="tcp" Description="HTTP port (MCP endpoint /mcp, admin page /admin, viewer /view). Point the Cloudflare Tunnel's public hostname here." Type="Port" Display="always" Required="true" Mask="false">5178</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/architecturer" Mode="rw" Description="Projects (plans/, exports in plans/exports), auth state (state/: keep private, back it up) and the asset download cache (cache/)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/architecturer</Config>
+  <Config Name="Public URL" Target="ARCHITECTURER_PUBLIC_URL" Default="https://arch.example.com" Mode="" Description="Public https origin clients reach (your tunnel hostname), with no path. OAuth and every link use it." Type="Variable" Display="always" Required="true" Mask="false">https://arch.example.com</Config>
+  <Config Name="Cloudflare Access team domain" Target="CF_ACCESS_TEAM_DOMAIN" Default="" Mode="" Description="Login through Cloudflare Access: your team domain, e.g. myteam.cloudflareaccess.com. Set together with the AUD tag." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Cloudflare Access AUD tag" Target="CF_ACCESS_AUD" Default="" Mode="" Description="The Access application's Application Audience (AUD) tag." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Allowed emails" Target="ARCHITECTURER_ALLOWED_EMAILS" Default="" Mode="" Description="Comma-separated emails allowed to log in through Access and approve apps. Empty = whoever your Access policy admits." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Admin password" Target="ARCHITECTURER_ADMIN_PASSWORD" Default="" Mode="" Description="Login with a password instead of (or as well as) Cloudflare Access. Long and random. With neither set, OAuth is off and only personal tokens work." Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Render workers" Target="ARCHITECTURER_WORKERS" Default="1" Mode="" Description="Parallel render/export workers. Each can need ~3.5 GB on big plans: raise --memory in Extra Parameters with it (2 workers: --memory=8g)." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
+  <Config Name="Allow private network fetches" Target="ARCHITECTURER_ALLOW_PRIVATE_FETCH" Default="" Mode="" Description="Set to 1 to let plans load models / textures from LAN addresses (a NAS). Off by default." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Extra allowed hosts" Target="ARCHITECTURER_ALLOWED_HOSTS" Default="" Mode="" Description="Comma-separated extra host names accepted (e.g. tower.local). The public host, localhost and IP addresses are always accepted." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Viewer texture size" Target="ARCHITECTURER_VIEWER_TEXTURE_SIZE" Default="512" Mode="" Description="Texture resolution of the model the live viewer loads." Type="Variable" Display="advanced" Required="false" Mask="false">512</Config>
+</Container>

@@ -92,9 +92,9 @@ export class PlanViewer {
   load() {
     const q = `level=${encodeURIComponent(this.level)}&sheet=${this.sheet}`;
     this.stage.classList.add("loading");
-    this.img.src = `/plan.svg?${q}&t=${Date.now()}`;
+    this.img.src = `plan.svg?${q}&t=${Date.now()}`;
     const a = $("planSvg");
-    a.href = `/plan.svg?${q}`;
+    a.href = `plan.svg?${q}`;
     a.download = `${this.level || "plan"}_${this.sheet}.svg`;
   }
 

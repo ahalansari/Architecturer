@@ -1,0 +1,33 @@
+# Architecturer behind a Cloudflare Tunnel (e.g. on Unraid with the Compose Manager plugin).
+# 1. Copy .env.example to .env and fill it in.
+# 2. In Cloudflare Zero Trust: create the tunnel (token → CLOUDFLARE_TUNNEL_TOKEN), add a public hostname
+#    arch.<domain> → http://architecturer:5178, and an Access application on that hostname for the paths
+#    /authorize, /admin, /view and /login only (README, "Remote MCP server").
+# 3. docker compose up -d --build
+services:
+  architecturer:
+    build: .
+    image: aalansari/architecturer:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ARCHITECTURER_WORKERS: ${ARCHITECTURER_WORKERS:-1}
+    volumes:
+      # on Unraid use a cache / disk path, not /mnt/user (file change events are unreliable through shfs)
+      - ${ARCHITECTURER_DATA:-./data}:/data
+    # no published port: only cloudflared reaches it. Uncomment to also use it on the LAN.
+    # ports:
+    #   - "5178:5178"
+    # one export of a big furnished plan peaks around 3.5 GB; allow ~3.5 GB per worker plus 0.5 GB
+    mem_limit: ${ARCHITECTURER_MEMORY:-4g}
+    cpus: ${ARCHITECTURER_CPUS:-2}
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      architecturer:
+        condition: service_healthy

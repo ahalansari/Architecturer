@@ -49,6 +49,8 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch bom plan.json [--csv]` | Shopping list of placed products |
 | `arch estimate plan.json -o bill.html` | Cost estimate / bill of quantities measured from the model (also `.md`, `.csv`, `.json`) |
 | `arch fetch plan.json` | Download all online assets into the cache (then builds work offline) |
+| `arch mcp [--http]` | MCP server over stdio, or `--http` for the remote server ([docs/REMOTE_MCP.md](docs/REMOTE_MCP.md)) |
+| `arch token create --name n` / `list` / `revoke --id g` | Personal tokens and connected apps of the remote server |
 | `arch serve plan.json` | Live viewer that reloads whenever the file is saved, with a first-person **walk mode** and 2D plan, lighting and finishes sheets (pan/zoom, per level, SVG download) |
 | `arch schema` / `materials` / `furniture` | Reference |
 
@@ -76,13 +78,25 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 
 | Tool | Purpose |
 |---|---|
-| `get_guide`, `get_schema`, `list_materials`, `list_furniture` | Learn the format |
-| `create_project`, `read_project`, `write_project`, `add_level` | Whole-plan operations |
+| `get_guide`, `get_schema`, `list_materials`, `list_furniture` | Learn the format (`get_guide` takes a `section` for a shorter read) |
+| `list_projects`, `create_project`, `read_project`, `write_project`, `add_level` | Whole-plan operations |
 | `add_elements`, `update_element`, `remove_elements` | Incremental edits by id. Every edit returns validation results. |
 | `validate` | Errors and warnings |
 | `render_plan`, `render_view` | Return PNG images so the model can see its work |
 | `search_assets`, `search_products`, `import_product`, `shopping_list`, `cost_estimate` | Scanned CC0 materials / models, IKEA catalogue search, vendor product import with 3D models, bill of materials, cost estimate |
-| `export_model` | `.glb` / `.gltf` for game engines |
+| `export_model` | `.glb` / `.gltf` for game engines (`export_status` on the remote server) |
+
+### Remote MCP server
+
+`arch mcp --http` (or the Docker image) serves the same tools over HTTP so that Claude on the web, desktop and mobile, ChatGPT, LM Studio and Claude Code can use one shared server from anywhere:
+- OAuth login, or personal tokens for header-configured clients.
+- Projects addressed by name.
+- Download links for exports and renders.
+- Background exports.
+- A live 3D viewer for every project.
+- Render work in worker threads.
+
+`compose.yaml` runs it behind a Cloudflare Tunnel. For setup, Unraid notes, client configuration and the security model, see [docs/REMOTE_MCP.md](docs/REMOTE_MCP.md).
 
 ## Plan format in 30 seconds
 
@@ -208,7 +222,7 @@ src/geometry    math and MeshBuilder (primitives, world-scaled UVs)
 src/materials   material library and procedural texture generator
 src/export      glTF/GLB writer
 src/render      software rasterizer (3D) and SVG floor plans
-src/cli, src/mcp, src/server   interfaces
+src/cli, src/mcp, src/server   interfaces (src/mcp/http.ts + src/mcp/remote: remote server, OAuth)
 viewer/         three.js viewer
 ```
 

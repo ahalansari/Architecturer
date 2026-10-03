@@ -183,15 +183,40 @@ Call get_schema for every field; this guide covers conventions and good practice
    leaves are separate nodes with pivots; node extras carry ids/room names.
 `;
 
-export function fullGuide(): string {
-  const mats = listMaterials()
+const materialSection = () =>
+  "## Material library\n" +
+  listMaterials()
     .map((m) => `- ${m.name}: ${m.description}`)
     .join("\n");
-  const furn = listFurniture()
+
+const furnitureSection = () =>
+  "## Furniture types (width x depth x height)\n" +
+  listFurniture()
     .map((f) => {
       const opts = Object.keys(f.options ?? {});
       return `- ${f.type} (${f.defaults.width}x${f.defaults.depth}x${f.defaults.height}; slots: ${Object.keys(f.slots).join(", ")}${opts.length ? `; options: ${opts.join(", ")}` : ""}): ${f.description}`;
     })
     .join("\n");
-  return `${GUIDE}\n## Material library\n${mats}\n\n## Furniture types (width x depth x height)\n${furn}\n`;
+
+export function fullGuide(): string {
+  return `${GUIDE}\n${materialSection()}\n\n${furnitureSection()}\n`;
+}
+
+/** Headings of the format guide, for fetching one part at a time (small context windows). */
+export const guideHeadings = (): string[] => [...GUIDE.matchAll(/^## (.+)$/gm)].map((m) => m[1].trim());
+
+/**
+ * Part of the guide: 'format' (conventions without the libraries), 'materials', 'furniture', or one
+ * section by (the start of) its heading, e.g. 'stairs'. Undefined / 'all' = everything.
+ */
+export function guideSection(section?: string): string {
+  const s = section?.trim().toLowerCase();
+  if (!s || s === "all") return fullGuide();
+  if (s === "format") return GUIDE;
+  if (s === "materials") return materialSection();
+  if (s === "furniture") return furnitureSection();
+  const parts = GUIDE.split(/^(?=## )/m);
+  const hit = parts.find((p) => p.slice(3).toLowerCase().startsWith(s));
+  if (hit) return hit.trim();
+  throw new Error(`no guide section '${section}'. Sections: format, materials, furniture, ${guideHeadings().map((h) => h.toLowerCase()).join(", ")}`);
 }

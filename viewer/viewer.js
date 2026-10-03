@@ -39,7 +39,7 @@ scene.add(sun, sun.target);
 // Day / Night switch (night = the plan's KHR_lights_punctual lights), see lighting.js
 const dayNight = new DayNight({ scene, renderer, camera });
 
-const ktx2 = new KTX2Loader().setTranscoderPath("/three/examples/jsm/libs/basis/").detectSupport(renderer);
+const ktx2 = new KTX2Loader().setTranscoderPath("three/examples/jsm/libs/basis/").detectSupport(renderer);
 const gltfLoader = new GLTFLoader().setKTX2Loader(ktx2);
 
 let model = null;
@@ -63,7 +63,7 @@ function setStatus(t) {
 }
 
 async function loadInfo() {
-  const info = await (await fetch("/info")).json();
+  const info = await (await fetch("info")).json();
   $("title").textContent = info.name ?? "Architecturer";
   document.title = `${info.name ?? "Plan"} · Architecturer`;
   const s = info.stats;
@@ -148,7 +148,7 @@ async function loadModel(keepCamera) {
   }
   // ?format=ktx2 previews the GPU-compressed export (KHR_texture_basisu)
   const format = new URLSearchParams(location.search).get("format") ?? "";
-  const gltf = await gltfLoader.loadAsync(`/model.glb?format=${encodeURIComponent(format)}&t=${Date.now()}`);
+  const gltf = await gltfLoader.loadAsync(`model.glb?format=${encodeURIComponent(format)}&t=${Date.now()}`);
   if (model) {
     scene.remove(model);
     model.traverse((o) => {
@@ -343,7 +343,7 @@ canvas.addEventListener("dblclick", (e) => {
   if (hit) startWalk(hit.point);
 });
 
-new EventSource("/events").addEventListener("reload", () => {
+new EventSource("events").addEventListener("reload", () => {
   plans.refresh();
   loadModel(true).catch((e) => setStatus(String(e)));
 });

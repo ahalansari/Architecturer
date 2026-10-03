@@ -12,6 +12,7 @@ import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import type { MeshData } from "../geometry/mesh.js";
 import type { AssetSource, MaterialDef, RGB } from "../materials/types.js";
 import { cachePathFor, cacheRoot, download, fetchCached, hashOf } from "./cache.js";
+import { checkLocalPath, isInside } from "../sandbox.js";
 import { registerMaterial, type ImportedModel } from "./registry.js";
 import { webpToPng } from "./images.js";
 
@@ -44,6 +45,7 @@ export async function fetchModelUrl(url: string): Promise<string> {
   const fetchRel = async (rel: string) => {
     if (/^(data:|https?:)/.test(rel)) return;
     const p = join(dir, decodeURIComponent(rel));
+    if (!isInside(p, dir)) throw new Error(`model ${url} references a file outside its folder: ${rel}`);
     if (existsSync(p)) return;
     await mkdir(dirname(p), { recursive: true });
     await writeFile(p, await download(new URL(rel, base).href));
@@ -55,7 +57,7 @@ export async function fetchModelUrl(url: string): Promise<string> {
     for (const m of buf.toString("utf8").matchAll(/^mtllib\s+(.+)$/gm)) {
       const rel = m[1].trim();
       await fetchRel(rel);
-      const mtl = readFileSync(join(dir, rel), "utf8");
+      const mtl = readFileSync(join(dir, decodeURIComponent(rel)), "utf8");
       for (const t of mtl.matchAll(/^\s*(?:map_Kd|map_Bump|bump|norm|map_d|map_Pr)\s+(?:-\S+\s+\S+\s+)*(\S+)\s*$/gm)) await fetchRel(t[1]).catch(() => undefined);
     }
   }
@@ -395,6 +397,11 @@ function parseMtl(path: string, tag: string, source: AssetSource, warn: (m: stri
     const rest = [...r];
     while (rest.length > 1 && rest[0].startsWith("-")) rest.splice(0, 2);
     const p = resolve(dir, rest.join(" ").replace(/\\/g, "/"));
+    try {
+      checkLocalPath(p, "texture");
+    } catch {
+      return undefined;
+    }
     return existsSync(p) && /\.(png|jpe?g)$/i.test(p) ? p : undefined;
   };
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -432,8 +439,8 @@ export async function resolveModelPath(src: string, baseDir: string, online: (s:
     return { path: await fetchModelUrl(src), source: { id: src, url: src, title: src.split("/").pop(), license: vendor ? "vendor" : "unknown (check the source)" } };
   }
   if (/^[a-z0-9]+:/i.test(src) && !/^[a-z]:[\\/]/i.test(src)) return online(src);
-  const p = resolve(baseDir, src);
-  if (!existsSync(p)) throw new Error(`model file not found: ${p}`);
+  const p = checkLocalPath(resolve(baseDir, src), "model file");
+  if (!existsSync(p)) throw new Error(`model file not found: ${src}`);
   return { path: p, source: { id: src, title: src.split(/[\\/]/).pop(), license: "local file" } };
 }
 
