@@ -142,6 +142,8 @@ Call get_schema for every field; this guide covers conventions and good practice
    unreachable from the entrance, stairs through walls, arriving into walls, or with an open side and no railing.
    Most messages say exactly how to fix them (e.g. "move it 0.12 m south (to [4.5, 9.48])").
 3. render_plan for each level (ids, coordinates, door swings, furniture) to check the layout reads well.
+   Interiors: render_plan sheet="lighting" (fixture layout, ~lux per room, aim for 100-300 lx in living spaces,
+   300+ over kitchen worktops) and sheet="finishes" (floor patterns, wall finish and accent bands, finish schedule).
 4. render_view: iso plus a cutaway per level (level=<id>); close-ups with focus=[x, y] (+ radius, zoom).
 5. export_model to .glb (engine "unity"/"godot" adds merged meshes + colliders; textureFormat "ktx2" for the
    smallest, GPU-compressed textures). Y-up, meters; furniture and door

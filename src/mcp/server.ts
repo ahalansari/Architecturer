@@ -12,7 +12,7 @@ import { fullGuide } from "../guide.js";
 import { readJson } from "../io.js";
 import { listMaterials } from "../materials/library.js";
 import { compile, type Compiled } from "../pipeline.js";
-import { renderPlanSVG, svgToPng } from "../render/plan.js";
+import { renderPlanSVG, svgToPng, PLAN_SHEETS } from "../render/plan.js";
 import { VIEW_PRESETS, type ViewPreset } from "../render/raster.js";
 import { renderViewPNG } from "../render/view.js";
 import { ELEMENT_KINDS, projectJsonSchema } from "../schema/schema.js";
@@ -260,13 +260,19 @@ server.registerTool(
 server.registerTool(
   "render_plan",
   {
-    description: "2D floor plan image of one level: meter grid with coordinates, walls (with ids), doors with swings, windows, rooms with areas, stairs, furniture footprints (front edge drawn thick).",
-    inputSchema: { path: PathArg, level: LevelArg.optional().describe("Default: first level") },
+    description:
+      "2D floor plan image of one level: meter grid with coordinates, walls (with ids), doors with swings, windows, rooms with areas, stairs, furniture footprints (front edge drawn thick). " +
+      "sheet 'lighting': fixture symbols with ids, rooms tinted by estimated lux, fixture legend with lumens. sheet 'finishes': floors in their material pattern, wall finish / accent bands, per-room finish schedule.",
+    inputSchema: {
+      path: PathArg,
+      level: LevelArg.optional().describe("Default: first level"),
+      sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes"),
+    },
   },
-  guard(async ({ path, level }) => {
+  guard(async ({ path, level, sheet }) => {
     const c = compile(await load(path));
     if (!c.root) return fail(summary(c));
-    const png = await svgToPng(renderPlanSVG(c, level));
+    const png = await svgToPng(renderPlanSVG(c, level, { sheet }));
     return ok({ type: "image", data: png.toString("base64"), mimeType: "image/png" }, text(summary(c)));
   }),
 );

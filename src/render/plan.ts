@@ -7,13 +7,23 @@ import { caseworkPlan, resolveLevelCasework } from "../elements/casework.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
+import { floorPattern, levelFixtures, LUX_BANDS, luxFill, lightSymbol, materialLabel, materialTone, roomFinishBands, roomLux, type PlanFixture, type Tone } from "./plan-sheets.js";
 
 export interface PlanOptions {
   /** Pixels per meter. */
   scale?: number;
   /** Label walls/openings/furniture with their ids (useful for AI editing). */
   labels?: boolean;
+  /**
+   * plan (default): construction plan with small light symbols.
+   * lighting: reflected-ceiling style lighting layout: fixture symbols, rooms tinted by estimated lux, legend.
+   * finishes: floors drawn in their material and pattern, wall finish / accent bands, finish schedule per room, legend.
+   */
+  sheet?: PlanSheet;
 }
+
+export const PLAN_SHEETS = ["plan", "lighting", "finishes"] as const;
+export type PlanSheet = (typeof PLAN_SHEETS)[number];
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const ROOM_COLORS = ["#f6e7c8", "#d9ecf7", "#e2f2dc", "#f7dfe4", "#e9e2f5", "#fbeedd", "#dff3f0", "#f1f1d8"];
@@ -118,6 +128,8 @@ interface LabelReq {
   /** Skip the label when every candidate collides with an already placed label. */
   optional?: boolean;
   halo?: string;
+  /** Rounded backing plate behind the text (labels over busy fills such as floor patterns). */
+  plate?: string;
   avoidWalls?: boolean;
   /** Penalize boxes leaving this polygon (px). */
   within?: Vec2[];
@@ -184,6 +196,10 @@ function placeLabels(reqs: LabelReq[], walls: Vec2[][], W: number, H: number): s
     }
     if (!best) continue;
     placed.push(best.box);
+    if (r.plate) {
+      const b = best.box;
+      out.push(`<rect x="${(b.x0 - 3).toFixed(1)}" y="${(b.y0 - 2).toFixed(1)}" width="${(b.x1 - b.x0 + 6).toFixed(1)}" height="${(b.y1 - b.y0 + 4).toFixed(1)}" rx="4" fill="${r.plate}" stroke="#00000022" stroke-width="0.6"/>`);
+    }
     let y = best.box.y0 + 1;
     const cx = (best.box.x0 + best.box.x1) / 2;
     r.lines.forEach((l, i) => {
@@ -209,6 +225,10 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const lv = project.levels[li];
   const info: LevelInfo = c.levels[li];
   const labels = opts.labels ?? true;
+  const sheet = opts.sheet ?? "plan";
+  const fixtures: PlanFixture[] = c.root ? levelFixtures(c, lv) : [];
+  const tones = new Map<string, Tone>();
+  const D = project.defaults;
 
   // stairs of this level, and stairs from lower levels that arrive here
   const ownStairs = lv.stairs.map((s) => ({ s, plan: stairPlan(s, info.height) }));
@@ -241,7 +261,10 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const span = Math.max(maxX - minX, maxY - minY);
   const S = opts.scale ?? Math.max(20, Math.min(80, Math.round(1100 / span)));
   const pad = 50;
-  const W = (maxX - minX) * S + pad * 2, H = (maxY - minY) * S + pad * 2 + 30;
+  const W0 = (maxX - minX) * S + pad * 2;
+  const LEGEND_W = sheet === "plan" ? 0 : 250;
+  const W = W0 + LEGEND_W;
+  let H = (maxY - minY) * S + pad * 2 + 30;
   const X = (x: number) => +(pad + (x - minX) * S).toFixed(2);
   const Y = (y: number) => +(pad + 30 + (maxY - y) * S).toFixed(2);
   const P = (p: Vec2) => `${X(p[0])},${Y(p[1])}`;
@@ -257,16 +280,30 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const fs = Math.max(9, Math.min(13, S / 4));
   const hatchStep = 7;
 
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Helvetica, Arial, sans-serif">`);
+  // floor materials drawn as patterns on the finishes sheet
+  const floorFill = new Map<string, string>();
+  const floorDefs: string[] = [];
+  if (sheet === "finishes")
+    for (const r of lv.rooms) {
+      const m = r.floorMaterial ?? D.floorMaterial;
+      if (floorFill.has(m)) continue;
+      const id = `floor_${floorFill.size}`;
+      floorDefs.push(floorPattern(id, materialTone(c, m, tones), S));
+      floorFill.set(m, `url(#${id})`);
+    }
+  const svgOpen = out.length;
+  out.push("");
   out.push(
     `<defs>` +
+      floorDefs.join("") +
       `<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/></marker>` +
       `<marker id="arrow_dn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>` +
       `<pattern id="hatch_overhead" patternUnits="userSpaceOnUse" width="${hatchStep}" height="${hatchStep}" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${hatchStep}" stroke="#b07a45" stroke-width="1"/></pattern>` +
       `</defs>`,
   );
   out.push(`<rect width="100%" height="100%" fill="#ffffff"/>`);
-  out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)} (z=${info.elevation.toFixed(2)} m)</text>`);
+  const sheetTitle = sheet === "lighting" ? " — lighting plan" : sheet === "finishes" ? " — finishes plan" : "";
+  out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)}${sheetTitle} (z=${info.elevation.toFixed(2)} m)</text>`);
 
   // grid with coordinates every meter (labels every `step` meters)
   const step = span > 40 ? 5 : span > 20 ? 2 : 1;
@@ -288,8 +325,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   for (const t of lv.terraces) out.push(`<polygon points="${poly(t.polygon as Vec2[])}" fill="#efe6d6" stroke="#b5a184" stroke-width="1"/>`);
 
   // rooms
+  const lux = lv.rooms.map((r) => roomLux(r.polygon as Vec2[], fixtures));
   lv.rooms.forEach((r, i) => {
-    out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="${ROOM_COLORS[i % ROOM_COLORS.length]}" stroke="none"/>`);
+    const fill =
+      sheet === "finishes" ? floorFill.get(r.floorMaterial ?? D.floorMaterial) : sheet === "lighting" ? luxFill(lux[i].lux) : ROOM_COLORS[i % ROOM_COLORS.length];
+    out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="${fill}" stroke="none"/>`);
   });
   for (const r of lv.roofs)
     out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="none" stroke="#c77" stroke-width="1.5" stroke-dasharray="8 4"/>`);
@@ -352,6 +392,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   }
 
   // furniture footprints: flat things (rugs, mats) first, then by height so tall items stay on top
+  // (faded on the lighting / finishes sheets: context only)
+  if (sheet !== "plan") out.push(`<g opacity="${sheet === "finishes" ? 0.4 : 0.35}">`);
   const furn = lv.furniture.map((f, i) => {
     const t = FURNITURE[f.type];
     const h = f.height ?? t?.defaults.height ?? 1;
@@ -376,7 +418,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
     const b = pxBox(rect);
     if (!flat) furnSoft.push(b);
-    if (labels) {
+    if (labels && sheet === "plan") {
       const cx = X(c0[0]), cy = Y(c0[1]);
       const size = fs - 2;
       const tw = textWidth(f.id ?? f.type, size);
@@ -408,11 +450,13 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       const cc = px(polygonCentroid(it.poly));
       out.push(`<text x="${cc[0]}" y="${cc[1] + 3}" font-size="${Math.max(7, fs - 4)}" fill="#5b5348" text-anchor="middle">${esc(it.label!)}</text>`);
     }
-    if (labels) {
+    if (labels && sheet === "plan") {
       const lc = px(cp.labelAt);
       L.push({ lines: [{ text: cp.id, size: fs - 2, color: "#5b4a33", bold: true }], prio: 2.8, cands: [{ x: lc[0], y: lc[1], cost: 0 }, { x: lc[0], y: lc[1] - fs, cost: 10 }, { x: lc[0], y: lc[1] + fs, cost: 10 }], optional: true });
     }
   }
+
+  if (sheet !== "plan") out.push(`</g>`);
 
   // overhead slabs (canopies, roof decks): hatched + dashed, labelled with their height
   for (const s of overhead) {
@@ -518,7 +562,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       }
       if (!leaves.length) out.push(line(at(u0, 0), at(u1, 0), `stroke="#a0522d" stroke-width="2"`));
     }
-    if (labels) {
+    if (labels && sheet === "plan") {
       const off = half + 0.22 + (fs - 3) / S / 2;
       const cands: Cand[] = [];
       [-1, 1].forEach((side, si) => {
@@ -576,7 +620,78 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
   }
 
+  // finishes sheet: wall finish bands along the inside faces (accent walls bolder, wainscot as a strip on the wall)
+  const bandW = Math.max(4, Math.min(8, S * 0.11)) / S;
+  const wallMats = new Map<string, { accent: boolean }>();
+  if (sheet === "finishes")
+    for (const r of lv.rooms)
+      for (const b of roomFinishBands(r, info, D.wallMaterial, bandW)) {
+        const t = materialTone(c, b.material, tones);
+        const w = (b.accent ? 1.6 : 1) * bandW * S;
+        const shift = v2.scale(b.inward, ((b.accent ? 1.6 : 1) - 1) * bandW / 2);
+        const a = v2.add(b.a, shift), e = v2.add(b.b, shift);
+        out.push(line(a, e, `stroke="${t.fill}" stroke-width="${w.toFixed(1)}"`));
+        out.push(line(a, e, `stroke="${t.line}" stroke-width="${b.accent ? 1.4 : 0.7}" fill="none"${b.partial ? ` stroke-dasharray="4 3"` : ""}`));
+        if (b.wainscot) {
+          const k = materialTone(c, b.wainscot, tones);
+          const ws = v2.scale(b.inward, -(bandW / 2) + 0.012);
+          out.push(line(v2.add(b.a, ws), v2.add(b.b, ws), `stroke="${k.line}" stroke-width="1.6"`));
+        }
+        if (!wallMats.has(b.material) || b.accent) wallMats.set(b.material, { accent: b.accent || !!wallMats.get(b.material)?.accent });
+      }
+
+  // light fixtures and lamps (lighting sheet: full size with ids; plan: small, no labels)
+  const fr = sheet === "lighting" ? Math.max(5, Math.min(10, S * 0.13)) : Math.max(3, Math.min(6, S * 0.08));
+  const fixtureSyms = fixtures.filter((f) => sheet === "lighting" || !f.lamp);
+  if (fixtureSyms.length) {
+    out.push(`<g${sheet === "finishes" ? ` opacity="0.55"` : ""}>`);
+    // paths first so point symbols stay on top
+    for (const f of [...fixtureSyms].sort((a, b) => Number(!!b.points) - Number(!!a.points))) out.push(lightSymbol(f, px, fr, S));
+    out.push(`</g>`);
+  }
+  if (sheet === "lighting" && labels) {
+    const seen = new Set<string>();
+    for (const f of fixtures) {
+      if (!f.id || f.lamp || seen.has(f.id)) continue;
+      seen.add(f.id);
+      const at = px(f.points?.[0] ?? f.at);
+      const size = fs - 3;
+      L.push({
+        lines: [{ text: f.id, size, color: "#8a5a00" }],
+        prio: 3,
+        optional: true,
+        cands: [
+          { x: at[0], y: at[1] - fr - size * 0.7, cost: 0 },
+          { x: at[0], y: at[1] + fr + size * 0.7, cost: 4 },
+          { x: at[0] + fr + textWidth(f.id, size) / 2 + 2, y: at[1], cost: 6 },
+          { x: at[0] - fr - textWidth(f.id, size) / 2 - 2, y: at[1], cost: 6 },
+        ],
+      });
+    }
+  }
+
   // room names + areas: in open floor space near the centroid (terraces too)
+  const roomExtra = (r: (typeof lv.rooms)[number] | (typeof lv.terraces)[number]): LabelLine[] => {
+    const small = fs - 3, col = "#444";
+    if (sheet === "lighting") {
+      const ri = lv.rooms.indexOf(r as (typeof lv.rooms)[number]);
+      const lm = ri >= 0 ? lux[ri] : roomLux(r.polygon as Vec2[], fixtures);
+      return lm.lumens > 0 ? [{ text: `≈ ${Math.round(lm.lux)} lx · ${Math.round(lm.lumens).toLocaleString("en-US")} lm`, size: small, color: "#8a5a00", bold: true }] : [{ text: "no lighting", size: small, color: "#b33" }];
+    }
+    if (sheet === "finishes" && "floorMaterial" in r) {
+      const f = r.finishes;
+      const lines: LabelLine[] = [{ text: `floor: ${materialLabel(r.floorMaterial ?? D.floorMaterial)}`, size: small, color: col }];
+      if (f?.walls) lines.push({ text: `walls: ${materialLabel(f.walls)}`, size: small, color: col });
+      for (const a of f?.accents ?? [])
+        lines.push({ text: `accent ${a.side ?? a.wall}${a.from !== undefined || a.to !== undefined ? ` ${a.from ?? 0}–${a.to ?? "top"} m` : ""}: ${materialLabel(a.material)}`, size: small, color: "#6b4a1f" });
+      if (f?.wainscot) lines.push({ text: `${f.wainscot.style === "panels" ? "panelled " : ""}wainscot ${f.wainscot.height} m: ${materialLabel(f.wainscot.material)}`, size: small, color: col });
+      const ceil = f?.ceiling && f.ceiling.type !== "flat" ? `${f.ceiling.type} ceiling` : r.ceilingMaterial === false ? "no ceiling" : "";
+      const trims = [ceil, f?.cornice ? "cornice" : "", f?.skirting ? "skirting" : "", f?.floorBorder ? "border" : ""].filter(Boolean).join(" · ");
+      if (trims) lines.push({ text: trims, size: small, color: "#666" });
+      return lines;
+    }
+    return [];
+  };
   [...lv.rooms, ...lv.terraces].forEach((r) => {
     const pg = r.polygon as Vec2[];
     const pgPx = pg.map(px);
@@ -597,7 +712,9 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       lines: [
         { text: r.name, size: fs + 1, color: "#222", bold: true },
         { text: `${polygonArea(pg).toFixed(1)} m²`, size: fs - 2, color: "#555" },
+        ...roomExtra(r),
       ],
+      plate: sheet === "finishes" ? "#fffffff0" : undefined,
       prio: 0,
       cands,
       within: pgPx,
@@ -607,7 +724,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   });
 
   // wall ids (lowest priority: skipped when there is no free spot)
-  if (labels) {
+  if (labels && sheet === "plan") {
     const byWall = new Map<string, typeof info.segments>();
     for (const s of info.segments) byWall.set(s.wallId, [...(byWall.get(s.wallId) ?? []), s]);
     for (const [id, segs] of byWall) {
@@ -634,13 +751,81 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   }
 
   // ---- label layer (drawn last) ----
-  out.push(...placeLabels(L, wallPx, W, H));
+  out.push(...placeLabels(L, wallPx, W0, H));
+
+  // legend panel (lighting / finishes sheets)
+  if (sheet !== "plan") {
+    const lg: string[] = [];
+    const x0 = W0 + 10;
+    let y = pad + 30;
+    const head = (t: string) => {
+      lg.push(`<text x="${x0}" y="${y}" font-size="13" font-weight="bold" fill="#222">${esc(t)}</text>`);
+      y += 18;
+    };
+    const row = (sym: string, t: string, sub?: string) => {
+      lg.push(sym, `<text x="${x0 + 34}" y="${y + 4}" font-size="11" fill="#222">${esc(t)}</text>`);
+      if (sub) lg.push(`<text x="${x0 + 34}" y="${y + 16}" font-size="9.5" fill="#666">${esc(sub)}</text>`);
+      y += sub ? 30 : 22;
+    };
+    if (sheet === "lighting") {
+      head("Fixtures");
+      const types = new Map<string, { n: number; lm: number; k: Set<number>; sample: PlanFixture }>();
+      for (const f of fixtures) {
+        const key = f.lamp ? `lamp: ${f.type.replace(/_/g, " ")}` : f.type.replace(/_/g, " ");
+        const e = types.get(key) ?? { n: 0, lm: 0, k: new Set<number>(), sample: f };
+        e.n++;
+        e.lm += f.lumens;
+        if (f.kelvin) e.k.add(f.kelvin);
+        types.set(key, e);
+      }
+      if (!types.size) row("", "no light fixtures on this level");
+      for (const [k, e] of types) {
+        const at: Vec2 = [x0 + 14, y];
+        const s = e.sample;
+        const sym = s.points
+          ? lightSymbol({ ...s, points: [[x0 + 2, y], [x0 + 26, y]], heads: s.type === "track" ? [{ at: [x0 + 8, y], lumens: 0 }, { at: [x0 + 20, y], lumens: 0 }] : [] }, (p) => p, 7, 1)
+          : lightSymbol({ ...s, at, rotZ: s.type === "wall_sconce" ? Math.PI : 0 }, (p) => p, 7, 1);
+        const kel = [...e.k].sort().map((v) => `${v} K`).join("/");
+        row(sym, `${k} × ${e.n}`, `${Math.round(e.lm).toLocaleString("en-US")} lm${kel ? " · " + kel : ""}`);
+      }
+      const total = fixtures.reduce((a, f) => a + f.lumens, 0);
+      y += 4;
+      lg.push(`<text x="${x0}" y="${y}" font-size="11" font-weight="bold" fill="#222">Total ${Math.round(total).toLocaleString("en-US")} lm</text>`);
+      y += 26;
+      head("Estimated average illuminance");
+      for (const b of LUX_BANDS) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="${b.fill}" stroke="#999" stroke-width="0.6"/>`, b.label);
+      lg.push(`<text x="${x0}" y="${y + 2}" font-size="9" fill="#777">lumens in the room × ${0.5} / floor area</text>`);
+      y += 16;
+    } else {
+      head("Floors");
+      const floors = [...new Set(lv.rooms.map((r) => r.floorMaterial ?? D.floorMaterial))];
+      for (const m of floors) {
+        const t = materialTone(c, m, tones);
+        row(`<rect x="${x0 + 2}" y="${y - 9}" width="24" height="18" fill="${floorFill.get(m)}" stroke="${t.line}" stroke-width="0.8"/>`, materialLabel(m), t.def.pattern !== "none" ? t.def.pattern.replace(/_/g, " ") : undefined);
+      }
+      y += 6;
+      head("Walls");
+      if (!wallMats.size) row("", "plain walls");
+      for (const [m, w] of wallMats) {
+        const t = materialTone(c, m, tones);
+        row(`<rect x="${x0 + 2}" y="${y - (w.accent ? 5 : 3)}" width="24" height="${w.accent ? 10 : 6}" fill="${t.fill}" stroke="${t.line}" stroke-width="${w.accent ? 1.4 : 0.7}"/>`, materialLabel(m), w.accent ? "accent wall" : undefined);
+      }
+      const wains = [...new Set(lv.rooms.map((r) => r.finishes?.wainscot?.material).filter((m): m is string => !!m))];
+      for (const m of wains) {
+        const t = materialTone(c, m, tones);
+        row(`<rect x="${x0 + 2}" y="${y - 3}" width="24" height="6" fill="#ffffff" stroke="none"/><line x1="${x0 + 2}" y1="${y + 3}" x2="${x0 + 26}" y2="${y + 3}" stroke="${t.line}" stroke-width="1.6"/>`, materialLabel(m), "wainscot / tiled band (wall side)");
+      }
+    }
+    out.push(`<line x1="${W0}" y1="${pad + 10}" x2="${W0}" y2="${Math.max(H, y + 20) - 20}" stroke="#ddd" stroke-width="1"/>`, ...lg);
+    H = Math.max(H, y + 30);
+  }
 
   // north arrow + scale bar
-  const nx = W - pad, ny = 20;
+  const nx = W0 - pad, ny = 20;
   out.push(`<g><polygon points="${nx},${ny + 2} ${nx - 6},${ny + 20} ${nx + 6},${ny + 20}" fill="#333"/><text x="${nx}" y="${ny + 32}" font-size="11" text-anchor="middle" fill="#333">N</text></g>`);
-  out.push(`<line x1="${W - pad - 5 * S}" y1="${H - 15}" x2="${W - pad}" y2="${H - 15}" stroke="#333" stroke-width="3"/><text x="${W - pad - 2.5 * S}" y="${H - 20}" font-size="10" text-anchor="middle" fill="#333">5 m</text>`);
+  out.push(`<line x1="${W0 - pad - 5 * S}" y1="${H - 15}" x2="${W0 - pad}" y2="${H - 15}" stroke="#333" stroke-width="3"/><text x="${W0 - pad - 2.5 * S}" y="${H - 20}" font-size="10" text-anchor="middle" fill="#333">5 m</text>`);
   out.push(`</svg>`);
+  out[svgOpen] = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Helvetica, Arial, sans-serif">`;
   return out.join("\n");
 }
 

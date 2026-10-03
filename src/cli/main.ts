@@ -6,7 +6,7 @@ import { exportGLB, exportGLTF } from "../export/gltf.js";
 import { listMaterials } from "../materials/library.js";
 import { loadAndCompile } from "../io.js";
 import type { Compiled } from "../pipeline.js";
-import { renderPlanSVG, svgToPng } from "../render/plan.js";
+import { PLAN_SHEETS, renderPlanSVG, svgToPng, type PlanSheet } from "../render/plan.js";
 import { LIGHTING_MODES, VIEW_PRESETS, type LightingMode, type ViewPreset } from "../render/raster.js";
 import { renderViewPNG } from "../render/view.js";
 import { projectJsonSchema } from "../schema/schema.js";
@@ -61,14 +61,20 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   plan: {
-    usage: "arch plan <plan.json> [--level id] [-o plan.png|plan.svg]",
-    desc: "2D floor plan: meter grid with coordinates, wall/opening/furniture ids, door swings, rooms with areas",
+    usage: "arch plan <plan.json> [--level id] [--sheet plan|lighting|finishes] [-o plan.png|plan.svg]",
+    desc: "2D floor plan: meter grid with coordinates, wall/opening/furniture ids, door swings, rooms with areas; lighting and finishes sheets",
     file: true,
-    flags: [{ name: "level", arg: "id", desc: "level to draw (default: first)" }, OUT],
+    flags: [
+      { name: "level", arg: "id", desc: "level to draw (default: first)" },
+      { name: "sheet", arg: "kind", desc: "plan (default) | lighting (fixture layout, lux per room, legend) | finishes (floor materials and patterns, wall finish bands, finish schedule)" },
+      OUT,
+    ],
     async run(file, f) {
+      const sheet = (f.sheet as string | undefined) ?? "plan";
+      if (!(PLAN_SHEETS as readonly string[]).includes(sheet)) throw new Error(`--sheet must be one of ${PLAN_SHEETS.join(", ")}`);
       const c = await compiled(file);
-      const out = (f.o as string) ?? `${base(file)}.plan.png`;
-      const svg = renderPlanSVG(c, f.level as string | undefined);
+      const out = (f.o as string) ?? `${base(file)}.${sheet === "plan" ? "plan" : sheet}.png`;
+      const svg = renderPlanSVG(c, f.level as string | undefined, { sheet: sheet as PlanSheet });
       await write(out, extname(out) === ".svg" ? svg : await svgToPng(svg));
     },
   },
