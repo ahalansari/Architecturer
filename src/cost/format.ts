@@ -8,7 +8,7 @@ const amt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2,
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export function billMarkdown(b: Bill, opts: { lines?: boolean } = {}): string {
-  const out: string[] = [`# Cost estimate — ${b.project}`, ``, `${b.date} · all amounts in ${b.currency}`, ``];
+  const out: string[] = [`# Cost estimate — ${b.project}`, ``, `${b.date} · ${scopeText(b)} · all amounts in ${b.currency}`, ``];
   out.push(`| Section | Amount |`, `|---|---:|`);
   for (const s of b.sections) out.push(`| ${s.code}. ${s.name} | ${money(s.subtotal, b.currency)} |`);
   for (const a of b.adjustments) out.push(`| ${a.label} (${a.percent}%) | ${money(a.amount, b.currency)} |`);
@@ -76,7 +76,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;border-bottom:1p
 .cov{color:var(--muted);font-size:12px;padding-top:8px}.q{color:var(--muted);font-size:11.5px;margin-top:2px}table.src td{font-size:12.5px}a{color:inherit;text-decoration-color:var(--line)}ul{color:var(--muted);padding-left:18px}
 .wrap{overflow-x:auto}@media print{body{font-size:11px}main{padding:0}a{text-decoration:none}}
 </style></head><body><main>
-<h1>Cost estimate — ${esc(b.project)}</h1><div class="meta">Bill of quantities · ${b.date} · amounts in ${b.currency}</div>
+<h1>Cost estimate — ${esc(b.project)}</h1><div class="meta">Bill of quantities · ${b.date} · ${esc(scopeText(b))} · amounts in ${b.currency}</div>
 <div class="summary"><table>${summary}</table><div class="cov">Rate basis: ${esc(coverageText(b))}</div></div>
 <div class="wrap">${sec}</div>
 <h2>Notes</h2><ul>${b.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>
@@ -86,3 +86,6 @@ ${b.sources.length ? `<h2>Rates &amp; sources</h2><div class="wrap"><table class
 </main></body></html>
 `;
 }
+
+/** What the bill covers, for its header. */
+export const scopeText = (b: Bill) => (b.scope === "full" ? "full build: structure, shell and fit-out" : "fit-out only (structure not included)");

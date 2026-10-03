@@ -43,10 +43,14 @@ export interface BillSection {
   subtotal: number;
 }
 
+export type CostScope = "fitout" | "full";
+
 export interface Bill {
   project: string;
   currency: string;
   date: string;
+  /** fitout: interior fit-out of an existing shell; full: also the structure and shell. */
+  scope: CostScope;
   sections: BillSection[];
   trades: number;
   retail: number;
@@ -58,6 +62,8 @@ export interface Bill {
   sources: MarketRate[];
   /** Share of the measured bill (before percentages) by rate source. */
   coverage: Record<"vendor" | "override" | "market" | "indicative", number>;
+  /** Products with no vendor price, billed as allowances instead (worth researching). */
+  unpriced: { id: string; name: string; url?: string; allowance: number }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +93,7 @@ export const DEFAULT_RATES: Record<string, number> = {
   // joinery (parametric runs without products)
   "joinery:kitchen_base": 150, "joinery:kitchen_upper": 105, "joinery:kitchen_tall": 280, "joinery:worktop": 85, "joinery:wardrobe": 240,
   "joinery:vanity": 220, "joinery:media": 200, "joinery:shelving": 140, "joinery:desk": 120, "joinery:bench": 120,
-  "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "appliance:dishwasher": 180, "appliance:extractor": 90,
+  "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "appliance:dishwasher": 180, "appliance:extractor": 90, "appliance:oven": 160, "appliance:hob": 110, "appliance:fridge": 260, "appliance:microwave": 60,
   // electrical
   "point:switch": 12, "point:switch_2way": 16, "point:dimmer": 22, "point:double_socket": 14, "point:socket": 12, "point:usb_socket": 18,
   "point:data": 20, "point:tv": 18, "point:shaver": 28, "point:cooker": 30, "point:spur": 18, "point:fan": 35, "point:ac": 280, "point:db": 220,
@@ -122,9 +128,11 @@ const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 
 // ---------------------------------------------------------------------------
 
-export function estimate(c: Compiled): Bill {
+/** `scope` overrides project.costs.scope for this bill. */
+export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
   const project = c.project!;
   const costs = project.costs;
+  const scope: CostScope = opts.scope ?? costs.scope;
   const cur = costs.currency;
   const used: Record<string, number> = {};
   const provenance: Record<string, { src: "override" | "market" | "indicative"; m?: MarketRate }> = {};
@@ -167,6 +175,50 @@ export function estimate(c: Compiled): Bill {
     s.lines.push({ ...l, code: `${s.code}.${s.lines.length + 1}`, qty: round(l.qty), rate: round(l.rate), amount });
   };
   const products = new Map<string, Product>(project.products.map((p) => [p.id, p]));
+  const unpriced = new Map<string, Bill["unpriced"][number]>();
+  const priced = (p: Product) => typeof p.price === "number" && p.price > 0;
+  const productLabel = (p: Product) => `${p.name}${p.sku ? ` (${p.vendor ?? ""} ${p.sku})` : ""}`;
+  /** Allowance for a loose / furniture item of this type: researched rate, built-in allowance, or by size. */
+  const furnitureAllowance = (type: string): { rate: number; key: string } => {
+    const k = `furniture:${type}`;
+    const hit = lookup(k);
+    const r = hit?.v ?? FURNITURE_ALLOWANCE[type] ?? Math.round(30 + 40 * ((FURNITURE[type]?.defaults.width ?? 0.5) * (FURNITURE[type]?.defaults.depth ?? 0.5)));
+    used[k] = r;
+    provenance[k] = { src: hit?.src ?? "indicative", m: hit?.m };
+    return { rate: r, key: k };
+  };
+  /** What a kitchen / joinery product is, from its name and type, to price it when the vendor price is missing. */
+  const productKind = (p: Product): string => {
+    const n = `${p.name} ${p.type}`.toLowerCase();
+    if (/mixer|\btap\b|faucet/.test(n)) return "tap";
+    if (/worktop|countertop|benchtop|work top/.test(n)) return "worktop";
+    if (/\bfronts?\b|\bdoors?\b|cover panel|plinth|deco strip/.test(n)) return "cabinetry";
+    if (/dishwasher/.test(n)) return "dishwasher";
+    if (/extractor|cooker hood|\bhood\b/.test(n)) return "extractor";
+    if (/\boven\b/.test(n)) return "oven";
+    if (/\bhob\b|cooktop|induction/.test(n)) return "hob";
+    if (/fridge|refrigerator|freezer/.test(n)) return "fridge";
+    if (/microwave/.test(n)) return "microwave";
+    if (/\bsink\b/.test(n) && !/cabinet/.test(n)) return "sink";
+    if (/kitchen|cabinet|metod|havstorp|drawer|wardrobe|\bpax\b|enhet|knoxhult|shelf|shelving/.test(n)) return "cabinetry";
+    return "other";
+  };
+  /** Rate (per item) and its key for a product without a price; worktops by their length. */
+  const productAllowance = (p: Product, kind: string): { rate: number; key: string; how: string } => {
+    if (kind === "worktop") {
+      const m = typeof p.width === "number" && p.width > 0.3 ? p.width : 2.4;
+      return { rate: rate("joinery:worktop") * m, key: "joinery:worktop", how: `worktop allowance, ${round(m, 2)} m` };
+    }
+    const key = ({ tap: "sanitary:tap", sink: "sanitary:sink", dishwasher: "appliance:dishwasher", extractor: "appliance:extractor", oven: "appliance:oven", hob: "appliance:hob", fridge: "appliance:fridge", microwave: "appliance:microwave" } as Record<string, string>)[kind];
+    if (key) return { rate: rate(key), key, how: `${kind} allowance` };
+    const f = furnitureAllowance(p.type);
+    return { ...f, how: `${p.type.replace(/_/g, " ")} allowance` };
+  };
+  const noteUnpriced = (p: Product, allowance: number) => {
+    const u = unpriced.get(p.id) ?? { id: p.id, name: p.name, url: p.url, allowance: 0 };
+    u.allowance = round(u.allowance + allowance);
+    unpriced.set(p.id, u);
+  };
   const label = (m: string) => (m.startsWith("#") ? `paint ${m}` : m.replace(/_/g, " "));
   const pattern = (m: string) => {
     try {
@@ -332,12 +384,37 @@ export function estimate(c: Compiled): Bill {
         const counts = new Map<string, number>();
         for (const m of prodMods) counts.set(m.product!, (counts.get(m.product!) ?? 0) + 1);
         for (const x of cw.products) counts.set(x.product, (counts.get(x.product) ?? 0) + x.qty);
+        // cabinetry with no vendor price is priced per metre of the run instead (supply & install)
+        const unpricedCabinetry: Product[] = [];
         for (const [pid, q] of counts) {
           const p = products.get(pid);
           if (!p) continue;
-          add(joinery, { description: `${name}: ${p.name}${p.sku ? ` (${p.vendor ?? ""} ${p.sku})` : ""}`, qty: q, unit: "no", rate: fx(p.price ?? 0, p.currency), basis: "vendor", url: p.url });
+          if (priced(p)) {
+            add(joinery, { description: `${name}: ${productLabel(p)}`, qty: q, unit: "no", rate: fx(p.price!, p.currency), basis: "vendor", url: p.url });
+            continue;
+          }
+          const kind = productKind(p);
+          if (kind === "cabinetry" && run) {
+            unpricedCabinetry.push(p);
+            continue;
+          }
+          const a = productAllowance(p, kind);
+          add(joinery, { description: `${name}: ${productLabel(p)} — no vendor price, ${a.how}`, qty: q, unit: "no", rate: a.rate, basis: "allowance", key: a.key, url: p.url });
+          noteUnpriced(p, a.rate * q);
         }
-        const cabinets = prodMods.length;
+        if (unpricedCabinetry.length && run) {
+          const len = (row: string) => [...run.base, ...run.uppers].filter((x) => x.row === row).reduce((a, x) => a + (x.x1 - x.x0), 0);
+          const talls = run.base.filter((x) => x.row === "tall").length;
+          const what = unpricedCabinetry.map((p) => p.name).join("; ");
+          const before = joinery.lines.reduce((a, l) => a + l.amount, 0);
+          add(joinery, { description: `${name}: base cabinets incl. fronts & hardware — no vendor price for ${what}, per-metre allowance`, qty: len("base"), unit: "m", rate: rate("joinery:kitchen_base"), basis: "allowance", key: "joinery:kitchen_base" });
+          add(joinery, { description: `${name}: wall cabinets — per-metre allowance`, qty: len("upper"), unit: "m", rate: rate("joinery:kitchen_upper"), basis: "allowance", key: "joinery:kitchen_upper" });
+          add(joinery, { description: `${name}: tall units — allowance`, qty: talls, unit: "no", rate: rate("joinery:kitchen_tall"), basis: "allowance", key: "joinery:kitchen_tall" });
+          const share = (joinery.lines.reduce((a, l) => a + l.amount, 0) - before) / unpricedCabinetry.length;
+          for (const p of unpricedCabinetry) noteUnpriced(p, share);
+        }
+        // the per-metre allowance already includes installing those cabinets
+        const cabinets = prodMods.filter((m) => !unpricedCabinetry.some((p) => p.id === m.product)).length;
         const worktops = cw.products.filter((x) => /worktop/i.test(products.get(x.product)?.name ?? "")).reduce((a, x) => a + x.qty, 0);
         const appliances = cw.products.filter((x) => /oven|hob|fridge|freezer|dishwasher|hood/i.test(products.get(x.product)?.name ?? "")).reduce((a, x) => a + x.qty, 0);
         add(joinery, { description: `${name}: assembly & installation of cabinets`, qty: cabinets, unit: "no", rate: rate("install:cabinet"), basis: "count", key: "install:cabinet" });
@@ -372,7 +449,7 @@ export function estimate(c: Compiled): Bill {
   });
 
   // ---- emit sections in order ----
-  const full = costs.scope === "full";
+  const full = scope === "full";
   const ratio = (key: string, fallback: number) => marketRate(key)?.value ?? fallback;
   const gfa = groundSlab + suspSlab;
   let structureTotal = 0;
@@ -515,15 +592,15 @@ export function estimate(c: Compiled): Bill {
   const H = sec("H", "Furniture, furnishings & decor", true);
   const furn = [...furniture.values()].sort((a, b) => Number(!!b.product) - Number(!!a.product) || (b.product?.price ?? 0) * b.qty - (a.product?.price ?? 0) * a.qty);
   for (const f of furn) {
-    if (f.product)
-      add(H, { description: `${f.product.name}${f.product.sku ? ` (${f.product.vendor ?? ""} ${f.product.sku})` : ""}`, qty: f.qty, unit: "no", rate: fx(f.product.price ?? 0, f.product.currency), basis: "vendor", url: f.product.url });
-    else {
-      const k = `furniture:${f.type}`;
-      const hit = lookup(k);
-      const r = hit?.v ?? FURNITURE_ALLOWANCE[f.type] ?? Math.round(30 + 40 * ((FURNITURE[f.type]?.defaults.width ?? 0.5) * (FURNITURE[f.type]?.defaults.depth ?? 0.5)));
-      used[k] = r;
-      provenance[k] = { src: hit?.src ?? "indicative", m: hit?.m };
-      add(H, { description: `${f.type.replace(/_/g, " ")} (allowance)`, qty: f.qty, unit: "no", rate: r, basis: "allowance", key: k });
+    if (f.product && priced(f.product))
+      add(H, { description: productLabel(f.product), qty: f.qty, unit: "no", rate: fx(f.product.price!, f.product.currency), basis: "vendor", url: f.product.url });
+    else if (f.product) {
+      const a = furnitureAllowance(f.product.type);
+      add(H, { description: `${productLabel(f.product)} — no vendor price, ${f.product.type.replace(/_/g, " ")} allowance`, qty: f.qty, unit: "no", rate: a.rate, basis: "allowance", key: a.key, url: f.product.url });
+      noteUnpriced(f.product, a.rate * f.qty);
+    } else {
+      const a = furnitureAllowance(f.type);
+      add(H, { description: `${f.type.replace(/_/g, " ")} (allowance)`, qty: f.qty, unit: "no", rate: a.rate, basis: "allowance", key: a.key });
     }
   }
 
@@ -586,8 +663,16 @@ export function estimate(c: Compiled): Bill {
     "Vendor prices are as read from the product pages; delivery, assembly by the vendor and promotions are not included.",
     "Excludes: HVAC (except listed AC units), permits, base-building works outside the scope, loose kitchenware and soft goods not modelled.",
   );
+  if (unpriced.size)
+    notes.unshift(
+      `${unpriced.size} product(s) have no vendor price and are billed as allowances instead (marked 'no vendor price'): ${[...unpriced.values()].map((u) => u.name).join("; ")}. Find their prices and set them on the products (price + currency) for a firmer total.`,
+    );
+  if (!full)
+    notes.unshift(
+      "Scope: fit-out only — the structure and shell (foundations, reinforced concrete frame and slabs, rebar, formwork, blockwork, plaster / render, roof build-up) are NOT included. Ask for scope 'full' (project.costs.scope) to add them.",
+    );
   return {
-    project: project.name, currency: cur, date: new Date().toISOString().slice(0, 10), sections: out, trades, retail, adjustments, total,
+    project: project.name, currency: cur, date: new Date().toISOString().slice(0, 10), scope, sections: out, trades, retail, adjustments, total,
     notes: [...new Set(notes)], ratesUsed: Object.fromEntries(Object.entries(used).sort()),
     sources: [
       ...new Map(
@@ -596,6 +681,7 @@ export function estimate(c: Compiled): Bill {
       ).values(),
     ].sort((a, b) => a.key.localeCompare(b.key)),
     coverage: Object.fromEntries(Object.entries(coverage).map(([k, v]) => [k, round(v)])) as Bill["coverage"],
+    unpriced: [...unpriced.values()],
   };
 }
 

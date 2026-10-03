@@ -100,3 +100,19 @@ test("full-scope bill: foundations, concrete, rebar, formwork, blockwork, plaste
   assert.ok(!fit.sections.some((s) => s.code === "A"));
   assert.ok(fit.sections.flatMap((s) => s.lines).some((l) => /Internal walls: 150 mm hollow concrete block/.test(l.description)));
 });
+
+test("bill scope can be chosen per estimate, and a fit-out bill says the structure is excluded", async () => {
+  const c = compile(house());
+  const fit = estimate(c);
+  assert.equal(fit.scope, "fitout");
+  assert.ok(fit.notes[0].includes("NOT included"), fit.notes[0]);
+  const full = estimate(c, { scope: "full" });
+  assert.equal(full.scope, "full");
+  assert.ok(full.sections.some((s) => s.code === "A"), "structure section");
+  assert.ok(full.sections.flatMap((s) => s.lines).some((l) => /Steel reinforcement/.test(l.description)));
+  assert.ok(full.total > fit.total);
+  assert.ok(!estimate(compile({ ...house(), costs: { scope: "full" } }), { scope: "fitout" }).sections.some((s) => s.code === "A"), "override wins over the project");
+  const { billMarkdown } = await import("../src/cost/format.js");
+  assert.match(billMarkdown(fit), /fit-out only \(structure not included\)/);
+  assert.match(billMarkdown(full), /full build: structure, shell and fit-out/);
+});

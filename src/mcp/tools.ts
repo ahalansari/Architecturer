@@ -621,6 +621,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
       description:
         "Add a real product to a plan's products catalogue — from a vendor page URL (IKEA, Homecentre, Amazon, Wayfair...: name, SKU, price, size, photo colour and, when published, the vendor's 3D model) and/or fields you read yourself — and optionally place it. " +
         "Without a 3D model the product is shown as the closest parametric furniture type, sized and tinted to match. Sizes are metres. " +
+        "To correct or fill in an existing product (e.g. a price you researched), pass its `id` with just the fields to change, such as {id, price, currency}. " +
         "Vendor models are for visualising designs (licence 'vendor'); check the vendor's terms before redistributing them in a game.",
       inputSchema: {
         path: PathArg,
@@ -666,12 +667,14 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
           info = { url: a.url, vendor: vendorFromUrl(a.url), warnings: [] };
         }
       }
-      const name = a.name ?? info.name;
+      // an existing product (by id) keeps what isn't given: {id, price} just sets the price
+      const prior = a.id ? ((await load(file)).products as Json[] | undefined)?.find((p) => p.id === a.id) : undefined;
+      const name = a.name ?? info.name ?? prior?.name;
       if (!name) return fail("no product name: pass `name` (and size) when the page cannot be read");
-      const type = a.type ?? info.type ?? guessFurnitureType(name) ?? "box";
+      const type = a.type ?? info.type ?? prior?.type ?? guessFurnitureType(name) ?? "box";
       const image = a.image ?? info.image;
       const model = a.model ?? info.model;
-      const color = a.color ?? (!model && image ? await photoColor(image) : undefined);
+      const color = a.color ?? (!model && image && !prior ? await photoColor(image) : undefined);
       const { productId } = await import("../elements/products.js");
       const placed: string[] = [];
       let existing = false;
@@ -725,19 +728,21 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
       title: "Cost estimate",
       description:
         "Cost estimate / bill of quantities for a plan, measured from the model: partitions, floor / wall / ceiling finishes by material, doors, windows and treatments, built-in joinery (products like IKEA METOD at their real prices, custom runs per metre), electrical points, fixtures and circuits, plumbing fixtures and pipe runs, furniture (vendor prices or allowances), terraces; plus preliminaries, overhead & profit, contingency, fees, VAT. " +
-        "Rates are indicative Kuwait fit-out rates in KWD; override any line with project.costs.rates (keys are listed) and set currency / percentages in project.costs. " +
+        "scope 'fitout' (the project default unless project.costs.scope says otherwise) prices the interior fit-out of an existing shell; scope 'full' adds the structure and shell measured from the model and project.construction: foundations, reinforced concrete (m³ of concrete, tonnes of rebar, formwork), RC stairs, blockwork, parapets, plaster / render, roof build-up and screed. Use 'full' for a new build or whenever the user asks about concrete, steel, structure or total construction cost. " +
+        "Rates are researched Kuwait market rates in KWD where available; override any line with project.costs.rates (keys are listed) and set currency / percentages in project.costs. " +
         (remote ? "Optionally saves the bill as .html / .md / .csv / .json and returns a download link." : "Optionally writes the bill as .html / .md / .csv / .json."),
       inputSchema: {
         path: PathArg,
         output: z.string().optional().describe("Write the full bill here (.html printable, .md, .csv, .json)"),
         lines: z.boolean().default(false).describe("Include every line in the reply (default: section totals)"),
+        scope: z.enum(["fitout", "full"]).optional().describe("fitout = interior only; full = also foundations, RC frame, slabs, rebar, formwork, blockwork, plaster, roof (default: project.costs.scope, which defaults to fitout)"),
       },
       annotations: OUTPUT,
     },
-    guard(async ({ path, output, lines }, extra) => {
+    guard(async ({ path, output, lines, scope }, extra) => {
       const file = ws.plan(path);
       const out = output ? ws.output(output, [".html", ".md", ".csv", ".json"]) : undefined;
-      const r = await job(file, await load(file), { op: "cost", output: out, lines }, extra, "Estimating");
+      const r = await job(file, await load(file), { op: "cost", output: out, lines, scope }, extra, "Estimating");
       if (!r.ok) return fail(r.summary);
       const wrote = out ? (remote ? `\nDownload: ${remote.fileLink(out)}` : `\nWrote ${out}`) : "";
       return ok(text(r.text! + wrote));

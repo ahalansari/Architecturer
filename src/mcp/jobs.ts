@@ -9,6 +9,7 @@ import { dirname, extname } from "node:path";
 import { exportGLB, exportGLTF, type ExportOptions } from "../export/gltf.js";
 import { compileWithAssets, vendorNotice, type Compiled } from "../pipeline.js";
 import { renderPlanSVG, svgToPng, type PlanSheet } from "../render/plan.js";
+import type { CostScope } from "../cost/estimate.js";
 import type { LightingMode } from "../render/raster.js";
 import { renderViewPNG, type ViewOptions } from "../render/view.js";
 
@@ -24,12 +25,12 @@ export type JobRequest =
   | (Base & { op: "render_plan"; level?: string; sheet?: PlanSheet })
   | (Base & { op: "render_view"; view: ViewOptions; modes: LightingMode[] })
   | (Base & { op: "export"; out: string; opts: ExportOptions })
-  | (Base & { op: "cost"; output?: string; lines: boolean })
+  | (Base & { op: "cost"; output?: string; lines: boolean; scope?: CostScope })
   // for the live viewer
   | (Base & { op: "info" })
   | (Base & { op: "plan_svg"; level?: string; sheet?: PlanSheet })
   | (Base & { op: "glb"; opts: ExportOptions })
-  | (Base & { op: "bill"; format: "html" | "csv" });
+  | (Base & { op: "bill"; format: "html" | "csv"; scope?: CostScope });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -128,19 +129,24 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
     case "bill": {
       const { estimate } = await import("../cost/estimate.js");
       const fmt = await import("../cost/format.js");
-      const bill = estimate(c);
+      const bill = estimate(c, { scope: req.scope });
       return { ok: true, summary: sum, text: req.format === "csv" ? fmt.billCsv(bill) : fmt.billHtml(bill) };
     }
     case "cost": {
       const { estimate } = await import("../cost/estimate.js");
       const fmt = await import("../cost/format.js");
-      const bill = estimate(c);
+      const bill = estimate(c, { scope: req.scope });
       if (req.output) {
         const ext = extname(req.output).toLowerCase();
         await writeAtomic(req.output, ext === ".html" ? fmt.billHtml(bill) : ext === ".csv" ? fmt.billCsv(bill) : ext === ".json" ? JSON.stringify(bill, null, 1) : fmt.billMarkdown(bill));
       }
       const keys = Object.entries(bill.ratesUsed).map(([k, v]) => `${k}=${v}`).join(", ");
-      return { ok: true, summary: sum, text: fmt.billMarkdown(bill, { lines: req.lines }) + `\n\nRate keys used (override in project.costs.rates): ${keys}` };
+      const missing = bill.unpriced.length
+        ? `\n\nPRODUCTS WITHOUT A PRICE (billed as allowances, ${bill.currency}): ` +
+          bill.unpriced.map((u) => `\n- ${u.id}: ${u.name} — allowance ${u.allowance}${u.url ? ` — ${u.url}` : ""}`).join("") +
+          `\nFind each one's current price (its product page, or a web search for the vendor's price in the local market), then set it with import_product {path, id, price, currency} and run cost_estimate again. If a price can't be found, say the line is an allowance.`
+        : "";
+      return { ok: true, summary: sum, text: fmt.billMarkdown(bill, { lines: req.lines }) + missing + `\n\nRate keys used (override in project.costs.rates): ${keys}` };
     }
   }
 }

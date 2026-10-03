@@ -124,3 +124,35 @@ test("market rates: every researched rate is sourced and positive", () => {
   // window treatment types map onto the researched keys
   assert.ok(marketRate("treatment:roller") && marketRate("treatment:roman") && marketRate("treatment:curtains_and_sheers"));
 });
+
+test("products without a vendor price are billed as allowances, never 0, and listed", () => {
+  const p = flat({}, { products: [{ product: "worktop", qty: 2 }, { product: "mixer", qty: 1 }, { product: "sink", qty: 1 }, { product: "kitchen", qty: 1 }] });
+  p.products = [
+    { id: "sofa1", name: "Test sofa", vendor: "Shop", type: "sofa" },
+    { id: "lamp1", name: "Test lamp", vendor: "Shop", price: 20, currency: "USD", type: "floor_lamp" },
+    { id: "base80", name: "METOD base cabinet 80", vendor: "IKEA", type: "box" },
+    { id: "worktop", name: "IKEA custom-made light-colour worktop", vendor: "IKEA", type: "box", width: 3 },
+    { id: "mixer", name: "ÄLMAREN pull-out mixer", vendor: "IKEA", type: "box" },
+    { id: "sink", name: "FYNDIG inset sink 46×40 cm", vendor: "IKEA", type: "box" },
+    { id: "kitchen", name: "IKEA METOD / HAVSTORP brown-beige kitchen and island", vendor: "IKEA", type: "box" },
+  ] as never;
+  const bill = estimate(compile(p));
+  const lines = bill.sections.flatMap((s) => s.lines);
+  assert.ok(!lines.some((l) => l.basis === "vendor" && l.amount === 0), "no zero vendor lines");
+  const find = (re: RegExp) => lines.find((l) => re.test(l.description));
+  assert.match(find(/pull-out mixer/)!.description, /no vendor price, tap allowance/);
+  assert.ok(find(/pull-out mixer/)!.amount > 0);
+  assert.ok(find(/inset sink/)!.amount > 0);
+  const worktop = find(/custom-made light-colour worktop/)!;
+  assert.match(worktop.description, /worktop allowance, 3 m/);
+  // cabinets without prices are priced per metre of the run instead
+  const base = find(/base cabinets incl\. fronts & hardware — no vendor price/)!;
+  assert.equal(base.unit, "m");
+  assert.ok(base.qty > 3 && base.amount > 0);
+  assert.ok(!find(/assembly & installation of cabinets/), "per-metre allowance already includes installation");
+  assert.match(find(/Test sofa/)!.description, /no vendor price, sofa allowance/);
+  assert.ok(find(/Test sofa/)!.amount > 0);
+  assert.deepEqual(bill.unpriced.map((u) => u.id).sort(), ["base80", "kitchen", "mixer", "sink", "sofa1", "worktop"]);
+  assert.ok(bill.unpriced.every((u) => u.allowance > 0));
+  assert.match(bill.notes.join(" "), /6 product\(s\) have no vendor price/);
+});

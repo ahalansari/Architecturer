@@ -47,6 +47,22 @@ test("MCP server: create, edit, validate, render, export", async () => {
     assert.equal(view.content[0].type, "image");
     assert.ok(Buffer.from(view.content[0].data!, "base64").length > 10_000);
 
+    const fit = await call("cost_estimate", { path: plan });
+    assert.match(fit.content[0].text!, /fit-out only/);
+    const full = await call("cost_estimate", { path: plan, scope: "full" });
+    assert.match(full.content[0].text!, /A\. Structure & shell/);
+
+    // a product without a price is an allowance the AI is asked to research; {id, price} fills it in
+    r = await call("import_product", { path: plan, id: "lamp_x", name: "Lamp X", type: "floor_lamp", place: { position: [1, 1] } });
+    assert.ok(!r.isError, r.content[0].text);
+    r = await call("cost_estimate", { path: plan });
+    assert.match(r.content[0].text!, /PRODUCTS WITHOUT A PRICE[\s\S]*lamp_x: Lamp X — allowance/);
+    r = await call("import_product", { path: plan, id: "lamp_x", price: 25, currency: "KWD" });
+    assert.match(r.content[0].text!, /Updated product 'lamp_x': Lamp X/);
+    r = await call("cost_estimate", { path: plan, lines: true });
+    assert.ok(!/PRODUCTS WITHOUT A PRICE/.test(r.content[0].text!));
+    assert.match(r.content[0].text!, /Lamp X \| 1 \| no \| 25\.00/);
+
     const out = join(dir, "plan.glb");
     r = await call("export_model", { path: plan, output: out, textureSize: 128 });
     assert.ok(!r.isError, r.content[0].text);

@@ -121,7 +121,8 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
       }
       if (path === "estimate.html" || path === "estimate.csv") {
         const csv = path.endsWith(".csv");
-        const r = await run(`bill:${csv ? "csv" : "html"}`, { op: "bill", format: csv ? "csv" : "html" });
+        const scope = query.get("scope") === "full" ? "full" : query.get("scope") === "fitout" ? "fitout" : undefined;
+        const r = await run(`bill:${csv ? "csv" : "html"}:${scope ?? ""}`, { op: "bill", format: csv ? "csv" : "html", scope });
         if (!r.ok) return void res.writeHead(422, { "content-type": "text/plain; charset=utf-8" }).end(r.summary);
         res.writeHead(200, {
           "content-type": csv ? "text/csv; charset=utf-8" : "text/html; charset=utf-8",

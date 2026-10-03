@@ -424,15 +424,16 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   estimate: {
-    usage: "arch estimate <plan.json> [-o bill.html|bill.md|bill.csv|bill.json] [--summary]",
-    desc: "Cost estimate / bill of quantities measured from the model: finishes, ceilings, doors & windows, joinery (IKEA METOD at real prices), electrical, plumbing, furniture, totals",
+    usage: "arch estimate <plan.json> [--scope fitout|full] [-o bill.html|bill.md|bill.csv|bill.json] [--summary]",
+    desc: "Cost estimate / bill of quantities measured from the model: finishes, ceilings, doors & windows, joinery (IKEA METOD at real prices), electrical, plumbing, furniture, totals; --scope full adds the structure (foundations, RC concrete, rebar, formwork, blockwork, plaster, roof)",
     file: true,
-    flags: [OUT, { name: "summary", desc: "print the section totals only" }],
+    flags: [OUT, { name: "summary", desc: "print the section totals only" }, { name: "scope", arg: "s", desc: "fitout (interior only) | full (with structure and shell); default project.costs.scope" }],
     async run(file, f) {
+      if (f.scope !== undefined && f.scope !== "fitout" && f.scope !== "full") throw new Error(`--scope must be fitout or full (got '${f.scope}')`);
       const c = await compiled(file);
       const { estimate } = await import("../cost/estimate.js");
       const fmt = await import("../cost/format.js");
-      const bill = estimate(c);
+      const bill = estimate(c, { scope: f.scope as "fitout" | "full" | undefined });
       const out = f.o as string | undefined;
       if (out) {
         const ext = extname(out).toLowerCase();
