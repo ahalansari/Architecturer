@@ -8,18 +8,9 @@ import { z } from "zod";
  * Angles: degrees, counter-clockwise, 0 = east (+x), 90 = north (+y).
  */
 
-const Point = z
-  .tuple([z.number(), z.number()])
-  .describe("2D plan point [x, y] in meters (x = east, y = north)");
-const Polygon = z.array(Point).min(3).describe("Closed polygon as a list of [x, y] points (do not repeat the first point)");
-const Mat = z
-  .string()
-  .describe('Material name from the library (see list_materials), a custom material from `materials`, or a hex color like "#c0a080"');
-const Id = z.string().regex(/^[A-Za-z0-9_\-.]+$/, "ids may only contain letters, digits, _ - .");
+import { Direction, Id, Mat, Point, Polygon, Vec3 } from "./common.js";
 
-const Direction = z
-  .union([z.number(), z.enum(["north", "south", "east", "west"])])
-  .describe("Degrees counter-clockwise from east (0=east, 90=north, 180=west, 270=south) or a compass word");
+export { Direction, Id, Mat, Point, Polygon, Vec3 };
 
 export const CustomMaterialSchema = z
   .object({
@@ -210,7 +201,6 @@ export const TerraceSchema = z
   })
   .describe("Terrace, balcony, deck or patio: floor slab plus railings/parapet on the free edges, all in one element");
 
-const Vec3 = z.tuple([z.number(), z.number(), z.number()]).describe("[x, y, z] in meters; z relative to the level elevation");
 
 export const BandSchema = z
   .object({
