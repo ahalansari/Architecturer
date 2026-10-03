@@ -57,6 +57,18 @@ Every command has `--help`, and unknown options are errors. During development, 
 { "mcpServers": { "architecturer": { "command": "node", "args": ["/abs/path/to/Architecturer/dist/mcp/server.js"] } } }
 ```
 
+Claude Desktop: add the server to `~/Library/Application Support/Claude/claude_desktop_config.json`, then quit and reopen the app. Use the absolute Node path, because Desktop doesn't use your shell's PATH:
+
+```json
+{ "mcpServers": { "architecturer": {
+  "command": "/usr/local/bin/node",
+  "args": ["/abs/path/to/Architecturer/dist/mcp/server.js"],
+  "env": { "ARCHITECTURER_WORKDIR": "/Users/you/Architecturer" }
+} } }
+```
+
+Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they resolve against the server's working directory, or `~/Architecturer` when the server is started from `/`, as Claude Desktop does.
+
 | Tool | Purpose |
 |---|---|
 | `get_guide`, `get_schema`, `list_materials`, `list_furniture` | Learn the format |

@@ -3,7 +3,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { dirname, extname, join, resolve } from "node:path";
 import { z } from "zod";
 import { listFurniture } from "../elements/furniture.js";
 import { exportGLB, exportGLTF } from "../export/gltf.js";
@@ -18,6 +19,14 @@ import { ELEMENT_KINDS, projectJsonSchema } from "../schema/schema.js";
 import { STARTER_PROJECT } from "../templates.js";
 
 type Json = Record<string, any>;
+
+/**
+ * Relative paths resolve against ARCHITECTURER_WORKDIR, else the working directory. Apps like Claude
+ * Desktop start servers in "/", so there we fall back to ~/Architecturer instead of the disk root.
+ */
+const WORKDIR =
+  process.env.ARCHITECTURER_WORKDIR ?? (process.cwd() === "/" ? join(homedir(), "Architecturer") : process.cwd());
+const abs = (p: string) => resolve(WORKDIR, p.replace(/^~(?=\/|$)/, homedir()));
 type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
 
 const server = new McpServer(
@@ -48,13 +57,13 @@ function summary(c: Compiled): string {
 }
 
 async function load(path: string): Promise<Json> {
-  const j = await readJson(resolve(path));
+  const j = await readJson(abs(path));
   if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error(`${path} does not contain a JSON object`);
   return j as Json;
 }
 
 async function save(path: string, project: Json): Promise<Compiled> {
-  const p = resolve(path);
+  const p = abs(path);
   await mkdir(dirname(p), { recursive: true });
   await writeFile(p, JSON.stringify(project, null, 2) + "\n");
   return compile(project);
@@ -94,7 +103,7 @@ const guard =
     }
   };
 
-const PathArg = z.string().describe("Path to the plan JSON file (absolute or relative to the server's working directory)");
+const PathArg = z.string().describe(`Path to the plan JSON file: absolute, or relative to the project folder ${WORKDIR}`);
 const LevelArg = z.string().describe("Level id, e.g. 'ground'");
 
 server.registerTool(
@@ -128,9 +137,9 @@ server.registerTool(
     inputSchema: { path: PathArg, project: z.record(z.string(), z.any()).optional(), overwrite: z.boolean().default(false) },
   },
   guard(async ({ path, project, overwrite }) => {
-    if (existsSync(resolve(path)) && !overwrite) return fail(`${path} already exists (pass overwrite: true to replace it)`);
+    if (existsSync(abs(path)) && !overwrite) return fail(`${path} already exists (pass overwrite: true to replace it)`);
     const c = await save(path, (project as Json) ?? structuredClone(STARTER_PROJECT));
-    return ok(text(`Created ${resolve(path)}\n${summary(c)}`));
+    return ok(text(`Created ${abs(path)}\n${summary(c)}`));
   }),
 );
 
@@ -308,7 +317,7 @@ server.registerTool(
   guard(async ({ path, output, textureSize, textureFormat, engine, merge, collision }) => {
     const c = compile(await load(path));
     if (!c.root) return fail(summary(c));
-    const out = resolve(output);
+    const out = abs(output);
     await mkdir(dirname(out), { recursive: true });
     const opts = {
       textureSize,
