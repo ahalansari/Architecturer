@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { exportGLB } from "../export/gltf.js";
 import { loadAndCompile } from "../io.js";
 import type { Compiled } from "../pipeline.js";
-import { renderPlanSVG } from "../render/plan.js";
+import { PLAN_SHEETS, renderPlanSVG, type PlanSheet } from "../render/plan.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const VIEWER = join(ROOT, "viewer");
@@ -96,8 +96,10 @@ export async function serve(planPath: string, opts: { port: number; textureSize?
         return;
       }
       if (url.pathname === "/plan.svg") {
-        res.writeHead(200, { "content-type": MIME[".svg"] });
-        res.end(renderPlanSVG(c, url.searchParams.get("level") ?? undefined));
+        const sheet = url.searchParams.get("sheet") || "plan";
+        if (!(PLAN_SHEETS as readonly string[]).includes(sheet)) return void res.writeHead(400).end(`sheet must be one of ${PLAN_SHEETS.join(", ")}`);
+        res.writeHead(200, { "content-type": MIME[".svg"], "cache-control": "no-store" });
+        res.end(renderPlanSVG(c, url.searchParams.get("level") || undefined, { sheet: sheet as PlanSheet }));
         return;
       }
       res.writeHead(404).end("not found");

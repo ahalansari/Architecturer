@@ -44,7 +44,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch plan plan.json --level ground [--sheet lighting\|finishes] -o plan.png` | 2D floor plan (`.svg` or `.png`). `--sheet lighting`: fixture symbols, estimated lux per room and a fixture legend. `--sheet finishes`: floors drawn in their material pattern, wall finish and accent bands, and a per-room finish schedule |
 | `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
 | `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png\|ktx2]` | Export; `.gltf` writes separate image files |
-| `arch serve plan.json` | Live viewer that reloads whenever the file is saved, with a first-person **walk mode** |
+| `arch serve plan.json` | Live viewer that reloads whenever the file is saved, with a first-person **walk mode** and 2D plan, lighting and finishes sheets (pan/zoom, per level, SVG download) |
 | `arch schema` / `materials` / `furniture` | Reference |
 
 Every command has `--help`, and unknown options are errors. During development, `arch` is `npx tsx src/cli/main.ts`. After `npm run build` it is `node bin/arch.js`.
@@ -130,6 +130,14 @@ Examples:
   - `arch render --room Kitchen` gives an eye-level shot from a clear corner. `--elevation <wall> --elevation-room <room>` gives a square-on wall elevation.
   - The validator checks clearances, aisles, hob-under-window, cabinets over windows, pendant heights and unlit rooms.
 - **Showcase:** `examples/showcase_apartment.json`, a Japandi apartment that uses all of the above.
+
+## Plans in the viewer
+
+The **Plans** section of the viewer panel opens the 2D sheets: **2D plan**, **💡 Lighting** and **🎨 Finishes**.
+
+- Switch sheets with the tabs or the keys 1, 2 and 3, and pick the level from the dropdown.
+- Drag to pan; zoom with the wheel, a double-click, + / − or Fit (0).
+- **SVG** downloads the sheet. The open sheet refreshes whenever the plan file is saved.
 
 ## Walk mode
 

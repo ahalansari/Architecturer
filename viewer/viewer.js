@@ -5,6 +5,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { WalkMode } from "./walk.js";
 import { DayNight } from "./lighting.js";
+import { PlanViewer } from "./plans.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view");
@@ -92,6 +93,7 @@ async function loadInfo() {
   }
   $("cut").value = levels.some((l) => l.id === prevCut) ? prevCut : "";
   elevators = info.elevators ?? [];
+  plans?.setLevels(levels);
   return info;
 }
 
@@ -242,13 +244,11 @@ canvas.addEventListener("pointerup", (e) => {
 document.querySelectorAll("input[data-kind], #wire, #shadows").forEach((i) => (i.onchange = applyVisibility));
 $("cut").onchange = applyVisibility;
 document.querySelectorAll("button[data-view]").forEach((b) => (b.onclick = () => frame(b.dataset.view)));
-$("planBtn").onclick = () => {
-  const level = $("cut").value || levels[0]?.id || "";
-  $("planImg").src = `/plan.svg?level=${encodeURIComponent(level)}&t=${Date.now()}`;
-  $("plan").hidden = false;
-};
-$("planClose").onclick = () => ($("plan").hidden = true);
-$("plan").onclick = (e) => e.target === $("plan") && ($("plan").hidden = true);
+// 2D plan sheets: plan / lighting / finishes (opens on the cut level, else the first)
+const plans = new PlanViewer();
+document.querySelectorAll("#panel button[data-sheet]").forEach(
+  (b) => (b.onclick = () => plans.show(b.dataset.sheet, plans.isOpen ? plans.level : $("cut").value || levels[0]?.id)),
+);
 
 // ---------------------------------------------------------------- walk mode
 const hud = {
@@ -343,7 +343,10 @@ canvas.addEventListener("dblclick", (e) => {
   if (hit) startWalk(hit.point);
 });
 
-new EventSource("/events").addEventListener("reload", () => loadModel(true).catch((e) => setStatus(String(e))));
+new EventSource("/events").addEventListener("reload", () => {
+  plans.refresh();
+  loadModel(true).catch((e) => setStatus(String(e)));
+});
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {

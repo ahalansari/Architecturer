@@ -38,10 +38,17 @@
           <button data-view="top">Top</button>
           <button data-view="south">South</button>
           <button data-view="east">East</button>
-          <button id="planBtn">2D plan</button>
           <button id="walkBtn" title="First-person walk (or double-click a floor)">🚶 Walk</button>
         </div>
         <a id="download" href="/model.glb" download="model.glb" class="button">Download GLB</a>
+      </section>
+      <section>
+        <h2>Plans</h2>
+        <div class="buttons">
+          <button data-sheet="plan" title="2D floor plan with ids, door swings and furniture">2D plan</button>
+          <button data-sheet="lighting" title="Light fixtures, estimated lux per room, fixture schedule">💡 Lighting</button>
+          <button data-sheet="finishes" title="Floor materials, wall finishes and accent walls, finish schedule">🎨 Finishes</button>
+        </div>
       </section>
       <section id="picked" hidden>
         <h2>Selected</h2>
@@ -52,7 +59,25 @@
         <ul id="issueList"></ul>
       </section>
     </aside>
-    <div id="plan" hidden><img id="planImg" alt="floor plan" /><button id="planClose">Close</button></div>
+    <div id="plan" hidden>
+      <div id="planBar">
+        <div class="tabs" role="tablist">
+          <button data-sheet="plan" role="tab">Plan</button>
+          <button data-sheet="lighting" role="tab">💡 Lighting</button>
+          <button data-sheet="finishes" role="tab">🎨 Finishes</button>
+        </div>
+        <select id="planLevel" title="Level"></select>
+        <div class="tabs">
+          <button id="planOut" title="Zoom out (−)">−</button>
+          <button id="planFit" title="Fit (0)">Fit</button>
+          <button id="planIn" title="Zoom in (+)">+</button>
+        </div>
+        <a id="planSvg" class="button" download>SVG</a>
+        <button id="planClose" title="Close (Esc)">✕</button>
+      </div>
+      <div id="planStage"><img id="planImg" alt="floor plan" draggable="false" /></div>
+      <div id="planHint" class="muted">drag to pan · wheel to zoom · 1 2 3 switch sheets · Esc closes</div>
+    </div>
     <div id="status"></div>
     <div id="walkHud" hidden>
       <div id="crosshair"></div>
