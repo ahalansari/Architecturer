@@ -41,7 +41,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch guide` | Authoring guide for AI agents: conventions, plus the material and furniture lists |
 | `arch init plan.json` | Starter plan |
 | `arch validate plan.json [--strict]` | Errors, layout warnings, stats (`--strict` fails on warnings) |
-| `arch plan plan.json --level ground [--sheet lighting\|finishes] -o plan.png` | 2D floor plan (`.svg` or `.png`). `--sheet lighting`: fixture symbols, estimated lux per room and a fixture legend. `--sheet finishes`: floors drawn in their material pattern, wall finish and accent bands, and a per-room finish schedule |
+| `arch plan plan.json --level ground [--sheet lighting\|finishes\|rcp\|false_ceiling] -o plan.png` | 2D floor plan (`.svg` or `.png`). `--sheet lighting`: fixture symbols, estimated lux per room and a fixture legend. `--sheet finishes`: floors drawn in their material pattern, wall finish and accent bands, and a per-room finish schedule. `--sheet rcp`: reflected ceiling plan. `--sheet false_ceiling`: false ceiling plan with every ceiling level tagged above FFL |
 | `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
 | `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png\|ktx2]` | Export; `.gltf` writes separate image files |
 | `arch serve plan.json` | Live viewer that reloads whenever the file is saved, with a first-person **walk mode** and 2D plan, lighting and finishes sheets (pan/zoom, per level, SVG download) |
@@ -126,16 +126,16 @@ Examples:
 - **117 furniture and decor types,** including wall art, gallery walls, plants, mirrors, vases, cushions, throws, lounge chairs, sideboards, beds, bathroom and kitchen accessories.
 - **Style presets** (`project.style`, `room.style`): scandinavian, japandi, modern_minimal, industrial, mid_century, classic, coastal, luxury, boho and farmhouse. A style fills every unset material by role (floors, walls, wood, upholstery, metal, stone, cabinetry...). Explicit choices always win.
 - **Design review:**
-  - `arch plan --sheet lighting` and `--sheet finishes` (MCP `render_plan` `sheet`) draw lighting and finishes plans. Light symbols also appear on the normal plan.
+  - `arch plan --sheet lighting|finishes|rcp|false_ceiling` (MCP `render_plan` `sheet`) draws lighting, finishes, reflected ceiling and false ceiling plans. Light symbols also appear on the normal plan.
   - `arch render --room Kitchen` gives an eye-level shot from a clear corner. `--elevation <wall> --elevation-room <room>` gives a square-on wall elevation.
   - The validator checks clearances, aisles, hob-under-window, cabinets over windows, pendant heights and unlit rooms.
 - **Showcase:** `examples/showcase_apartment.json`, a Japandi apartment that uses all of the above.
 
 ## Plans in the viewer
 
-The **Plans** section of the viewer panel opens the 2D sheets: **2D plan**, **💡 Lighting** and **🎨 Finishes**.
+The **Plans** section of the viewer panel opens the 2D sheets: **2D plan**, **💡 Lighting**, **🎨 Finishes**, **Reflected ceiling** and **False ceiling**.
 
-- Switch sheets with the tabs or the keys 1, 2 and 3, and pick the level from the dropdown.
+- Switch sheets with the tabs or the keys 1 to 5, and pick the level from the dropdown.
 - Drag to pan; zoom with the wheel, a double-click, + / − or Fit (0).
 - **SVG** downloads the sheet. The open sheet refreshes whenever the plan file is saved.
 

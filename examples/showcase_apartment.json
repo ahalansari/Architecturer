@@ -385,6 +385,7 @@
     {
      "id": "hall",
      "name": "Entry hall",
+     "ceilingHeight": 2.6,
      "polygon": [
       [
        0,
@@ -430,6 +431,7 @@
     {
      "id": "wc",
      "name": "Guest WC",
+     "ceilingHeight": 2.5,
      "polygon": [
       [
        3.2,
@@ -538,6 +540,7 @@
     {
      "id": "closet",
      "name": "Walk-in closet",
+     "ceilingHeight": 2.6,
      "polygon": [
       [
        9.6,
@@ -567,6 +570,7 @@
     {
      "id": "ensuite",
      "name": "En-suite bathroom",
+     "ceilingHeight": 2.5,
      "polygon": [
       [
        12.8,

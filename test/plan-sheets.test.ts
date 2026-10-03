@@ -84,3 +84,64 @@ test("lighting and finishes sheets render with legends", async () => {
   assert.ok(!plain.includes(">Fixtures<") && plain.includes(">door<"));
   for (const svg of [light, fin]) assert.ok((await svgToPng(svg)).length > 1000);
 });
+
+/** Three rooms: a tray-ceiling lounge, a lowered bathroom and a beamed kitchen under a 3.0 m level (slab 0.2). */
+function ceilings() {
+  return {
+    site: { ground: false },
+    levels: [
+      {
+        id: "g",
+        height: 3,
+        walls: [
+          { id: "ext", points: [[0, 0], [12, 0], [12, 5], [0, 5]], closed: true },
+          { id: "m1", points: [[5, 0], [5, 5]] },
+          { id: "m2", points: [[8, 0], [8, 5]] },
+        ],
+        openings: [
+          { id: "d1", type: "door", at: [5, 1] },
+          { id: "d2", type: "door", at: [8, 1] },
+        ],
+        rooms: [
+          { id: "lounge", name: "Lounge", polygon: [[0, 0], [5, 0], [5, 5], [0, 5]], finishes: { ceiling: { type: "tray", drop: 0.25, inset: 0.6 }, cornice: {} } },
+          { id: "bath", name: "Bath", polygon: [[5, 0], [8, 0], [8, 5], [5, 5]], ceilingHeight: 2.5, floorMaterial: "tiles_white" },
+          { id: "kit", name: "Kitchen", polygon: [[8, 0], [12, 0], [12, 5], [8, 5]], finishes: { ceiling: { type: "beams", spacing: 1.2 } } },
+        ],
+        lights: [{ id: "dl", type: "downlight", room: "Lounge", spacing: 2, margin: 1.5 }],
+      },
+    ],
+  };
+}
+
+test("the build records each room's ceiling layout (heights, soffit, cove, beams, void)", () => {
+  const c = compile(ceilings());
+  assert.ok(c.ok, c.errors.join("\n"));
+  const [lounge, bath, kit] = c.levels[0].ceilings;
+  assert.equal(lounge.type, "tray");
+  assert.equal(lounge.height, 2.8);
+  assert.equal(lounge.structure, 2.8);
+  assert.ok(Math.abs(lounge.soffit!.height - 2.55) < 1e-6 && lounge.soffit!.width === 0.6);
+  assert.ok(lounge.cove && lounge.cove.line.length === 4, "LED cove around the recess");
+  assert.ok(lounge.cornice);
+  assert.equal(bath.type, "flat");
+  assert.equal(bath.height, 2.5);
+  assert.equal(kit.type, "beams");
+  assert.ok(kit.beams.length >= 2 && kit.beams.every((b) => Math.abs(b.height - 2.6) < 1e-6));
+});
+
+test("reflected ceiling and false ceiling sheets", async () => {
+  const c = compile(ceilings());
+  const rcp = renderPlanSVG(c, "g", { sheet: "rcp" });
+  assert.ok(rcp.includes("reflected ceiling plan"));
+  assert.ok(rcp.includes("CH 2.80") && rcp.includes("CH 2.50"), "ceiling heights");
+  assert.ok(rcp.includes("tray, soffit 2.55 · LED cove"));
+  assert.ok(rcp.includes("url(#hatch_soffit)") && rcp.includes(">dl<"), "soffit hatch and fixture ids");
+  assert.ok(!rcp.includes("stroke-dasharray=\"3 2\""), "no door swings looking up");
+  const fcp = renderPlanSVG(c, "g", { sheet: "false_ceiling" });
+  assert.ok(fcp.includes("false ceiling plan"));
+  for (const t of ["FCL +2.80", "FCL +2.55", "FCL +2.50", "FCL +2.60"]) assert.ok(fcp.includes(t), t);
+  assert.ok(fcp.includes("void 0.30 m"), "bathroom void under the slab");
+  assert.ok(fcp.includes(">0.60<"), "soffit width dimension");
+  assert.ok(fcp.includes("Typical tray section"));
+  for (const svg of [rcp, fcp]) assert.ok((await svgToPng(svg)).length > 1000);
+});

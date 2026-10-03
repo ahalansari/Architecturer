@@ -188,7 +188,7 @@ export function materialTone(c: Compiled, name: string, cache = new Map<string, 
 }
 
 /** Human label for a material name: "wood_floor_oak" → "wood floor oak". */
-export const materialLabel = (name: string) => (name.startsWith("#") ? name : name.replace(/_/g, " "));
+export const materialLabel = (name: string) => (name.startsWith("#") ? `paint ${name}` : name.replace(/_/g, " "));
 
 /**
  * `<pattern>` filling a floor with its material drawn to scale: planks, herringbone, parquet, tile grids,

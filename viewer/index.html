@@ -48,6 +48,8 @@
           <button data-sheet="plan" title="2D floor plan with ids, door swings and furniture">2D plan</button>
           <button data-sheet="lighting" title="Light fixtures, estimated lux per room, fixture schedule">💡 Lighting</button>
           <button data-sheet="finishes" title="Floor materials, wall finishes and accent walls, finish schedule">🎨 Finishes</button>
+          <button data-sheet="rcp" title="Reflected ceiling plan: ceiling heights and materials, soffits, beams, coves, light fixtures">Reflected ceiling</button>
+          <button data-sheet="false_ceiling" title="False ceiling plan: ceiling levels above FFL, drops, LED coves, soffit dimensions, typical section">False ceiling</button>
         </div>
       </section>
       <section id="picked" hidden>
@@ -65,6 +67,8 @@
           <button data-sheet="plan" role="tab">Plan</button>
           <button data-sheet="lighting" role="tab">💡 Lighting</button>
           <button data-sheet="finishes" role="tab">🎨 Finishes</button>
+          <button data-sheet="rcp" role="tab" title="Reflected ceiling plan">RCP</button>
+          <button data-sheet="false_ceiling" role="tab">False ceiling</button>
         </div>
         <select id="planLevel" title="Level"></select>
         <div class="tabs">
@@ -76,7 +80,7 @@
         <button id="planClose" title="Close (Esc)">✕</button>
       </div>
       <div id="planStage"><img id="planImg" alt="floor plan" draggable="false" /></div>
-      <div id="planHint" class="muted">drag to pan · wheel to zoom · 1 2 3 switch sheets · Esc closes</div>
+      <div id="planHint" class="muted">drag to pan · wheel to zoom · 1–5 switch sheets · Esc closes</div>
     </div>
     <div id="status"></div>
     <div id="walkHud" hidden>

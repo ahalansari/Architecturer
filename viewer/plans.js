@@ -1,7 +1,7 @@
 // 2D plan sheets (plan / lighting / finishes) in a pan-and-zoom overlay, refreshed live on reload.
 
 const $ = (id) => document.getElementById(id);
-const SHEETS = ["plan", "lighting", "finishes"];
+const SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling"];
 const STORE = "architecturer.planSheet";
 
 export class PlanViewer {
@@ -38,7 +38,7 @@ export class PlanViewer {
     addEventListener("keydown", (e) => {
       if (this.root.hidden || e.target instanceof HTMLSelectElement) return;
       if (e.key === "Escape") this.close();
-      else if (e.key >= "1" && e.key <= "3") this.show(SHEETS[+e.key - 1]);
+      else if (e.key >= "1" && e.key <= String(SHEETS.length)) this.show(SHEETS[+e.key - 1]);
       else if (e.key === "+" || e.key === "=") this.zoomAt(1.25);
       else if (e.key === "-") this.zoomAt(0.8);
       else if (e.key === "0") this.fit();

@@ -669,7 +669,38 @@ function gridLines(a: number, b: number, spacing: number): number[] {
 // Build
 // ---------------------------------------------------------------------------
 
+/**
+ * What a room's ceiling looks like in plan (recorded by the build for the reflected-ceiling and false-ceiling
+ * sheets). Heights are nominal, above the level's slab top (≈ the finished floor).
+ */
+export interface CeilingLayout {
+  /** Index in level.rooms. */
+  room: number;
+  type: "flat" | "tray" | "coffered" | "beams" | "none";
+  /** Requested feature ceiling that did not fit (built flat instead). */
+  fallback?: "tray" | "coffered" | "beams";
+  material?: string;
+  /** Main ceiling height. */
+  height: number;
+  /** Underside of the structure above (slab soffit); height..structure is the ceiling void. */
+  structure: number;
+  /** Clear outline (wall faces) of the ceiling. */
+  outline: Vec2[];
+  holes: Vec2[][];
+  /** Lowered perimeter band: tray soffit or the coffered perimeter beam. */
+  soffit?: { outer: Vec2[]; inner: Vec2[]; height: number; width: number; material: string };
+  /** Hanging beams / coffer ribs (centrelines). */
+  beams: { a: Vec2; b: Vec2; width: number; height: number; material: string }[];
+  /** LED cove line around the tray step (closed). */
+  cove?: { line: Vec2[]; material: string };
+  cornice?: { depth: number; material: string };
+}
+
 export interface RoomFinishOptions {
+  /** Nominal ceiling height above the level (for the recorded layout). */
+  ceilingHeight: number;
+  /** Underside of the structure above, above the level. */
+  structureHeight: number;
   floorMaterial: string;
   /** false = no ceiling. */
   ceilingMaterial: string | false;
@@ -679,8 +710,8 @@ export interface RoomFinishOptions {
   ceilingHoles: Vec2[][];
 }
 
-/** Floor, ceiling and trims of a room that has `finishes`. */
-export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number, o: RoomFinishOptions) {
+/** Floor, ceiling and trims of a room that has `finishes`. Returns the ceiling as built. */
+export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number, o: RoomFinishOptions): CeilingLayout {
   const room = plan.rooms[ri];
   const fin = room.finishes!;
   const label = roomLabel(room, ri);
@@ -741,13 +772,23 @@ export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number,
   }
 
   // ---- ceiling ----
+  const H = o.ceilingHeight;
+  const toH = (zAbs: number) => Math.round((H - (o.ceilingZ - zAbs)) * 1000) / 1000;
+  const layout: CeilingLayout = { room: ri, type: "flat", height: H, structure: o.structureHeight, outline: clear, holes: o.ceilingHoles, beams: [] };
+  if (fin.cornice) layout.cornice = { depth: fin.cornice.depth, material: fin.cornice.material };
   if (o.ceilingMaterial === false) {
     if (fin.ceiling && fin.ceiling.type !== "flat") warn(`${label}: ceiling ${fin.ceiling.type} ignored because ceilingMaterial is false`);
     if (fin.cornice) runCornice(mb, plan, ri, fin, o.ceilingZ);
-    return;
+    layout.type = "none";
+    return layout;
   }
   const c = fin.ceiling ?? { type: "flat" as const };
   const cm = ("material" in c && c.material) || o.ceilingMaterial;
+  layout.material = cm;
+  const addBeam = (mat: string, p: Vec2, q: Vec2, w: number, zb: number) => {
+    beam(mb, mat, p, q, w, zb, o.ceilingZ);
+    if (v2.dist(p, q) >= 0.01) layout.beams.push({ a: p, b: q, width: w, height: toH(zb), material: mat });
+  };
   let corniceZ = o.ceilingZ;
   if (c.type === "tray") {
     const zS = o.ceilingZ - c.drop;
@@ -755,13 +796,17 @@ export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number,
     if (!inner || zS - floorZ < 2.0) {
       warn(`${label}: tray ceiling ${!inner ? `inset ${c.inset} m is too wide for the room` : `soffit at ${(zS - floorZ).toFixed(2)} m leaves too little headroom (< 2.0 m)`}; using a flat ceiling`);
       mb.flat(cm, poly, o.ceilingZ, true, o.ceilingHoles);
+      layout.fallback = "tray";
     } else {
       corniceZ = zS;
+      layout.type = "tray";
+      layout.soffit = { outer: clear, inner, height: toH(zS), width: c.inset, material: cm };
       mb.flat(cm, poly, zS, true, [inner]);
       if (c.coveLight) {
         // recessed slot at the top of the step with a glowing back (LED strip)
         const slotH = Math.min(0.07, c.drop * 0.4), slotD = 0.08;
         const back = offsetPolygon(inner, slotD);
+        layout.cove = { line: offsetPolygon(inner, slotD / 2), material: c.coveLight };
         innerWalls(mb, cm, inner, zS, o.ceilingZ - slotH);
         mb.flat(cm, back, o.ceilingZ - slotH, false, [inner]); // slot floor (seen from the cutaway)
         innerWalls(mb, c.coveLight, back, o.ceilingZ - slotH, o.ceilingZ);
@@ -779,7 +824,10 @@ export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number,
     if (!inner || zb - floorZ < 2.0 || c.spacing < bw * 2.5) {
       warn(`${label}: coffered ceiling does not fit (beams ${bw}×${bd} m, spacing ${c.spacing} m, headroom under beams ${(zb - floorZ).toFixed(2)} m); using a flat ceiling`);
       mb.flat(cm, poly, o.ceilingZ, true, o.ceilingHoles);
+      layout.fallback = "coffered";
     } else {
+      layout.type = "coffered";
+      layout.soffit = { outer: clear, inner, height: toH(zb), width: bw, material: bm };
       mb.flat(cm, poly, o.ceilingZ, true, o.ceilingHoles);
       // perimeter beam
       mb.flat(bm, poly, zb, true, [inner]);
@@ -791,19 +839,20 @@ export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number,
       // beams along x (continuous), beams along y split where they cross the x beams
       for (const y of yl) {
         const p0 = at(F.x0 - 1, y);
-        for (const [t0, t1] of clipToPolygon(p0, F.ex, F.x1 - F.x0 + 2, inner)) beam(mb, bm, v2.add(p0, v2.scale(F.ex, t0)), v2.add(p0, v2.scale(F.ex, t1)), bw, zb, o.ceilingZ);
+        for (const [t0, t1] of clipToPolygon(p0, F.ex, F.x1 - F.x0 + 2, inner)) addBeam(bm, v2.add(p0, v2.scale(F.ex, t0)), v2.add(p0, v2.scale(F.ex, t1)), bw, zb);
       }
       for (const x of xl) {
         const p0 = at(x, F.y0 - 1);
         const cuts = yl.map((y) => [y - F.y0 + 1 - bw / 2, y - F.y0 + 1 + bw / 2] as [number, number]);
         for (const [t0, t1] of clipToPolygon(p0, F.ey, F.y1 - F.y0 + 2, inner))
-          for (const [a, b] of subtract(t0, t1, cuts)) beam(mb, bm, v2.add(p0, v2.scale(F.ey, a)), v2.add(p0, v2.scale(F.ey, b)), bw, zb, o.ceilingZ);
+          for (const [a, b] of subtract(t0, t1, cuts)) addBeam(bm, v2.add(p0, v2.scale(F.ey, a)), v2.add(p0, v2.scale(F.ey, b)), bw, zb);
       }
     }
   } else if (c.type === "beams") {
     const bw = c.beamWidth ?? 0.14, bd = c.beamDepth ?? 0.2;
     const bm = c.beamMaterial ?? "wood_oak";
     const zb = o.ceilingZ - bd;
+    layout.type = "beams";
     mb.flat(cm, poly, o.ceilingZ, true, o.ceilingHoles);
     if (zb - floorZ < 2.0) warn(`${label}: beams hang down to ${(zb - floorZ).toFixed(2)} m above the floor (< 2.0 m headroom)`);
     const F = outlineFrame(clear);
@@ -816,12 +865,13 @@ export function buildRoomFinishes(mb: MeshBuilder, plan: FinishPlan, ri: number,
     for (const pos of gridLines(a0, a1, c.spacing)) {
       const p0 = v2.add(v2.scale(across, pos), v2.scale(run, r0 - 1));
       for (const [t0, t1] of clipToPolygon(p0, run, r1 - r0 + 2, clear))
-        beam(mb, bm, v2.add(p0, v2.scale(run, t0)), v2.add(p0, v2.scale(run, t1)), bw, zb, o.ceilingZ);
+        addBeam(bm, v2.add(p0, v2.scale(run, t0)), v2.add(p0, v2.scale(run, t1)), bw, zb);
     }
   } else {
     mb.flat(cm, poly, o.ceilingZ, true, o.ceilingHoles);
   }
   if (fin.cornice) runCornice(mb, plan, ri, fin, corniceZ);
+  return layout;
 }
 
 function runCornice(mb: MeshBuilder, plan: FinishPlan, ri: number, fin: Finishes, z: number) {

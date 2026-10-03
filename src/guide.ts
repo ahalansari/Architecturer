@@ -143,7 +143,9 @@ Call get_schema for every field; this guide covers conventions and good practice
    Most messages say exactly how to fix them (e.g. "move it 0.12 m south (to [4.5, 9.48])").
 3. render_plan for each level (ids, coordinates, door swings, furniture) to check the layout reads well.
    Interiors: render_plan sheet="lighting" (fixture layout, ~lux per room, aim for 100-300 lx in living spaces,
-   300+ over kitchen worktops) and sheet="finishes" (floor patterns, wall finish and accent bands, finish schedule).
+   300+ over kitchen worktops), sheet="finishes" (floor patterns, wall finish and accent bands, finish schedule),
+   sheet="rcp" (reflected ceiling plan: heights, materials, soffits, beams, coves, fixtures) and sheet="false_ceiling"
+   (ceiling levels above FFL; lower service rooms with room.ceilingHeight, e.g. bathrooms 2.4-2.5 for a services void).
 4. render_view: iso plus a cutaway per level (level=<id>); close-ups with focus=[x, y] (+ radius, zoom).
 5. export_model to .glb (engine "unity"/"godot" adds merged meshes + colliders; textureFormat "ktx2" for the
    smallest, GPU-compressed textures). Y-up, meters; furniture and door

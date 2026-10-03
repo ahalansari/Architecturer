@@ -7,6 +7,7 @@ import { caseworkPlan, resolveLevelCasework } from "../elements/casework.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
+import { ceilingLevels, dimension, fcpRoom, fmtH, levelKey, levelTag, rcpRoom, traySection } from "./plan-ceilings.js";
 import { floorPattern, levelFixtures, LUX_BANDS, luxFill, lightSymbol, materialLabel, materialTone, roomFinishBands, roomLux, type PlanFixture, type Tone } from "./plan-sheets.js";
 
 export interface PlanOptions {
@@ -18,11 +19,15 @@ export interface PlanOptions {
    * plan (default): construction plan with small light symbols.
    * lighting: reflected-ceiling style lighting layout: fixture symbols, rooms tinted by estimated lux, legend.
    * finishes: floors drawn in their material and pattern, wall finish / accent bands, finish schedule per room, legend.
+   * rcp: reflected ceiling plan: ceiling materials and heights, soffits, coffers, beams, coves, cornices, ceiling
+   *   openings and light fixtures, no furniture.
+   * false_ceiling: suspended-ceiling setting-out: ceiling levels colour-coded and tagged above the finished floor,
+   *   drop edges, LED coves, soffit dimensions, void depth, typical section.
    */
   sheet?: PlanSheet;
 }
 
-export const PLAN_SHEETS = ["plan", "lighting", "finishes"] as const;
+export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling"] as const;
 export type PlanSheet = (typeof PLAN_SHEETS)[number];
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -226,6 +231,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const info: LevelInfo = c.levels[li];
   const labels = opts.labels ?? true;
   const sheet = opts.sheet ?? "plan";
+  /** Ceiling sheets look up: no furniture, stairs or door swings. */
+  const ceilingSheet = sheet === "rcp" || sheet === "false_ceiling";
   const fixtures: PlanFixture[] = c.root ? levelFixtures(c, lv) : [];
   const tones = new Map<string, Tone>();
   const D = project.defaults;
@@ -262,7 +269,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const S = opts.scale ?? Math.max(20, Math.min(80, Math.round(1100 / span)));
   const pad = 50;
   const W0 = (maxX - minX) * S + pad * 2;
-  const LEGEND_W = sheet === "plan" ? 0 : 250;
+  const LEGEND_W = sheet === "plan" ? 0 : 260;
   const W = W0 + LEGEND_W;
   let H = (maxY - minY) * S + pad * 2 + 30;
   const X = (x: number) => +(pad + (x - minX) * S).toFixed(2);
@@ -298,11 +305,14 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       floorDefs.join("") +
       `<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/></marker>` +
       `<marker id="arrow_dn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/></marker>` +
+      `<pattern id="hatch_soffit" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#7d7d7d" stroke-width="0.6"/></pattern>` +
+      `<pattern id="hatch_open" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(-45)"><rect width="10" height="10" fill="#f6f6f6"/><line x1="0" y1="0" x2="0" y2="10" stroke="#c8c8c8" stroke-width="0.8"/></pattern>` +
+      `<pattern id="hatch_slab" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect width="5" height="5" fill="#e4e4e4"/><line x1="0" y1="0" x2="0" y2="5" stroke="#999" stroke-width="0.6"/></pattern>` +
       `<pattern id="hatch_overhead" patternUnits="userSpaceOnUse" width="${hatchStep}" height="${hatchStep}" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${hatchStep}" stroke="#b07a45" stroke-width="1"/></pattern>` +
       `</defs>`,
   );
   out.push(`<rect width="100%" height="100%" fill="#ffffff"/>`);
-  const sheetTitle = sheet === "lighting" ? " — lighting plan" : sheet === "finishes" ? " — finishes plan" : "";
+  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan" }[sheet];
   out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)}${sheetTitle} (z=${info.elevation.toFixed(2)} m)</text>`);
 
   // grid with coordinates every meter (labels every `step` meters)
@@ -326,7 +336,22 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 
   // rooms
   const lux = lv.rooms.map((r) => roomLux(r.polygon as Vec2[], fixtures));
+  const ceilDraw = { px, S, fs };
+  const levelFills = ceilingLevels(info.ceilings);
+  const ceilTags: { at: Vec2; text: string }[] = [];
   lv.rooms.forEach((r, i) => {
+    const cl = info.ceilings[i];
+    if (ceilingSheet && cl) {
+      // the room polygon (wall centrelines) under the walls, then the ceiling inside the wall faces
+      out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="#ffffff" stroke="none"/>`);
+      if (sheet === "rcp") out.push(rcpRoom(ceilDraw, cl, (m) => materialTone(c, m, tones)));
+      else {
+        const f = fcpRoom(ceilDraw, cl, levelFills);
+        out.push(f.svg);
+        ceilTags.push(...f.tags);
+      }
+      return;
+    }
     const fill =
       sheet === "finishes" ? floorFill.get(r.floorMaterial ?? D.floorMaterial) : sheet === "lighting" ? luxFill(lux[i].lux) : ROOM_COLORS[i % ROOM_COLORS.length];
     out.push(`<polygon points="${poly(r.polygon as Vec2[])}" fill="${fill}" stroke="none"/>`);
@@ -336,7 +361,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 
   // stairs arriving from below: the stairwell, with the flight seen through it (light) and a DN arrow
   const stairSoft: Box[] = [];
-  for (const a of arriving) {
+  for (const a of ceilingSheet ? [] : arriving) {
     out.push(`<polygon points="${poly(a.plan.hole)}" fill="#f2f2f2" stroke="none"/>`);
     for (const t of a.plan.treads) out.push(line(t[0], t[1], `stroke="#b8b8b8" stroke-width="1"`));
     for (const h of a.plan.parts) out.push(`<polygon points="${poly(h)}" fill="none" stroke="#c4c4c4" stroke-width="1"/>`);
@@ -360,7 +385,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   }
 
   // stairs starting on this level: outline, treads, walking line with UP arrow
-  for (const { s, plan } of ownStairs) {
+  for (const { s, plan } of ceilingSheet ? [] : ownStairs) {
     for (const p of plan.parts) out.push(`<polygon points="${poly(p)}" fill="#ffffff" stroke="none"/>`);
     for (const t of plan.treads) out.push(line(t[0], t[1], `stroke="#888" stroke-width="1"`));
     for (const p of plan.parts) out.push(`<polygon points="${poly(p)}" fill="none" stroke="#555" stroke-width="1.5"/>`);
@@ -402,7 +427,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   });
   furn.sort((a, b) => (a.flat === b.flat ? a.top - b.top || a.i - b.i : a.flat ? -1 : 1));
   const furnSoft: Box[] = [];
-  for (const { f, t, flat } of furn) {
+  for (const { f, t, flat } of ceilingSheet ? [] : furn) {
     const w = f.width ?? t?.defaults.width ?? 1, dpt = f.depth ?? t?.defaults.depth ?? 1;
     const rot = deg2rad(f.rotation ?? (f.facing ? { south: 0, east: 90, north: 180, west: 270 }[f.facing] : 0));
     const c0 = f.position as Vec2;
@@ -434,6 +459,12 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 
   // casework runs: worktops, base/tall units solid (tall ones crossed), wall cabinets dashed, sink/hob symbols
   for (const cp of resolveLevelCasework(project, li, info).filter((r) => r.legs.length).map(caseworkPlan)) {
+    if (ceilingSheet) {
+      // only what reaches up towards the ceiling: tall units and wall cabinets, as dashed outlines
+      for (const it of cp.items.filter((i) => i.row === "tall" || i.row === "upper"))
+        out.push(`<polygon points="${poly(it.poly)}" fill="none" stroke="#7a6f60" stroke-width="0.8" stroke-dasharray="4 3"/>`);
+      continue;
+    }
     for (const it of cp.items.filter((i) => i.row === "worktop")) out.push(`<polygon points="${poly(it.poly)}" fill="#f3efe7" stroke="#7d7466" stroke-width="1"/>`);
     for (const it of cp.items.filter((i) => i.row === "base" || i.row === "tall")) {
       out.push(`<polygon points="${poly(it.poly)}" fill="${it.row === "tall" ? "#e6e2da" : "none"}" stroke="#5b5348" stroke-width="1.2"/>`);
@@ -543,6 +574,9 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     openingSoft.push(pxBox([at(u0, -half), at(u1, -half), at(u1, half), at(u0, half)]));
     if (o.op.type === "window") {
       for (const w of [-half + 0.01, 0, half - 0.01]) out.push(line(at(u0, w), at(u1, w), `stroke="#3b82c4" stroke-width="1.5"`));
+    } else if (o.op.type === "door" && ceilingSheet) {
+      // looking up: the door head across the opening
+      for (const w of [-half + 0.01, half - 0.01]) out.push(line(at(u0, w), at(u1, w), `stroke="#777" stroke-width="0.8"`));
     } else if (o.op.type === "door") {
       const toward = (o.op.swing === "in") === (s.interiorSide === "left") ? 1 : -1;
       const leaves: { hinge: number; len: number }[] =
@@ -582,7 +616,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const terraceRails = lv.terraces.flatMap((t, i) =>
     terraceGuardLines[i].lines.map((l) => ({ ...l, id: undefined as string | undefined, style: terraceGuardLines[i].guard === "parapet" ? "solid" : t.railingStyle })),
   );
-  for (const r of [...lv.railings, ...terraceRails]) {
+  for (const r of ceilingSheet ? [] : [...lv.railings, ...terraceRails]) {
     const ptsR = [...(r.points as Vec2[]), ...(r.closed ? [r.points[0] as Vec2] : [])];
     const pl = poly(ptsR);
     if (r.style === "glass") {
@@ -640,16 +674,25 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         if (!wallMats.has(b.material) || b.accent) wallMats.set(b.material, { accent: b.accent || !!wallMats.get(b.material)?.accent });
       }
 
-  // light fixtures and lamps (lighting sheet: full size with ids; plan: small, no labels)
-  const fr = sheet === "lighting" ? Math.max(5, Math.min(10, S * 0.13)) : Math.max(3, Math.min(6, S * 0.08));
+  // false ceiling: level tags on soffits / beams
+  for (const t of ceilTags) out.push(levelTag(ceilDraw, t.at, t.text, levelFills.get(levelKey(+t.text)) ?? "#ffffff"));
+
+  // light fixtures and lamps (lighting sheet / RCP: full size with ids; plan: small, no labels;
+  // false ceiling: the cut-outs, faded; ceiling sheets skip free-standing lamps)
+  const bigFixtures = sheet === "lighting" || ceilingSheet;
+  const fr = bigFixtures ? Math.max(5, Math.min(10, S * 0.13)) : Math.max(3, Math.min(6, S * 0.08));
   const fixtureSyms = fixtures.filter((f) => sheet === "lighting" || !f.lamp);
+  const fixtureSoft: Box[] = fixtureSyms.map((f) => {
+    const [x, y] = px(f.at);
+    return { x0: x - fr, y0: y - fr, x1: x + fr, y1: y + fr };
+  });
   if (fixtureSyms.length) {
-    out.push(`<g${sheet === "finishes" ? ` opacity="0.55"` : ""}>`);
+    out.push(`<g${sheet === "finishes" ? ` opacity="0.55"` : sheet === "false_ceiling" ? ` opacity="0.6"` : ""}>`);
     // paths first so point symbols stay on top
     for (const f of [...fixtureSyms].sort((a, b) => Number(!!b.points) - Number(!!a.points))) out.push(lightSymbol(f, px, fr, S));
     out.push(`</g>`);
   }
-  if (sheet === "lighting" && labels) {
+  if ((sheet === "lighting" || sheet === "rcp") && labels) {
     const seen = new Set<string>();
     for (const f of fixtures) {
       if (!f.id || f.lamp || seen.has(f.id)) continue;
@@ -677,6 +720,32 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       const ri = lv.rooms.indexOf(r as (typeof lv.rooms)[number]);
       const lm = ri >= 0 ? lux[ri] : roomLux(r.polygon as Vec2[], fixtures);
       return lm.lumens > 0 ? [{ text: `≈ ${Math.round(lm.lux)} lx · ${Math.round(lm.lumens).toLocaleString("en-US")} lm`, size: small, color: "#8a5a00", bold: true }] : [{ text: "no lighting", size: small, color: "#b33" }];
+    }
+    const ci = lv.rooms.indexOf(r as (typeof lv.rooms)[number]);
+    const cl = ci >= 0 ? info.ceilings[ci] : undefined;
+    if (ceilingSheet && !cl) return [{ text: "open to the sky", size: small, color: "#777" }];
+    if (sheet === "rcp" && cl) {
+      if (cl.type === "none") return [{ text: "no ceiling (exposed soffit)", size: small, color: "#777" }];
+      const lines: LabelLine[] = [{ text: `CH ${cl.height.toFixed(2)} · ${materialLabel(cl.material!)}`, size: small, color: "#1d4f86", bold: true }];
+      if (cl.type === "tray") lines.push({ text: `tray, soffit ${cl.soffit!.height.toFixed(2)}${cl.cove ? " · LED cove" : ""}`, size: small, color: col });
+      if (cl.type === "coffered") lines.push({ text: `coffered, ribs ${cl.beams[0]?.height.toFixed(2) ?? cl.soffit!.height.toFixed(2)}`, size: small, color: col });
+      if (cl.type === "beams") lines.push({ text: `${cl.beams.length} beams ${materialLabel(cl.beams[0]?.material ?? "")}, under ${cl.beams[0]?.height.toFixed(2)}`, size: small, color: col });
+      if (cl.fallback) lines.push({ text: `${cl.fallback} did not fit: flat`, size: small, color: "#b33" });
+      if (cl.cornice) lines.push({ text: `cornice ${materialLabel(cl.cornice.material)}`, size: small, color: "#666" });
+      return lines;
+    }
+    if (sheet === "false_ceiling" && cl) {
+      if (cl.type === "none") return [{ text: "no false ceiling", size: small, color: "#777" }];
+      const voidD = cl.structure - cl.height;
+      const lines: LabelLine[] = [{ text: `FCL ${fmtH(cl.height)}`, size: fs - 1, color: "#1d4f86", bold: true }];
+      if (cl.soffit && cl.type === "tray") {
+        const q = cl.soffit.inner;
+        const w = Math.max(...q.map((p) => p[0])) - Math.min(...q.map((p) => p[0])), h = Math.max(...q.map((p) => p[1])) - Math.min(...q.map((p) => p[1]));
+        lines.push({ text: `recess ${w.toFixed(2)} × ${h.toFixed(2)} m, drop ${(cl.height - cl.soffit.height).toFixed(2)}`, size: small, color: col });
+      }
+      if (cl.type === "coffered" || cl.type === "beams") lines.push({ text: `${cl.type} drop ${(cl.height - (cl.beams[0]?.height ?? cl.soffit?.height ?? cl.height)).toFixed(2)}`, size: small, color: col });
+      lines.push({ text: voidD > 0.005 ? `void ${voidD.toFixed(2)} m · ${materialLabel(cl.material!)}` : `on slab soffit · ${materialLabel(cl.material!)}`, size: small, color: "#666" });
+      return lines;
     }
     if (sheet === "finishes" && "floorMaterial" in r) {
       const f = r.finishes;
@@ -714,11 +783,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         { text: `${polygonArea(pg).toFixed(1)} m²`, size: fs - 2, color: "#555" },
         ...roomExtra(r),
       ],
-      plate: sheet === "finishes" ? "#fffffff0" : undefined,
+      plate: sheet === "finishes" || ceilingSheet ? "#fffffff0" : undefined,
       prio: 0,
       cands,
       within: pgPx,
-      soft: [...furnSoft, ...stairSoft],
+      soft: [...furnSoft, ...stairSoft, ...(bigFixtures ? fixtureSoft : [])],
       softWeight: 0.08,
     });
   });
@@ -767,10 +836,10 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       if (sub) lg.push(`<text x="${x0 + 34}" y="${y + 16}" font-size="9.5" fill="#666">${esc(sub)}</text>`);
       y += sub ? 30 : 22;
     };
-    if (sheet === "lighting") {
+    const fixtureLegend = (list: PlanFixture[]) => {
       head("Fixtures");
       const types = new Map<string, { n: number; lm: number; k: Set<number>; sample: PlanFixture }>();
-      for (const f of fixtures) {
+      for (const f of list) {
         const key = f.lamp ? `lamp: ${f.type.replace(/_/g, " ")}` : f.type.replace(/_/g, " ");
         const e = types.get(key) ?? { n: 0, lm: 0, k: new Set<number>(), sample: f };
         e.n++;
@@ -788,10 +857,55 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         const kel = [...e.k].sort().map((v) => `${v} K`).join("/");
         row(sym, `${k} × ${e.n}`, `${Math.round(e.lm).toLocaleString("en-US")} lm${kel ? " · " + kel : ""}`);
       }
-      const total = fixtures.reduce((a, f) => a + f.lumens, 0);
+      const total = list.reduce((a, f) => a + f.lumens, 0);
       y += 4;
       lg.push(`<text x="${x0}" y="${y}" font-size="11" font-weight="bold" fill="#222">Total ${Math.round(total).toLocaleString("en-US")} lm</text>`);
       y += 26;
+    };
+    const cls = info.ceilings.filter(Boolean);
+    if (sheet === "rcp") {
+      head("Ceilings");
+      const mats = [...new Set(cls.filter((cl) => cl.type !== "none").map((cl) => cl.material!))];
+      for (const m of mats) {
+        const t = materialTone(c, m, tones);
+        row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="${t.fill}" fill-opacity="0.55" stroke="#999" stroke-width="0.6"/>`, materialLabel(m));
+      }
+      if (cls.some((cl) => cl.soffit && cl.type === "tray")) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="url(#hatch_soffit)" stroke="#555" stroke-width="0.8"/>`, "lowered soffit (tray)");
+      const bm = cls.find((cl) => cl.beams.length)?.beams[0];
+      if (bm) row(`<rect x="${x0 + 2}" y="${y - 3}" width="24" height="6" fill="${materialTone(c, bm.material, tones).fill}" stroke="#6b5a45" stroke-width="0.8"/>`, "beam / coffer rib");
+      if (cls.some((cl) => cl.cove)) row(`<line x1="${x0 + 2}" y1="${y}" x2="${x0 + 26}" y2="${y}" stroke="#f2b632" stroke-width="2" stroke-dasharray="6 3"/>`, "LED cove");
+      if (cls.some((cl) => cl.cornice)) row(`<line x1="${x0 + 2}" y1="${y}" x2="${x0 + 26}" y2="${y}" stroke="#8a8a8a" stroke-width="0.8"/>`, "cornice line");
+      if (cls.some((cl) => cl.holes.length)) row(`<rect x="${x0 + 4}" y="${y - 7}" width="20" height="14" fill="#fff" stroke="#555"/><path d="M ${x0 + 4} ${y - 7} L ${x0 + 24} ${y + 7} M ${x0 + 24} ${y - 7} L ${x0 + 4} ${y + 7}" stroke="#999" stroke-width="0.8"/>`, "opening in the ceiling");
+      if (cls.some((cl) => cl.type === "none")) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="url(#hatch_open)" stroke="#999" stroke-width="0.6"/>`, "no ceiling");
+      row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="none" stroke="#7a6f60" stroke-width="0.8" stroke-dasharray="4 3"/>`, "tall / wall cabinets");
+      lg.push(`<text x="${x0}" y="${y}" font-size="9" fill="#777">CH = ceiling height above the finished floor</text>`);
+      y += 22;
+      fixtureLegend(fixtures.filter((f) => !f.lamp));
+    } else if (sheet === "false_ceiling") {
+      head("Ceiling levels (above FFL)");
+      for (const [h, fill] of levelFills) {
+        const mains = cls.filter((cl) => cl.type !== "none" && levelKey(cl.height) === h).length;
+        row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="${fill}" stroke="#1d4f86" stroke-width="0.6"/>`, `FCL +${h}`, mains ? `${mains} room${mains > 1 ? "s" : ""}` : "soffits / drops");
+      }
+      if (cls.some((cl) => cl.type === "none")) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="url(#hatch_open)" stroke="#999" stroke-width="0.6"/>`, "no false ceiling");
+      y += 4;
+      head("Symbols");
+      row(`<line x1="${x0 + 2}" y1="${y}" x2="${x0 + 26}" y2="${y}" stroke="#1d4f86" stroke-width="1.6"/>`, "drop edge (level change)");
+      if (cls.some((cl) => cl.cove)) row(`<line x1="${x0 + 2}" y1="${y}" x2="${x0 + 26}" y2="${y}" stroke="#f2b632" stroke-width="2" stroke-dasharray="6 3"/>`, "LED cove");
+      row(levelTag({ px: (p) => p, S: 1, fs: 13 }, [x0 + 14, y], "+2.45"), "level tag");
+      row(dimension({ px: (p) => p, S: 1, fs: 12 }, [x0 + 2, y + 4], [x0 + 26, y + 4], ""), "soffit width (m)");
+      if (cls.some((cl) => cl.holes.length)) row(`<rect x="${x0 + 4}" y="${y - 7}" width="20" height="14" fill="#fff" stroke="#555"/><path d="M ${x0 + 4} ${y - 7} L ${x0 + 24} ${y + 7} M ${x0 + 24} ${y - 7} L ${x0 + 4} ${y + 7}" stroke="#999" stroke-width="0.8"/>`, "opening in the ceiling");
+      if (fixtures.some((f) => !f.lamp)) row(lightSymbol({ type: "downlight", lamp: false, at: [x0 + 14, y], rotZ: 0, lumens: 0, heads: [] }, (p) => p, 7, 1), "fixture cut-outs (see RCP)");
+      const tray = cls.find((cl) => cl.type === "tray" && cl.soffit);
+      if (tray) {
+        y += 6;
+        head("Typical tray section");
+        const ts = traySection(x0, y - 6, LEGEND_W - 24, tray);
+        lg.push(ts.svg);
+        y += ts.height + 8;
+      }
+    } else if (sheet === "lighting") {
+      fixtureLegend(fixtures);
       head("Estimated average illuminance");
       for (const b of LUX_BANDS) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" fill="${b.fill}" stroke="#999" stroke-width="0.6"/>`, b.label);
       lg.push(`<text x="${x0}" y="${y + 2}" font-size="9" fill="#777">lumens in the room × ${0.5} / floor area</text>`);

@@ -6,7 +6,7 @@ import { buildStair, COLLIDER, type StairResult } from "./elements/stairs.js";
 import { buildTerrace } from "./elements/terraces.js";
 import { buildShape, shapeFootprint } from "./elements/shapes.js";
 import { addLampLight, buildLights, checkUnlitRooms } from "./elements/lighting.js";
-import { buildRoomFinishes, prepareFinishes } from "./elements/finishes.js";
+import { buildRoomFinishes, prepareFinishes, type CeilingLayout } from "./elements/finishes.js";
 import { buildCasework, levelCaseCtx } from "./elements/casework.js";
 import { buildWallSegment, expandWalls, resolveJoins, splitJunctions, type WallSegment } from "./elements/walls.js";
 import { deg2rad, ensureCCW, offsetPolygon, polygonArea, type Vec2 } from "./geometry/math.js";
@@ -23,6 +23,8 @@ export interface LevelInfo {
   openings: PlacedOpening[];
   stairOutlines: Vec2[][];
   stairs: (StairResult & { id: string; target: number })[];
+  /** Room ceilings as built (one per room, same order as level.rooms). */
+  ceilings: CeilingLayout[];
 }
 
 export interface BuildOutput {
@@ -181,14 +183,18 @@ export function buildProject(project: Project): BuildOutput {
     const roomsNode = node("rooms", "group");
     const nextSlab = li + 1 < project.levels.length ? slabT(project.levels[li + 1]) : T;
     const ceilingH = lv.ceilingHeight ?? lv.height - nextSlab;
+    const ceilings: CeilingLayout[] = [];
     lv.rooms.forEach((r, i) => {
       const mb = new MeshBuilder();
       const poly = r.polygon as Vec2[];
       const roomHoles = holes.filter((h) => h.every((p) => insideLoose(p, poly)));
       // stairwells only cut the room floor if they're on this level's slab (arriving stairs)
+      const structure = lv.height - nextSlab;
       if (r.finishes) {
         const ch = r.ceilingHeight ?? ceilingH;
-        buildRoomFinishes(mb, finishPlan, i, {
+        ceilings[i] = buildRoomFinishes(mb, finishPlan, i, {
+          ceilingHeight: ch,
+          structureHeight: structure,
           floorMaterial: r.floorMaterial ?? D.floorMaterial,
           ceilingMaterial: r.ceilingMaterial === false ? false : r.ceilingMaterial ?? D.ceilingMaterial,
           ceilingZ: z + ch - 0.01,
@@ -201,6 +207,13 @@ export function buildProject(project: Project): BuildOutput {
         // stairs going up from this room need a hole in the ceiling too
         const up = stairOutlines.filter((h) => h.every((p) => insideLoose(p, poly)));
         mb.flat(r.ceilingMaterial ?? D.ceilingMaterial, poly, z + ch - 0.01, true, up);
+      }
+      if (!r.finishes) {
+        const ch = r.ceilingHeight ?? ceilingH;
+        const up = stairOutlines.filter((h) => h.every((p) => insideLoose(p, poly)));
+        ceilings[i] = r.ceilingMaterial === false
+          ? { room: i, type: "none", height: ch, structure, outline: poly, holes: up, beams: [] }
+          : { room: i, type: "flat", material: r.ceilingMaterial ?? D.ceilingMaterial, height: ch, structure, outline: poly, holes: up, beams: [] };
       }
       roomsNode.children.push(node(r.id ?? r.name.replace(/\W+/g, "_"), "room", mb, { id: r.id, room: r.name, floorZ: z + FLOOR_FINISH, area: Math.round((polygonArea(poly) - roomHoles.reduce((a, h) => a + polygonArea(h), 0)) * 100) / 100 }));
     });
@@ -313,7 +326,7 @@ export function buildProject(project: Project): BuildOutput {
         (n) => n.meshes.length || n.children.length,
       ),
     );
-    infos.push({ id: lv.id, name: lv.name ?? lv.id, elevation: z, height: lv.height, segments: segs, openings: placed, stairOutlines, stairs: stairInfos });
+    infos.push({ id: lv.id, name: lv.name ?? lv.id, elevation: z, height: lv.height, segments: segs, openings: placed, stairOutlines, stairs: stairInfos, ceilings });
   });
 
   // ---- site ----
