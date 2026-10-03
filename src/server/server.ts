@@ -104,6 +104,21 @@ export async function serve(planPath: string, opts: { port: number; textureSize?
         res.end(glb);
         return;
       }
+      if (url.pathname === "/estimate.html" || url.pathname === "/estimate.csv") {
+        if (!c.root) return void res.writeHead(422).end(c.errors.join("\n"));
+        const { estimate } = await import("../cost/estimate.js");
+        const fmt = await import("../cost/format.js");
+        const bill = estimate(c);
+        const csv = url.pathname.endsWith(".csv");
+        const body = csv ? fmt.billCsv(bill) : fmt.billHtml(bill);
+        res.writeHead(200, {
+          "content-type": csv ? "text/csv; charset=utf-8" : "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          ...(csv ? { "content-disposition": 'attachment; filename="cost_estimate.csv"' } : {}),
+        });
+        res.end(body);
+        return;
+      }
       if (url.pathname === "/plan.svg") {
         const sheet = url.searchParams.get("sheet") || "plan";
         if (!(PLAN_SHEETS as readonly string[]).includes(sheet)) return void res.writeHead(400).end(`sheet must be one of ${PLAN_SHEETS.join(", ")}`);
