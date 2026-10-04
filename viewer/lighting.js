@@ -9,6 +9,10 @@ import * as THREE from "three";
  * src/elements/lighting.ts) they are scaled by 0.02 so ~150 lux reads as a well-lit room with
  * ACES tone mapping at exposure 1. Only a few lights near the camera cast shadows (each point-light
  * shadow is six extra renders, and every shadow map costs a texture unit).
+ *
+ * Every visible light adds uniforms to every material's shader, and big plans have more lamps than WebGL
+ * allows (MAX_FRAGMENT_UNIFORM_VECTORS): at night a pool of the lamps that matter most from the camera is
+ * on, re-picked as you move. The pool size per light type stays fixed, so shaders never recompile.
  */
 const NIGHT_EXPOSURE = 0.02;
 const MAX_SHADOWS = 4;
@@ -23,7 +27,11 @@ export class DayNight {
     this.brightness = 1;
     this.model = null;
     this.lights = [];
+    this.active = new Set();
     this.frame = 0;
+    // ~6 uniform vectors per spot light, ~4 per point light, plus the material's own ~250
+    const maxVec = renderer.capabilities?.maxFragmentUniforms ?? 1024;
+    this.budget = Math.max(8, Math.min(48, Math.floor((maxVec - 300) / 6)));
     this.shadowSet = "";
     this.day = null; // saved day settings
     this.buildUI();
@@ -68,7 +76,10 @@ export class DayNight {
     this.ui.querySelectorAll("button[data-mode]").forEach((b) => (b.style.borderColor = b.dataset.mode === this.mode ? "var(--accent)" : ""));
     this.ui.querySelectorAll("[data-night]").forEach((el) => (el.style.display = this.mode === "night" ? "" : "none"));
     const c = this.ui.querySelector("[data-count]");
-    if (c) c.textContent = this.lights.length ? `${this.lights.length} lights · ${Math.min(MAX_SHADOWS, this.lights.filter((l) => l.userData.light?.castShadow).length)} with shadows` : "no lights in this plan";
+    if (c)
+      c.textContent = this.lights.length
+        ? `${this.lights.length} lights${this.lights.length > this.budget ? ` · the ${this.budget} nearest on (browser limit; 📷 Photo uses all)` : ""} · ${Math.min(MAX_SHADOWS, this.lights.filter((l) => l.userData.light?.castShadow).length)} with shadows`
+        : "no lights in this plan";
   }
 
   setMode(mode) {
@@ -132,12 +143,35 @@ export class DayNight {
       s.background = this.day.bg;
       if (s.fog && this.day.fog) s.fog.color.copy(this.day.fog);
     }
-    for (const l of this.lights) {
-      l.visible = night;
-      l.intensity = (l.userData.cd ?? 1) * NIGHT_EXPOSURE * this.brightness;
-    }
+    for (const l of this.lights) l.intensity = (l.userData.cd ?? 1) * NIGHT_EXPOSURE * this.brightness;
+    this.activeKey = "";
+    this.updateActive(true);
     this.shadowSet = "";
     if (night) this.updateShadows(true);
+  }
+
+  /** How much a light matters from the camera: candela over distance². */
+  score(l) {
+    const p = l.getWorldPosition(new THREE.Vector3());
+    return (l.userData.cd ?? 1) / Math.max(0.5, p.distanceToSquared(this.camera.position));
+  }
+
+  /** Switch on the pool: per type, the same count every time (so shaders keep their light count). */
+  updateActive(force) {
+    const night = this.mode === "night";
+    const points = this.lights.filter((l) => !l.isSpotLight), spots = this.lights.filter((l) => l.isSpotLight);
+    const total = points.length + spots.length;
+    let on = new Set(this.lights);
+    if (total > this.budget) {
+      const kp = Math.round((this.budget * points.length) / total), ks = this.budget - kp;
+      const pick = (ls, k) => ls.map((l) => ({ l, s: this.score(l) })).sort((a, b) => b.s - a.s).slice(0, k).map((x) => x.l);
+      on = new Set([...pick(points, kp), ...pick(spots, ks)]);
+    }
+    const key = night ? [...on].map((l) => l.uuid).join() : "day";
+    if (!force && key === this.activeKey) return;
+    this.activeKey = key;
+    this.active = on;
+    for (const l of this.lights) l.visible = night && on.has(l);
   }
 
   /** Give shadows to the few castShadow lights that matter most from where the camera is. */
@@ -145,7 +179,7 @@ export class DayNight {
     const cam = this.camera.position;
     const p = new THREE.Vector3();
     const ranked = this.lights
-      .filter((l) => l.userData.light?.castShadow)
+      .filter((l) => l.userData.light?.castShadow && this.active.has(l))
       .map((l) => {
         l.getWorldPosition(p);
         return { l, score: (l.userData.cd ?? 1) / Math.max(1, p.distanceToSquared(cam)) };
@@ -180,6 +214,9 @@ export class DayNight {
       this.apply();
       this.updateUI();
     }
-    if (this.mode === "night" && ++this.frame % 30 === 0) this.updateShadows(false);
+    if (this.mode === "night" && ++this.frame % 30 === 0) {
+      this.updateActive(false);
+      this.updateShadows(false);
+    }
   }
 }

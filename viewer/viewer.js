@@ -17,7 +17,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xbfd6ea);
@@ -355,9 +355,10 @@ new EventSource("events").addEventListener("reload", () => {
   loadModel(true).catch((e) => setStatus(String(e)));
 });
 
-const clock = new THREE.Clock();
+const timer = new THREE.Timer();
 renderer.setAnimationLoop(() => {
-  const dt = clock.getDelta();
+  timer.update();
+  const dt = timer.getDelta();
   if (walk.active) walk.update(dt);
   else controls.update();
   for (const f of frameHooks) f(Math.min(dt, 0.1));
