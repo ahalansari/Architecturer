@@ -54,7 +54,13 @@ fn pcg(v: u32) -> u32 {
   let w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
   return (w >> 22u) ^ w;
 }
-fn rnd() -> f32 { rng = pcg(rng); return f32(rng >> 8u) * (1.0 / 16777216.0); }
+// PCG: a full-period LCG step, hashed on output (iterating the hash itself falls into short cycles for
+// some seeds, and those pixels repeat the same few paths every sample: black specks)
+fn rnd() -> f32 {
+  rng = rng * 747796405u + 2891336453u;
+  let w = ((rng >> ((rng >> 28u) + 4u)) ^ rng) * 277803737u;
+  return f32(((w >> 22u) ^ w) >> 8u) * (1.0 / 16777216.0);
+}
 
 struct Hit { t: f32, tri: u32, u: f32, v: f32 };
 
@@ -265,11 +271,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       let nt = textureSampleLevel(normTex, samp, sf.uv, i32(m.extra.x), lod).xyz * 2.0 - 1.0;
       let tg = normalize(sf.t - n * dot(sf.t, n) + vec3f(1e-7));
       let bt = cross(n, tg) * sf.tsign;
-      let nn = normalize(tg * nt.x * m.extra.y + bt * nt.y * m.extra.y + n * max(nt.z, 0.05));
+      var nn = normalize(tg * nt.x * m.extra.y + bt * nt.y * m.extra.y + n * max(nt.z, 0.05));
+      // bumps tilt the normal at most ~35°: steeper and paths leak under the surface (dark speckles)
+      let c0 = dot(nn, n);
+      if (c0 < 0.82) { nn = normalize(n * 0.82 + normalize(nn - n * c0 + vec3f(1e-7)) * 0.572); }
       if (dot(nn, sf.ng) > 0.05) { n = nn; }
     }
-    if (bounce == 0u) { firstAlbedo = albedo; firstN = n; firstT = h.t; }
     let v = -rd;
+    // at grazing angles a bumped / interpolated normal can face away from the eye, and the surface would
+    // reflect nothing at all (black specks): bend it back into view
+    let nv0 = dot(n, v);
+    if (nv0 < 0.05) { n = normalize(n + v * (0.05 - nv0) * 1.02); }
+    if (bounce == 0u) { firstAlbedo = albedo; firstN = n; firstT = h.t; }
     // emission (lamp diffusers): seen directly or in a mirror; lamps light the room through the light list
     if (bounce == 0u || specLast) { rad += thr * m.emit.rgb * P.emitScale; }
     // glass: reflect or pass straight through (thin panes, no refraction offset)
@@ -339,7 +352,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       l = bs * vec3f(r * cos(ph), r * sin(ph), sqrt(max(0.0, 1.0 - r * r)));
       specLast = false;
     }
-    if (dot(l, sf.ng) <= 0.0 || dot(l, n) <= 0.0) { break; }
+    // a bumped normal can send the sample under the real surface: mirror it back above
+    if (dot(l, sf.ng) <= 0.0) { l = l - 2.0 * dot(l, sf.ng) * sf.ng; }
+    if (dot(l, n) <= 0.0) { break; }
     // pdf of the mixture
     let hv = normalize(v + l);
     let a = max(rough * rough, 0.006);
@@ -357,6 +372,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
   }
   if (any(rad != rad)) { rad = vec3f(0.0); }
+  // debug views: 1 = first-hit albedo, 2 = first-hit normal, 3 = number of passes
+  if (P.pad == 1u) { rad = firstAlbedo * 1000.0; }
+  if (P.pad == 2u) { rad = (firstN * 0.5 + 0.5) * 1000.0; }
+  if (P.pad == 3u) { rad = vec3f(f32(passes) * 100.0, f32(bounce) * 100.0, 0.0); }
   // w: luminance² for the per-pixel variance the denoiser uses
   let lr = dot(rad, vec3f(0.2126, 0.7152, 0.0722));
   accum[pix] += vec4f(rad, lr * lr);
@@ -380,7 +399,17 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let ap = aux[i * 2u] / D.frames; let np = normalize(aux[i * 2u + 1u].xyz + vec3f(1e-6));
   let cp = src[i].rgb;
   let lp = lum(cp);
-  let sigma = D.sigmaL * sqrt(max(src[i].w, 0.0)) + 1e-4;
+  // noise level from the 3×3 neighbourhood (SVGF): a pixel whose samples all came out the same (often all
+  // zero in dim corners) has no variance of its own but is just as noisy as its neighbours
+  var vn = 0.0; var nn = 0.0;
+  for (var y = -1; y <= 1; y++) {
+    for (var x = -1; x <= 1; x++) {
+      let xx = i32(gid.x) + x; let yy = i32(gid.y) + y;
+      if (xx < 0 || yy < 0 || xx >= i32(D.width) || yy >= i32(D.height)) { continue; }
+      vn += max(src[u32(yy) * D.width + u32(xx)].w, 0.0); nn += 1.0;
+    }
+  }
+  let sigma = D.sigmaL * sqrt(max(vn / max(nn, 1.0), max(src[i].w, 0.0))) + 1e-4;
   var K = array<f32, 3>(0.375, 0.25, 0.0625);
   var sum = vec3f(0.0); var wsum = 0.0; var vsum = 0.0;
   for (var dy = -2; dy <= 2; dy++) {
@@ -559,6 +588,7 @@ export class PathTracer {
     pf[40] = o.emitScale ?? 800;
     pf[41] = o.clampIndirect ?? 6e4;
     pu[42] = (o.seed ?? 1) >>> 0;
+    pu[43] = o.debug ?? 0;
     const bg = d.createBindGroup({
       layout: this.trace.getBindGroupLayout(0),
       entries: [

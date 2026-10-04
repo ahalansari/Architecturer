@@ -34,6 +34,8 @@ export interface ViewOptions {
   time?: string;
   date?: string;
   exposure?: number;
+  /** Path tracer: false skips the denoiser (debugging, or very high sample counts). */
+  denoise?: boolean;
 }
 
 /** A view ready to render: what to draw, from where, and how (shared by the CPU and GPU renderers). */

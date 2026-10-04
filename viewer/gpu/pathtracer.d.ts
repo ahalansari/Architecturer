@@ -23,6 +23,7 @@ export interface PTRender {
   clampIndirect?: number;
   seed?: number;
   denoise?: boolean;
+  debug?: number;
   denoiseIterations?: number;
   onProgress?: (done: number, total: number) => void;
   signal?: AbortSignal;

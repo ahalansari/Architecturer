@@ -246,6 +246,8 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
     sun: env.sun,
     sky: env.sky,
     emitScale: 1500,
+    denoise: o.denoise,
+    debug: Number(process.env.PT_DEBUG_VIEW ?? 0),
   });
   // night and dusk keep their mood: expose a little under the average
   const ev = (o.exposure ?? 0) + (mode === "night" ? -1.3 : mode === "dusk" ? -0.6 : 0);
