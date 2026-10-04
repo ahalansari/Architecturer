@@ -199,7 +199,7 @@ export function sunPosition(date = "03-21", time = "10:30", where = KUWAIT): { d
  * Preetham et al. (1999) daylight sky for a sun direction and turbidity (Kuwait: hazy, ~3.5): Perez coefficients
  * for Y, x, y, the zenith xyY (Y in cd/m²) and each channel's F(0, θs), packed for the path tracer's uniforms.
  */
-export function preethamSky(sunDir: Vec3, T = 3.5): number[] | undefined {
+export function preethamSky(sunDir: Vec3, T = 4.5): number[] | undefined {
   const ts = Math.acos(Math.max(-1, Math.min(1, sunDir[2])));
   if (sunDir[2] < 0.02) return undefined;
   const Y = [0.1787 * T - 1.463, -0.3554 * T + 0.4275, -0.0227 * T + 5.3251, 0.1206 * T - 2.5771, -0.067 * T + 0.3703];

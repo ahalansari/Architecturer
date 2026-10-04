@@ -84,7 +84,7 @@ const OUTPUT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, i
 const WEB: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
 const PREFIX: Record<string, string> = {
-  walls: "wall", openings: "", rooms: "room", slabs: "slab", stairs: "stair", furniture: "", columns: "column", railings: "railing", terraces: "terrace", roofs: "roof",
+  walls: "wall", openings: "", rooms: "room", slabs: "slab", stairs: "stair", furniture: "", columns: "column", railings: "railing", terraces: "terrace", roofs: "roof", screens: "screen", pergolas: "pergola",
 };
 
 /** Give new elements ids so they can be edited later. */

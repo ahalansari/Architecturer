@@ -31,6 +31,9 @@ export const TEXTURE_PATTERNS = [
   "fluted",
   "microcement",
   "grasscloth",
+  "palm_frond",
+  "leaf_cluster",
+  "palm_bark",
 ] as const;
 export type TexturePattern = (typeof TEXTURE_PATTERNS)[number];
 

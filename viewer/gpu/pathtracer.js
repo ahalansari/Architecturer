@@ -207,7 +207,7 @@ fn basis(n: vec3f) -> mat3x3f {
 // transmittance towards a light: passes glass, stops at anything else
 fn shadow(p: vec3f, d: vec3f, dist: f32) -> vec3f {
   var o = p; var left = dist; var T = vec3f(1.0);
-  for (var k = 0; k < 6; k++) {
+  for (var k = 0; k < 16; k++) {
     let h = intersect(o, d, left);
     if (h.tri == NOHIT) { return T; }
     let m = mats[u32(tris[h.tri * 3u].w)];
@@ -215,8 +215,10 @@ fn shadow(p: vec3f, d: vec3f, dist: f32) -> vec3f {
       // lamp diffusers and shades do not shadow their own lamp
     } else if (m.color.w >= 0.99) {
       if (m.emit.w <= 0.0) { return vec3f(0.0); }
-      // alpha-tested cut-outs (foliage): treat as half-blocking
-      T *= 0.5;
+      // alpha-tested cut-outs (leaves, fronds): blocked only where the texture is solid
+      if (m.pbr.z < 0.0) { return vec3f(0.0); }
+      let sf = surface(o, d, h);
+      if (textureSampleLevel(baseTex, samp, sf.uv, i32(m.pbr.z), 1.0).a >= m.emit.w) { return vec3f(0.0); }
     } else {
       T *= mix(vec3f(1.0), m.color.rgb, m.color.w) * (1.0 - 0.4 * m.color.w);
     }

@@ -45,6 +45,7 @@ function def(name: string, pattern: TexturePattern, description: string, o: Opts
     normalStrength: o.normalStrength ?? 1,
     ...(o.emissive ? { emissive: o.emissive } : {}),
     ...(o.doubleSided ? { doubleSided: true } : {}),
+    ...(o.alphaCutoff ? { alphaCutoff: o.alphaCutoff } : {}),
     ...(o.params ? { params: o.params } : {}),
   };
   DESCRIPTIONS[name] = description;
@@ -159,6 +160,10 @@ def("emissive_light", "none", "Glowing lamp / bulb / light panel (emissive)", { 
 
 // --- Exterior / landscape -----------------------------------------------------------------
 def("grass", "grass", "Lawn grass (top-down)", { roughness: 0.95, scale: 1.0 });
+def("palm_frond", "palm_frond", "Date-palm frond card (leaflets cut out of the card)", { roughness: 0.65, scale: 1, doubleSided: true, alphaCutoff: 0.5, normalStrength: 0.3 });
+def("olive_leaves", "leaf_cluster", "Olive foliage card: narrow silver-green leaves", { roughness: 0.7, scale: 1, doubleSided: true, alphaCutoff: 0.5, normalStrength: 0.3 });
+def("leaves_green", "leaf_cluster", "Broadleaf foliage card (shade trees, shrubs)", { roughness: 0.7, scale: 1, doubleSided: true, alphaCutoff: 0.5, normalStrength: 0.3, params: { style: "broad" } });
+def("palm_bark", "palm_bark", "Date-palm trunk: diamond leaf-base scars", { roughness: 0.9, scale: 1.0 });
 def("plant_green", "grass", "Leafy plant foliage (bushes, hedges, house plants)", { roughness: 0.8, scale: 0.4, doubleSided: true, params: { base: "#4d8a3a", blades: 9000 } });
 def("gravel", "gravel", "Loose gravel / pebbles", { roughness: 0.9, scale: 1.0 });
 def("grass_artificial", "grass", "Artificial grass (even, bright)", { roughness: 0.75, scale: 0.6, params: { base: "#4f9a36", blades: 14000 } });
@@ -314,6 +319,9 @@ def("wood_chevron_light", "chevron", "Pale oak chevron parquet", { roughness: 0.
 def("vinyl_plank_gray", "wood_planks", "Gray luxury vinyl plank (LVT)", { roughness: 0.45, scale: 1.2, normalStrength: 0.4, params: { wood: "#a39d95", contrast: 0.5 } });
 def("cork", "gravel", "Natural cork (floors, pin boards)", { roughness: 0.9, scale: 0.3, normalStrength: 0.6, params: { stones: 400, base: "#b48a5e" } });
 
+def("stone_wet_dark", "stone", "Dark stone, wet (water walls): glossy charcoal with a faint texture", { roughness: 0.12, scale: 1.2, normalStrength: 0.8, color: "#3a3c3e" });
+def("travertine_slabs", "tiles", "Honed travertine slabs 120 × 60 cm, staggered, fine joints (paving and cladding)", { roughness: 0.5, scale: 2.4, normalStrength: 0.5, params: { cols: 2, rows: 4, offset: 0.5, groutWidth: 0.0025, tile: "#dfcfb2", grout: "#c9b796", variation: 1.4 } });
+def("limestone_slabs", "tiles", "Pale limestone slabs 120 × 60 cm, staggered, fine joints (paving and cladding)", { roughness: 0.6, scale: 2.4, normalStrength: 0.5, params: { cols: 2, rows: 4, offset: 0.5, groutWidth: 0.0025, tile: "#e7dfcf", grout: "#d2c8b4", variation: 1.1 } });
 def("travertine", "marble", "Beige travertine (honed, banded)", { roughness: 0.45, scale: 2.0, normalStrength: 0.6, params: { base: "#dccbad", vein: "#b9a17c", veins: 0.25 } });
 def("travertine_silver", "marble", "Silver / gray travertine", { roughness: 0.45, scale: 2.0, normalStrength: 0.6, params: { base: "#c9c4b9", vein: "#9b968c", veins: 0.25 } });
 def("marble_calacatta", "marble", "Calacatta marble: white with bold gray-gold veins", { roughness: 0.15, scale: 2.4, params: { base: "#f3f1ec", vein: "#a69477", veins: 0.8 } });
@@ -430,6 +438,9 @@ const PATTERN_DEFAULT: Record<TexturePattern, string> = {
   fluted: "slats_oak",
   microcement: "microcement_gray",
   grasscloth: "grasscloth_natural",
+  palm_frond: "palm_frond",
+  leaf_cluster: "olive_leaves",
+  palm_bark: "palm_bark",
 };
 
 function clone(m: MaterialDef, name: string): MaterialDef {

@@ -190,6 +190,17 @@ Call get_schema for every field; this guide covers conventions and good practice
   fixture its pressure and hot wait (red when low / slow). Fix slow hot water by moving the heater (level.plumbing
   water_heater) nearer the outlets; fix stacks that do not line up by stacking the bathrooms.
 
+## Courtyards and facades (photographic exteriors)
+- level.screens: slatted timber along a line — {points, base, height, direction: "vertical" (fins) | "horizontal"
+  (louvres), slat {width, depth, gap}, offset, material "wood_teak"}: facade screens, privacy, sun shading.
+- level.pergolas: {polygon, height 2.8, slat {width, depth, gap}, direction (deg), posts true | [[x, y]...] | false,
+  material}: striped shade over seating, terraces, car ports.
+- Plants are cut-out leaf cards with real silhouettes and shadows: tree kind "palm" (date palm, height 5–8, width
+  4–5), "olive" (2.5–3.5 m), "deciduous" (shade tree), bush; options.seed varies the shape.
+- furniture water_wall: wet dark-stone panel, water sheet, basin with a warm LED line.
+- Cladding / paving: travertine_slabs, limestone_slabs (120 × 60 staggered, fine joints); garden paving can take them
+  as material. Light it: uplights at palm bases, strips under benches and steps (level.lights), lighting "golden".
+
 ## Gardens and irrigation (level.gardens, project.landscape)
 - level.gardens: [{polygon, surface: "lawn"|"turf"|"planting"|"gravel"|"mulch"|"paving"|"sand", irrigation: true}]
   outside the rooms (roof gardens on an upper level work too). Plants are furniture: tree (options.kind "palm" |

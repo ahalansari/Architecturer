@@ -88,7 +88,7 @@ export const DEFAULT_RATES: Record<string, number> = {
   "struct:timber_floor": 25, "wall:block_100": 4.5, "wall:block_150": 5.5, "wall:block_200": 6.5, "wall:block_insulated_200": 9,
   "wall:cement_plaster": 2.2, "wall:render_external": 3.5, "wall:drywall": 9, "wall:glass_partition": 60, "wall:timber_stud": 14,
   "roof:waterproofing": 4, "roof:insulation": 4, "roof:screed_tiles": 7, "roof:tiles": 12, "floor:screed": 2.5,
-  "railing:glass": 95, "railing:bars": 60, "railing:solid": 40,
+  "screen:slats": 45, "pergola:timber": 55, "railing:glass": 95, "railing:bars": 60, "railing:solid": 40,
   // doors & windows
   "door:single": 140, "door:double": 260, "door:sliding": 320, "door:glass": 220, "door:garage": 650, "door:front": 380, "door:opening": 35,
   window: 105, "treatment:curtains": 22, "treatment:sheers": 15, "treatment:roman": 18, "treatment:roller": 18, "treatment:venetian": 20, "treatment:shutters": 45,
@@ -253,6 +253,7 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
   const points = new Map<string, number>(), fixtures = new Map<string, number>(), sanitary = new Map<string, number>(), pipes = new Map<string, number>();
   let circuits = 0, stacks = 0, heaters = 0, drains = 0, inlets = 0, firstFix = 0;
   const railings = new Map<string, number>(), decks = new Map<string, number>();
+  let screensM2 = 0, pergolaM2 = 0;
   const furniture = new Map<string, { qty: number; product?: Product; type: string }>();
   const joinery = sec("E", "Built-in joinery & kitchens");
 
@@ -370,6 +371,8 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
       decks.set(m, (decks.get(m) ?? 0) + polygonArea(t.polygon as Vec2[]));
     }
     for (const r of lv.railings) railings.set(r.style, (railings.get(r.style) ?? 0) + polyLen(r.points as Vec2[]));
+    for (const sc of lv.screens) screensM2 += polyLen(sc.points as Vec2[]) * sc.height;
+    for (const pg of lv.pergolas) pergolaM2 += Math.abs(polygonArea(pg.polygon as Vec2[]));
     // ---- furniture ----
     for (const f of lv.furniture) {
       if (SKIP.has(f.type)) continue;
@@ -625,10 +628,12 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
     }
   }
 
-  if (decks.size || railings.size) {
+  if (decks.size || railings.size || screensM2 || pergolaM2) {
     const I = sec("I", "Terraces & outdoor");
     for (const [m, a] of decks) add(I, { description: `Terrace deck: ${label(m)}`, qty: a, unit: "m²", rate: rate(`floor:${m}`, `floor:${pattern(m)}`), basis: "measured", key: `floor:${pattern(m)}` });
     for (const [st, m] of railings) add(I, { description: `Balustrade: ${st}`, qty: m, unit: "m", rate: rate(`railing:${st}`), basis: "measured", key: `railing:${st}` });
+    if (screensM2) add(I, { description: "Slatted timber screens / louvres (hardwood, oiled) on steel brackets", qty: screensM2, unit: "m²", rate: rate("screen:slats"), basis: "measured", key: "screen:slats" });
+    if (pergolaM2) add(I, { description: "Timber pergola: posts, perimeter beams and slats, oiled, on footings", qty: pergolaM2, unit: "m²", rate: rate("pergola:timber"), basis: "measured", key: "pergola:timber" });
   }
 
   // ---- K. lifts (the shaft walls are in the structure, as RC walls) ----

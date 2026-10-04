@@ -210,7 +210,7 @@ function buildMips(t: TextureSet): MipTex | null {
       base[o] = lin2srgb8(SRGB2LIN[t.baseColor[o]] * f);
       base[o + 1] = lin2srgb8(SRGB2LIN[t.baseColor[o + 1]] * f);
       base[o + 2] = lin2srgb8(SRGB2LIN[t.baseColor[o + 2]] * f);
-      base[o + 3] = 255;
+      base[o + 3] = t.baseColor[o + 3]; // keep coverage for cut-outs
     }
   }
   const sizes = [s0];
@@ -228,7 +228,7 @@ function buildMips(t: TextureSet): MipTex | null {
           dst[o + c] = lin2srgb8(
             0.25 * (SRGB2LIN[src[i0 + c]] + SRGB2LIN[src[i1 + c]] + SRGB2LIN[src[i2 + c]] + SRGB2LIN[src[i3 + c]]),
           );
-        dst[o + 3] = 255;
+        dst[o + 3] = (src[i0 + 3] + src[i1 + 3] + src[i2 + 3] + src[i3 + 3] + 2) >> 2;
       }
     sizes.push(d);
     data.push(dst);
@@ -292,6 +292,8 @@ interface Mat {
   /** Thin fabric (lamp shades, curtains): artificial light also shows through from behind. */
   translucent: boolean;
   tex: MipTex | null;
+  /** Alpha-tested cut-outs (leaves, fronds): texels below this are not drawn. */
+  alphaCut: number;
 }
 
 /** A mesh in world space (transformed copy when its node has a pivot). */
@@ -692,6 +694,14 @@ function rasterTri(ia: number, ib: number, ic: number, mode: number, mat: Mat, g
         const dudx = (dUdx - u * dQdx) * iq, dvdx = (dVdx - v * dQdx) * iq;
         const dudy = (dUdy - u * dQdy) * iq, dvdy = (dVdy - v * dQdy) * iq;
         const rho2 = Math.max(dudx * dudx + dvdx * dvdx, dudy * dudy + dvdy * dvdy) * tsz2;
+        if (mat.alphaCut > 0) {
+          // cut-out: nearest texel of the base level
+          const sz = tex.sizes[0];
+          let tx = Math.floor(u * sz) % sz, ty = Math.floor(v * sz) % sz;
+          if (tx < 0) tx += sz;
+          if (ty < 0) ty += sz;
+          if (tex.data[0][(ty * sz + tx) * 4 + 3] < mat.alphaCut * 255) continue;
+        }
         sampleTex(tex, u, v, rho2 > 1 ? 0.5 * Math.log2(rho2) : 0);
         ar *= sR; ag *= sG; ab *= sB;
       }
@@ -1212,6 +1222,7 @@ export function renderScene(
       transparent: opacity < 0.999,
       translucent: def?.pattern === "fabric" && (def?.metalness ?? 0) < 0.5,
       tex: tex ? getMips(tex) : null,
+      alphaCut: def?.alphaCutoff ?? 0,
     };
     matCache.set(name, m);
     return m;

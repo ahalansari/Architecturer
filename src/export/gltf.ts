@@ -95,7 +95,7 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
     if (tex) {
       let t = textures.get(tex);
       if (!t) {
-        const alpha = def.opacity < 1;
+        const alpha = def.opacity < 1 || !!def.alphaCutoff;
         // JPEG artifacts would show up as bumps in normal maps, so those stay lossless
         t = {
           base: image(`${name}_basecolor`, tex.size, tex.baseColor, alpha, "color"),
@@ -113,7 +113,8 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
     } else {
       m.setBaseColorFactor([lin[0], lin[1], lin[2], def.opacity]).setRoughnessFactor(def.roughness).setMetallicFactor(def.metalness);
     }
-    if (def.opacity < 1) m.setAlphaMode("BLEND");
+    if (def.alphaCutoff) m.setAlphaMode("MASK").setAlphaCutoff(def.alphaCutoff).setDoubleSided(true);
+    else if (def.opacity < 1) m.setAlphaMode("BLEND");
     if (def.emissive) m.setEmissiveFactor(def.emissive.map(srgbToLinear) as [number, number, number]);
     mats.set(name, m);
     return m;

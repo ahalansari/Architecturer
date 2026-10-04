@@ -138,6 +138,8 @@ interface Canvas {
   cavityRadius: number;
   /** Optional per-pixel metalness added to the material's (metallic inks). */
   metal?: Float32Array;
+  /** Coverage 0..1 for cut-out materials (foliage); absent = opaque. */
+  alpha?: Float32Array;
 }
 
 function makeCanvas(size: number, seed: number): Canvas {
@@ -1888,6 +1890,123 @@ const paintGrasscloth: Painter = (c, p) => {
   c.cavityRadius = 0.006;
 };
 
+// ---------------------------------------------------------------------------
+// Foliage cut-outs (alpha-tested cards): one card = one tile, u along / v across
+// ---------------------------------------------------------------------------
+
+/** Stamp a tapered leaf from (u0, v0) towards angle `ang` (radians in image space), length / width in tile units. */
+function leaf(c: Canvas, u0: number, v0: number, ang: number, len: number, wid: number, col: RGB, vein: RGB, tipCurl = 0) {
+  const { size } = c;
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  const x0 = Math.floor((Math.min(u0, u0 + dx * len) - wid) * size), x1 = Math.ceil((Math.max(u0, u0 + dx * len) + wid) * size);
+  const y0 = Math.floor((Math.min(v0, v0 + dy * len) - wid) * size), y1 = Math.ceil((Math.max(v0, v0 + dy * len) + wid) * size);
+  for (let y = Math.max(0, y0); y <= Math.min(size - 1, y1); y++)
+    for (let x = Math.max(0, x0); x <= Math.min(size - 1, x1); x++) {
+      const pu = (x + 0.5) / size - u0, pv = (y + 0.5) / size - v0;
+      const t = (pu * dx + pv * dy) / len;
+      if (t < 0 || t > 1) continue;
+      // a slight curl at the tip
+      const off = pu * -dy + pv * dx - tipCurl * t * t * len;
+      const half = wid * Math.pow(Math.sin(Math.PI * Math.min(1, 0.08 + t)), 0.7) * (1 - 0.35 * t);
+      if (Math.abs(off) > half) continue;
+      const i = y * size + x;
+      const edge = Math.abs(off) / Math.max(half, 1e-6);
+      const mid = edge < 0.12 ? 1 : 0;
+      const shade = 0.82 + 0.25 * (1 - edge) + 0.1 * t;
+      setCol(c, i, (mid ? vein[0] : col[0]) * shade, (mid ? vein[1] : col[1]) * shade, (mid ? vein[2] : col[2]) * shade);
+      c.alpha![i] = 1;
+      c.h[i] = (1 - edge) * 0.002;
+    }
+}
+
+/** Date-palm frond: the rachis along u with stiff leaflets in a V on both sides, longest mid-frond. */
+const paintPalmFrond: Painter = (c, p) => {
+  const leafCol = p.color(["base", "leaf"], hex("#7c8c58"));
+  const rachisCol = p.color("rachis", hex("#b0a467"));
+  const dry = p.num("dry", 0.08, 0, 1);
+  c.alpha = new Float32Array(c.n);
+  for (let i = 0; i < c.n; i++) setCol(c, i, leafCol[0], leafCol[1], leafCol[2]);
+  c.cavity = 0;
+  const s = c.seed ^ 331;
+  let k = 0;
+  // narrow stiff leaflets with gaps between them (each half of the card is one side of the frond)
+  for (let u = 0.06; u < 0.97; u += 0.019) {
+    const shape = Math.pow(Math.sin(Math.PI * Math.min(1, u * 1.05)), 0.7);
+    for (const side of [-1, 1]) {
+      k++;
+      const len = 0.62 * shape * (0.85 + rnd(k, 1, s) * 0.2);
+      const ang = side * (0.95 + rnd(k, 2, s) * 0.15);
+      const tone = 0.85 + rnd(k, 3, s) * 0.3;
+      const brown = rnd(k, 4, s) < dry ? 1 : 0;
+      const col: RGB = brown ? [0.55 * tone, 0.47 * tone, 0.3 * tone] : [leafCol[0] * tone, leafCol[1] * tone, leafCol[2] * tone];
+      leaf(c, u, 0.5, ang, len, 0.0055 + 0.0025 * shape, col, [col[0] * 1.15, col[1] * 1.12, col[2] * 1.05]);
+    }
+  }
+  // rachis on top
+  for (let x = 0; x < c.size; x++) {
+    const u = (x + 0.5) / c.size;
+    if (u > 0.98) continue;
+    const w = 0.004 + 0.016 * (1 - u);
+    for (let y = Math.floor((0.5 - w) * c.size); y <= Math.ceil((0.5 + w) * c.size); y++) {
+      const i = y * c.size + x;
+      setCol(c, i, rachisCol[0], rachisCol[1], rachisCol[2]);
+      c.alpha[i] = 1;
+      c.h[i] = 0.003;
+    }
+  }
+};
+
+/** A spray of small leaves around the card's centre (olive by default; style broad: rounder, greener). */
+const paintLeafCluster: Painter = (c, p) => {
+  const broad = p.str("style", "olive") === "broad";
+  const top = p.color(["base", "leaf"], broad ? hex("#4d7a2e") : hex("#7f9168"));
+  const under = p.color("under", broad ? hex("#6f9440") : hex("#a8b49a"));
+  const twig = p.color("twig", hex("#6a5a46"));
+  const n = p.int("leaves", broad ? 46 : 70, 4, 400);
+  c.alpha = new Float32Array(c.n);
+  for (let i = 0; i < c.n; i++) setCol(c, i, top[0], top[1], top[2]);
+  c.cavity = 0;
+  const s = c.seed ^ 517;
+  // twigs from the centre
+  for (let k = 0; k < 7; k++) {
+    const a = rnd(k, 9, s) * Math.PI * 2;
+    leaf(c, 0.5, 0.5, a, 0.3 + rnd(k, 10, s) * 0.12, 0.006, twig, twig);
+  }
+  for (let k = 0; k < n; k++) {
+    const r = Math.pow(rnd(k, 1, s), 0.6) * 0.4;
+    const a = rnd(k, 2, s) * Math.PI * 2;
+    const cu = 0.5 + Math.cos(a) * r, cv = 0.5 + Math.sin(a) * r;
+    const ang = a + (rnd(k, 3, s) - 0.5) * 1.6;
+    const len = broad ? 0.09 + rnd(k, 4, s) * 0.06 : 0.1 + rnd(k, 4, s) * 0.06;
+    const wid = broad ? 0.028 + rnd(k, 5, s) * 0.012 : 0.012 + rnd(k, 5, s) * 0.006;
+    const flip = rnd(k, 6, s) < 0.35;
+    const tone = 0.8 + rnd(k, 7, s) * 0.35;
+    const col = flip ? under : top;
+    leaf(c, cu, cv, ang, len, wid, [col[0] * tone, col[1] * tone, col[2] * tone], [col[0] * tone * 1.1, col[1] * tone * 1.1, col[2] * tone * 1.05], (rnd(k, 8, s) - 0.5) * 0.3);
+  }
+};
+
+/** Date-palm trunk: rows of diamond leaf-base scars. */
+const paintPalmBark: Painter = (c, p) => {
+  const base = p.color("base", hex("#7a6a55"));
+  const rows = p.int("rows", 7, 2, 40), cols = p.int("cols", 5, 2, 40);
+  const noise = fbm(c, 8, 8, 4, 401);
+  for (let y = 0; y < c.size; y++)
+    for (let x = 0; x < c.size; x++) {
+      const i = y * c.size + x;
+      const v = ((y + 0.5) / c.size) * rows;
+      const row = Math.floor(v);
+      const u = ((x + 0.5) / c.size) * cols + (row % 2) * 0.5;
+      const fu = u - Math.floor(u) - 0.5, fv = v - row - 0.5;
+      const d = Math.abs(fu) * 1.6 + Math.abs(fv);
+      const ridge = Math.max(0, 1 - d);
+      const tone = 0.7 + ridge * 0.45 + noise[i] * 0.12;
+      setCol(c, i, base[0] * tone, base[1] * tone, base[2] * tone);
+      c.h[i] = ridge * 0.01;
+      c.ao[i] = 0.75 + ridge * 0.25;
+    }
+};
+
 const PAINTERS: Record<TexturePattern, Painter> = {
   none: paintNone,
   brick: paintBrick,
@@ -1920,6 +2039,9 @@ const PAINTERS: Record<TexturePattern, Painter> = {
   fluted: paintFluted,
   microcement: paintMicrocement,
   grasscloth: paintGrasscloth,
+  palm_frond: paintPalmFrond,
+  leaf_cluster: paintLeafCluster,
+  palm_bark: paintPalmBark,
 };
 
 // ---------------------------------------------------------------------------
@@ -2001,7 +2123,7 @@ export function generateTextures(mat: MaterialDef, size = 512): TextureSet {
     baseColor[k] = Math.round(clamp01(c.col[i * 3] * tint[0] * bake) * 255);
     baseColor[k + 1] = Math.round(clamp01(c.col[i * 3 + 1] * tint[1] * bake) * 255);
     baseColor[k + 2] = Math.round(clamp01(c.col[i * 3 + 2] * tint[2] * bake) * 255);
-    baseColor[k + 3] = alpha;
+    baseColor[k + 3] = c.alpha ? Math.round(clamp01(c.alpha[i]) * alpha) : alpha;
     orm[k] = Math.round(ao * 255);
     orm[k + 1] = Math.round(clamp(rough0 + c.rough[i], 0.02, 1) * 255);
     orm[k + 2] = c.metal ? Math.round(clamp01(metal / 255 + c.metal[i]) * 255) : metal;

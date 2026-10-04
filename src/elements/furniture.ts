@@ -1968,7 +1968,9 @@ function buildPlanter(mb: MeshBuilder, s: FurnitureSpec) {
 
 function buildBush(mb: MeshBuilder, s: FurnitureSpec) {
   const { width: w, depth: d, height: h } = s;
-  foliage(mb, s.materials.foliage, 0, 0, 0, w, d, h, 7, Math.round(w * 101 + h * 37), 10, true);
+  const rnd = rng(Math.round(w * 101 + h * 37 + Number(s.options.seed ?? 0) * 7919));
+  const size = clamp(Math.min(w, h) * 0.45, 0.25, 0.7);
+  leafClump(mb, s.materials.leaves, [0, 0, h * 0.5], [w * 0.42, d * 0.42, h * 0.45], Math.round(clamp(w * d * h * 30, 14, 60)), size, rnd);
 }
 
 /** A palm frond: drooping leaf with a raised midrib, closed thin volume. */
@@ -2000,12 +2002,176 @@ function frond(mb: MeshBuilder, mat: string, base: Vec3, a: number, len: number,
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Foliage from alpha-tested cards (palm fronds, leaf clusters): real silhouettes and dappled shadows
+// ---------------------------------------------------------------------------
+
+/** One square leaf-cluster card centred on c, facing n, rotated by spin. */
+function leafCard(mb: MeshBuilder, mat: string, c: Vec3, n: Vec3, size: number, spin: number) {
+  const nn = v3.norm(n);
+  const ref: Vec3 = Math.abs(nn[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  let a = v3.norm(v3.cross(ref, nn));
+  let b = v3.cross(nn, a);
+  const cs = Math.cos(spin), sn = Math.sin(spin);
+  [a, b] = [v3.add(v3.scale(a, cs), v3.scale(b, sn)), v3.sub(v3.scale(b, cs), v3.scale(a, sn))];
+  const h = size / 2;
+  const p = (u: number, v: number): Vec3 => v3.add(c, v3.add(v3.scale(a, (u - 0.5) * 2 * h), v3.scale(b, (v - 0.5) * 2 * h)));
+  mb.quad(mat, p(0, 0), p(1, 0), p(1, 1), p(0, 1), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+}
+
+/** A clump of leaf cards filling an ellipsoid. */
+function leafClump(mb: MeshBuilder, mat: string, c: Vec3, r: Vec3, cards: number, size: number, rnd: () => number) {
+  for (let i = 0; i < cards; i++) {
+    // points biased to the outside of the clump, cards facing outward-ish
+    const th = rnd() * TAU, ph = Math.acos(2 * rnd() - 1), k = 0.55 + 0.45 * Math.sqrt(rnd());
+    const d: Vec3 = [Math.sin(ph) * Math.cos(th), Math.sin(ph) * Math.sin(th), Math.cos(ph)];
+    const p: Vec3 = [c[0] + d[0] * r[0] * k, c[1] + d[1] * r[1] * k, c[2] + d[2] * r[2] * k];
+    const n = v3.norm(v3.add(d, [rnd() - 0.5, rnd() - 0.5, rnd() - 0.2]));
+    leafCard(mb, mat, p, n, size * (0.8 + 0.4 * rnd()), rnd() * TAU);
+  }
+}
+
+/**
+ * A date-palm frond card from the crown: arched rib (start elevation, sagging with length), folded into a V along
+ * the rib; u runs base → tip, v across.
+ */
+function frondCard(mb: MeshBuilder, mat: string, base: Vec3, az: number, elev: number, len: number, wid: number, fold = 0.42) {
+  const n = 9;
+  const dirH: Vec3 = [Math.cos(az), Math.sin(az), 0];
+  const side: Vec3 = [-Math.sin(az), Math.cos(az), 0];
+  const rib: Vec3[] = [];
+  const ups: Vec3[] = [];
+  let p: Vec3 = [...base];
+  let e = elev;
+  for (let i = 0; i <= n; i++) {
+    rib.push(p);
+    const t = (i + 0.5) / n;
+    // the rib bends down more towards the tip
+    e -= (0.18 + 0.55 * t) * (1 / n) * 2.2;
+    const d: Vec3 = [dirH[0] * Math.cos(e), dirH[1] * Math.cos(e), Math.sin(e)];
+    ups.push(v3.norm(v3.cross(side, d)));
+    p = v3.add(p, v3.scale(d, len / n));
+  }
+  for (let i = 0; i < n; i++) {
+    const u0 = i / n, u1 = (i + 1) / n;
+    for (const sgn of [-1, 1]) {
+      // each half tilted up by the fold angle
+      const off = (k: number): Vec3 => v3.add(v3.scale(side, sgn * Math.cos(fold) * wid * 0.5), v3.scale(ups[k], Math.sin(fold) * wid * 0.5));
+      const a = rib[i], b = rib[i + 1];
+      const a2 = v3.add(a, off(i)), b2 = v3.add(b, off(i + 1));
+      const va = sgn < 0 ? 0 : 1;
+      mb.quad(mat, a, b, b2, a2, [[u0, 0.5], [u1, 0.5], [u1, va], [u0, va]]);
+    }
+  }
+}
+
+function buildDatePalm(mb: MeshBuilder, s: FurnitureSpec, seed: number) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const rnd = rng(seed);
+  const m = Math.min(w, d);
+  const crownR = m / 2;
+  const lean = Math.min(m * 0.05, 0.3) * (rnd() < 0.5 ? 1 : -0.6);
+  const zt = h - crownR * 0.35;
+  const segs = 10;
+  const pts: Vec3[] = [];
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    pts.push([lean * t * t, 0, zt * t]);
+  }
+  for (let i = 0; i < segs; i++) {
+    const r0 = 0.2 - 0.05 * (i / segs), r1 = 0.2 - 0.05 * ((i + 1) / segs);
+    const a = pts[i], b = pts[i + 1];
+    mb.with(m4.fromBasis([1, 0, 0], [0, 1, 0], v3.norm(v3.sub(b, a)), a), () => mb.cylinder(M.palmTrunk, [0, 0, 0], i === 0 ? r0 * 1.25 : r0, r1, v3.len(v3.sub(b, a)), 12, { top: false, bottom: i === 0 }));
+  }
+  const top = pts[segs];
+  // the crown's leaf bases
+  mb.sphere(M.palmTrunk, [top[0], top[1], top[2] + 0.05], 0.26, 10, 8, [1, 1, 0.8]);
+  const L = crownR * 1.05;
+  const tiers: [number, number, number, number][] = [
+    // count, elevation (rad), length factor, width factor
+    [7, 1.15, 0.78, 0.36],
+    [10, 0.55, 1, 0.42],
+    [9, 0.05, 0.95, 0.42],
+  ];
+  let k = 0;
+  for (const [count, el, lf, wf] of tiers)
+    for (let i = 0; i < count; i++, k++) {
+      const az = k * 2.39996 + rnd() * 0.3;
+      frondCard(mb, M.fronds, [top[0], top[1], top[2] + 0.1 - el * 0.05], az, el + (rnd() - 0.5) * 0.25, L * lf * (0.88 + rnd() * 0.24), L * wf, 0.35 + rnd() * 0.15);
+    }
+}
+
+function buildLeafTree(mb: MeshBuilder, s: FurnitureSpec, seed: number, olive: boolean) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const rnd = rng(seed);
+  const m = Math.min(w, d);
+  const crownZ = h * (olive ? 0.45 : 0.4);
+  const stems = olive ? 3 : 1;
+  const tips: Vec3[] = [];
+  for (let k = 0; k < stems; k++) {
+    // a twisted stem: a few jittered rod segments up to the crown, then branches
+    const a0 = (k / stems) * TAU + rnd();
+    let p: Vec3 = [Math.cos(a0) * 0.05 * (stems - 1), Math.sin(a0) * 0.05 * (stems - 1), 0];
+    const r = clamp(m * (olive ? 0.035 : 0.045), 0.05, 0.25);
+    const n = 4;
+    for (let i = 0; i < n; i++) {
+      const t = (i + 1) / n;
+      const q: Vec3 = [p[0] + (rnd() - 0.5) * 0.18 + Math.cos(a0) * 0.05 * t, p[1] + (rnd() - 0.5) * 0.18 + Math.sin(a0) * 0.05 * t, crownZ * t];
+      mb.rod(M.trunk, p, q, r * (1.15 - 0.3 * t), 8);
+      p = q;
+    }
+    const nb = olive ? 3 : 5;
+    for (let b = 0; b < nb; b++) {
+      const az = a0 + (b / nb) * TAU + rnd() * 0.6;
+      const out = (w / 2) * (0.45 + rnd() * 0.3);
+      const q: Vec3 = [p[0] + Math.cos(az) * out, p[1] + Math.sin(az) * out * (d / w), p[2] + (h - crownZ) * (0.3 + rnd() * 0.3)];
+      mb.rod(M.trunk, p, q, r * 0.45, 6);
+      tips.push(q);
+    }
+  }
+  // leaf clumps at the branch ends and in the middle of the crown
+  const cards = olive ? 16 : 18;
+  const size = clamp(m * 0.28, 0.45, 1.1);
+  const leaves = olive ? M.olive : M.leaves;
+  for (const t of tips) leafClump(mb, leaves, [t[0], t[1], t[2] + size * 0.2], [size * 1.1, size * 1.1, size * 0.8], cards, size, rnd);
+  leafClump(mb, leaves, [0, 0, crownZ + (h - crownZ) * 0.55], [w * 0.38, d * 0.38, (h - crownZ) * 0.4], cards * 2, size, rnd);
+}
+
+
+/** Water wall: a dark wet-stone panel with a film of water running down into a basin, LED line at the lip. */
+function buildWaterWall(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  const basinH = clamp(h * 0.14, 0.25, 0.45), basinD = Math.max(d, 0.35);
+  const panelT = 0.1;
+  const y0 = basinD / 2 - panelT; // panel at the back of the footprint
+  mb.box(M.panel, [-w / 2, y0, 0], [w / 2, y0 + panelT, h]);
+  // cap on top
+  mb.box(M.basin, [-w / 2 - 0.02, y0 - 0.03, h], [w / 2 + 0.02, y0 + panelT + 0.02, h + 0.04]);
+  // the sheet of water just in front of the panel, top to basin
+  mb.quad(M.water, [-w / 2 + 0.03, y0 - 0.006, basinH - 0.04], [w / 2 - 0.03, y0 - 0.006, basinH - 0.04], [w / 2 - 0.03, y0 - 0.006, h - 0.02], [-w / 2 + 0.03, y0 - 0.006, h - 0.02]);
+  // basin: four walls and a water surface
+  const t = 0.05, bx = w / 2 + 0.05, by0 = -basinD / 2, by1 = y0;
+  mb.box(M.basin, [-bx, by0, 0], [bx, by0 + t, basinH]);
+  mb.box(M.basin, [-bx, by0, 0], [-bx + t, by1, basinH]);
+  mb.box(M.basin, [bx - t, by0, 0], [bx, by1, basinH]);
+  mb.box(M.basin, [-bx + t, by0 + t, 0], [bx - t, by1, 0.05]);
+  mb.quad(M.water, [-bx + t, by0 + t, basinH - 0.05], [bx - t, by0 + t, basinH - 0.05], [bx - t, by1, basinH - 0.05], [-bx + t, by1, basinH - 0.05]);
+  // warm LED line under the basin's front lip
+  mb.box(M.led, [-bx + 0.02, by0 - 0.012, basinH - 0.03], [bx - 0.02, by0, basinH - 0.015]);
+}
+
 function buildTree(mb: MeshBuilder, s: FurnitureSpec) {
   const { width: w, depth: d, height: h } = s;
   const M = s.materials;
-  const kind = optStr(s, "kind", ["deciduous", "conifer", "palm"] as const, "deciduous");
+  const kind = optStr(s, "kind", ["deciduous", "conifer", "palm", "olive"] as const, "deciduous");
   const m = Math.min(w, d);
-  const seed = Math.round(w * 131 + d * 71 + h * 13);
+  const seed = Math.round(w * 131 + d * 71 + h * 13 + Number(s.options.seed ?? 0) * 7919);
+  if (kind === "palm") return buildDatePalm(mb, s, seed);
+  if (kind === "olive" || kind === "deciduous") return buildLeafTree(mb, s, seed, kind === "olive");
   if (kind === "conifer") {
     const rt = clamp(m * 0.04, 0.05, 0.2);
     mb.cylinder(M.trunk, [0, 0, 0], rt * 1.3, rt * 0.6, h * 0.35, 8);
@@ -4544,6 +4710,12 @@ export const FURNITURE: Record<string, FurnitureType> = {
     options: { style: { description: "gas | kettle", default: "gas" } },
     build: buildBbq,
   }),
+  water_wall: def({
+    description: "Water wall: dark wet-stone panel with a sheet of water running into a basin, warm LED line at the basin lip (courtyards, entrances). width = length, height = panel height; the panel stands at the back (north) of the footprint.",
+    defaults: { width: 1.4, depth: 0.45, height: 2.6 },
+    slots: { panel: "stone_wet_dark", basin: "stone_dark", water: "water", led: "emissive_light" },
+    build: buildWaterWall,
+  }),
   outdoor_sofa: def({
     description: "Low lounge sofa: slatted teak frame with thick seat and back cushions.",
     defaults: { width: 2.0, depth: 0.85, height: 0.75 },
@@ -4561,16 +4733,16 @@ export const FURNITURE: Record<string, FurnitureType> = {
     build: buildPlanter,
   }),
   bush: def({
-    description: "Rounded shrub made of foliage clumps filling the box.",
+    description: "Rounded shrub: leaf cards filling the box.",
     defaults: { width: 1.0, depth: 1.0, height: 0.9 },
-    slots: { foliage: "plant_green" },
+    slots: { foliage: "plant_green", leaves: "leaves_green" },
     build: buildBush,
   }),
   tree: def({
-    description: "Tree; footprint = canopy. kind deciduous (trunk + leafy crown) | conifer (stacked cones) | palm (curved trunk + fronds).",
+    description: "Tree; footprint = canopy. kind deciduous (shade tree with a leafy crown) | olive (twisted stems, silver-green crown) | palm (date palm: diamond-bark trunk, arched fronds) | conifer (stacked cones). Leaves are cut-out cards: real silhouettes and dappled shadows.",
     defaults: { width: 2.4, depth: 2.4, height: 3.0 },
-    slots: { trunk: "bark", foliage: "plant_green", needles: "plant_dark_green" },
-    options: { kind: { description: "deciduous | conifer | palm", default: "deciduous" } },
+    slots: { trunk: "bark", foliage: "plant_green", needles: "plant_dark_green", leaves: "leaves_green", olive: "olive_leaves", fronds: "palm_frond", palmTrunk: "palm_bark" },
+    options: { kind: { description: "deciduous | olive | palm | conifer", default: "deciduous" } },
     build: buildTree,
   }),
   hedge: def({
