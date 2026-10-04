@@ -175,9 +175,11 @@ Call get_schema for every field; this guide covers conventions and good practice
   air speed, draught / stagnant shares, ADPI (aim 80%+); issues such as rooms that run warm, draughts, a return beside
   a supply. Image: temperature and air movement at 1.1 m. Fix by moving diffusers / returns (hvac zones) or splitting
   airflow over more diffusers, then re-run. Needs the server's GPU.
-- render_view path-traces on the GPU when there is one: time "HH:MM" and date "MM-DD" place the Kuwaiti sun
-  (06-21 high summer sun, 12-21 low winter sun), samples 128 default (256+ for final images). renderer "cpu" for a
-  quick rasterised check.
+- render_view path-traces on the GPU when there is one (physical sky, AI denoiser): time "HH:MM" and date "MM-DD"
+  place the Kuwaiti sun (06-21 high summer sun, 12-21 low winter sun); lighting "golden" = 45 min before sunset with
+  the lamps on, the warm architectural-photography look. Photographic shots: eye [x, y, 1.6] + target with lens 24
+  (exteriors) or room + lens 16–20 (interiors); verticals stay straight (two-point perspective). samples 128 default,
+  256+ for finals. renderer "cpu" for a quick rasterised check.
 
 ## Water supply and drainage (project.water)
 - Hydraulics of the plumbing layout, automatic: peak flows, pipe sizes, pressure at each outlet, booster set, hot-water

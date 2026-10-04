@@ -97,7 +97,8 @@ const COMMANDS: Record<string, Command> = {
       { name: "corner", arg: "n", desc: "with --room: which corner to shoot from (0 = farthest, 1, 2...)" },
       { name: "elevation", arg: "wall-id", desc: "interior: square-on orthographic view of a wall (kitchens, wardrobes, tiling, art)" },
       { name: "elevation-room", arg: "name|id", desc: "with --elevation: which room's side of the wall to look at" },
-      { name: "lighting", arg: "day|night|dusk|both", desc: "night/dusk: lit by the plan's light fixtures and lamps (judge a lighting design); both = day + night images" },
+      { name: "lighting", arg: "day|golden|dusk|night|both", desc: "golden: 45 min before sunset, lamps on; night/dusk: lit by the plan's light fixtures and lamps; both = day + night images" },
+      { name: "lens", arg: "mm", desc: "focal length (35 mm equivalent) for --eye / --room cameras" },
       { name: "renderer", arg: "auto|gpu|cpu", desc: "auto: GPU path tracer when there is a GPU (default); cpu: fast rasteriser" },
       { name: "samples", arg: "n", desc: "path tracer samples per pixel (default 128)" },
       { name: "time", arg: "HH:MM", desc: "local time for the sun (Kuwait; default 10:30)" },
@@ -113,7 +114,7 @@ const COMMANDS: Record<string, Command> = {
       const tag = f.room ? `room-${String(f.room).replace(/\W+/g, "_")}` : f.elevation ? `elev-${f.elevation}` : view;
       const out = (f.o as string) ?? `${base(file)}.${tag}${f.level ? "." + f.level : ""}.png`;
       const lighting = (f.lighting as string | undefined) ?? "day";
-      if (![...LIGHTING_MODES, "both"].includes(lighting)) throw new Error(`--lighting must be day, night, dusk or both (got '${lighting}')`);
+      if (![...LIGHTING_MODES, "both"].includes(lighting)) throw new Error(`--lighting must be day, golden, dusk, night or both (got '${lighting}')`);
       const viewOpts = {
         view,
         level: f.level as string | undefined,
@@ -131,6 +132,7 @@ const COMMANDS: Record<string, Command> = {
         time: f.time as string | undefined,
         date: f.date as string | undefined,
         exposure: f.exposure !== undefined ? num(f.exposure, "exposure") : undefined,
+        lens: f.lens ? num(f.lens, "lens") : undefined,
         interior:
           f.room || f.elevation
             ? {

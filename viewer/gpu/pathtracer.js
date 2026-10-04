@@ -29,6 +29,11 @@ struct Params {
   ground: vec3f, height: u32,
   capColor: vec3f, texSize: f32,
   emitScale: f32, clampIndirect: f32, seed: u32, pad: u32,
+  nPortals: u32, portalArea: f32, pp0: u32, pp1: u32,
+  // Preetham sky: Perez A..D for Y, x, y; E for each and the zenith xyY; F(0, sun) per channel and a scale
+  perezY: vec4f, perezX: vec4f, perezYy: vec4f, perezE: vec4f, zenith: vec4f, perezN: vec4f,
+  // camera: vertical lens shift (two-point perspective)
+  cam: vec4f,
 };
 struct Material { color: vec4f, pbr: vec4f, emit: vec4f, extra: vec4f };
 struct Light { pos: vec4f, col: vec4f, dir: vec4f, cone: vec4f };
@@ -44,6 +49,8 @@ struct Light { pos: vec4f, col: vec4f, dir: vec4f, cone: vec4f };
 @group(0) @binding(8) var baseTex: texture_2d_array<f32>;
 @group(0) @binding(9) var normTex: texture_2d_array<f32>;
 @group(0) @binding(10) var samp: sampler;
+// window glass as "portals" for the sky: 3 vec4 per triangle (v0 + cumulative area share, e1 + area, e2)
+@group(0) @binding(11) var<storage, read> portals: array<vec4f>;
 
 const PI = 3.14159265;
 const NOHIT = 0xffffffffu;
@@ -133,13 +140,29 @@ fn surface(ro: vec3f, rd: vec3f, h: Hit) -> Surf {
   return Surf(ro + rd * h.t, n, ng, uv, a4.xyz, a3.w, u32(tris[i * 3u].w), back);
 }
 
+fn perez(a: vec4f, e: f32, cosT: f32, g: f32, cosG: f32) -> f32 {
+  return (1.0 + a.x * exp(a.y / cosT)) * (1.0 + a.z * exp(a.w * g) + e * cosG * cosG);
+}
+
 fn sky(d: vec3f, withSun: bool) -> vec3f {
   if (d.z < 0.0) { return P.ground * (1.0 - d.z * 0.3); }
-  let k = pow(clamp(d.z, 0.0, 1.0), 0.45);
-  var c = mix(P.skyHorizon, P.skyZenith, k);
   let cs = dot(d, P.sunDir);
-  // forward-scattering glow around the sun (dusty Gulf air)
-  c += (P.skyHorizon * 0.6) * pow(max(cs, 0.0), 8.0) * select(0.0, 1.0, P.sunDir.z > -0.05);
+  var c: vec3f;
+  if (P.zenith.w > 0.5) {
+    // Preetham daylight sky (turbidity for hazy Gulf air), xyY → linear sRGB
+    let cosT = max(d.z, 0.02);
+    let g = acos(clamp(cs, -1.0, 1.0));
+    let Y = P.zenith.x * perez(P.perezY, P.perezE.x, cosT, g, cs) / P.perezN.x;
+    let x = P.zenith.y * perez(P.perezX, P.perezE.y, cosT, g, cs) / P.perezN.y;
+    let y = P.zenith.z * perez(P.perezYy, P.perezE.z, cosT, g, cs) / P.perezN.z;
+    let X = x * Y / max(y, 1e-4); let Z = (1.0 - x - y) * Y / max(y, 1e-4);
+    c = max(vec3f(3.2406 * X - 1.5372 * Y - 0.4986 * Z, -0.9689 * X + 1.8758 * Y + 0.0415 * Z, 0.0557 * X - 0.2040 * Y + 1.0570 * Z), vec3f(0.0)) * P.perezN.w;
+  } else {
+    let k = pow(clamp(d.z, 0.0, 1.0), 0.45);
+    c = mix(P.skyHorizon, P.skyZenith, k);
+    // forward-scattering glow around the sun (dusty Gulf air)
+    c += (P.skyHorizon * 0.6) * pow(max(cs, 0.0), 8.0) * select(0.0, 1.0, P.sunDir.z > -0.05);
+  }
   if (withSun && cs > P.sunCos) {
     let solid = 2.0 * PI * (1.0 - P.sunCos);
     c += P.sunE / solid;
@@ -164,6 +187,15 @@ fn bsdf(n: vec3f, v: vec3f, l: vec3f, albedo: vec3f, rough: f32, metal: f32) -> 
   let spec = F * ggxD(max(dot(n, h), 0.0), a) * smithG(nv, nl, a) / max(4.0 * nv * nl, 1e-4);
   let diff = (vec3f(1.0) - F) * (1.0 - metal) * albedo / PI;
   return (diff + spec) * nl;
+}
+
+// probability density of the scatter sampling (GGX / cosine mixture) for direction l
+fn scatterPdf(n: vec3f, v: vec3f, l: vec3f, ps: f32, rough: f32) -> f32 {
+  let hv = normalize(v + l);
+  let a = max(rough * rough, 0.006);
+  let pdfS = ggxD(max(dot(n, hv), 0.0), a) * max(dot(n, hv), 0.0) / max(4.0 * dot(v, hv), 1e-4);
+  let pdfD = max(dot(n, l), 0.0) / PI;
+  return ps * pdfS + (1.0 - ps) * pdfD;
 }
 
 fn basis(n: vec3f) -> mat3x3f {
@@ -224,7 +256,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     rd = P.fwd;
   } else {
     ro = P.eye;
-    rd = normalize(P.fwd + P.right * (sx * P.tanHalf * aspect) + P.up * (sy * P.tanHalf));
+    rd = normalize(P.fwd + P.right * (sx * P.tanHalf * aspect) + P.up * ((sy + P.cam.x) * P.tanHalf));
   }
   let spread = select(2.0 * P.tanHalf / f32(P.height), 0.0, P.ortho > 0.0);
   var thr = vec3f(1.0);
@@ -233,13 +265,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   var passes = 0u;
   var travelled = select(0.0, 2.0 * P.ortho / f32(P.height) * 400.0, P.ortho > 0.0);
   var specLast = true;
+  // window portals: MIS between aiming at the glass and scattering out through it
+  var sinceScatter = 0.0; var portalPdf = 0.0; var lastPdfB = 1e6;
   var firstAlbedo = vec3f(0.0); var firstN = vec3f(0.0); var firstT = 1e6;
   loop {
     if (bounce > P.maxBounce || passes > 24u) { break; }
     passes++;
     let h = intersect(ro, rd, 1e5);
     if (h.tri == NOHIT) {
-      var s = sky(rd, bounce == 0u || specLast);
+      let s0 = sky(rd, false);
+      var sunPart = vec3f(0.0);
+      if (bounce == 0u || specLast) { sunPart = sky(rd, true) - s0; }
+      var w = 1.0;
+      if (bounce >= 1u && portalPdf > 0.0) { w = lastPdfB / (lastPdfB + portalPdf); }
+      let s = s0 * w + sunPart;
       if (bounce == 0u) { firstAlbedo = vec3f(1.0); firstN = -rd; }
       var c = thr * s;
       if (bounce >= 2u) { c = min(c, vec3f(P.clampIndirect)); }
@@ -249,6 +288,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let sf = surface(ro, rd, h);
     let m = mats[sf.mat];
     travelled += h.t;
+    sinceScatter += h.t;
     // texture level of detail from the ray footprint (pixel cone)
     let tpm = m.pbr.w;
     let lod = log2(max(1.0, travelled * max(spread, 4e-4) * tpm / max(abs(dot(sf.ng, rd)), 0.25))) + f32(bounce);
@@ -292,7 +332,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         rd = reflect(rd, n);
         ro = sf.p + sf.ng * 1e-3;
         bounce++;
+        sinceScatter = 0.0; portalPdf = 0.0; lastPdfB = 1e6;
       } else {
+        // the first pane after a scatter: how likely aiming at the windows would have picked this direction
+        if (P.nPortals > 0u && portalPdf == 0.0 && bounce >= 1u) {
+          portalPdf = sinceScatter * sinceScatter / (P.portalArea * max(abs(dot(sf.ng, rd)), 1e-3));
+        }
         // passing a pane is not a bounce: what lies behind is what the pixel shows
         thr *= mix(vec3f(1.0), albedo, m.color.w) * (1.0 - 0.4 * m.color.w);
         ro = sf.p + rd * 1e-3;
@@ -330,12 +375,39 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         direct += pick * wgt * shadow(po, pdir, max(pdist - 0.12, 0.01));
       }
     }
+    let f0 = mix(vec3f(0.04), albedo, metal);
+    let ps = clamp(max(f0.x, max(f0.y, f0.z)) * 0.5 + metal * 0.5 + (1.0 - rough) * 0.25, 0.1, 0.9);
+    // sky through the windows: aim at a point on the glass (area-weighted), MIS with scattering
+    if (P.nPortals > 0u) {
+      let u = rnd();
+      var lo = 0u; var hi = P.nPortals - 1u;
+      loop {
+        if (lo >= hi) { break; }
+        let mid = (lo + hi) / 2u;
+        if (portals[mid * 3u].w < u) { lo = mid + 1u; } else { hi = mid; }
+      }
+      let v0 = portals[lo * 3u].xyz; let e1 = portals[lo * 3u + 1u].xyz; let e2 = portals[lo * 3u + 2u].xyz;
+      var a1 = rnd(); var a2 = rnd();
+      if (a1 + a2 > 1.0) { a1 = 1.0 - a1; a2 = 1.0 - a2; }
+      let q = v0 + e1 * a1 + e2 * a2;
+      let dq = q - po;
+      let dist = length(dq);
+      let l = dq / max(dist, 1e-6);
+      let cosP = abs(dot(normalize(cross(e1, e2)), l));
+      if (cosP > 1e-3 && dot(l, sf.ng) > 0.0) {
+        let f = bsdf(n, v, l, albedo, rough, metal);
+        if (max(f.x, max(f.y, f.z)) > 0.0) {
+          let pdfL = dist * dist / (P.portalArea * cosP);
+          let pdfB = scatterPdf(n, v, l, ps, rough);
+          let w = pdfL / (pdfL + pdfB);
+          direct += sky(l, false) * f * shadow(po, l, 1e5) * (w / pdfL);
+        }
+      }
+    }
     var c = thr * direct;
     if (bounce >= 1u) { c = min(c, vec3f(P.clampIndirect)); }
     rad += c;
     // next direction: diffuse or specular lobe
-    let f0 = mix(vec3f(0.04), albedo, metal);
-    let ps = clamp(max(f0.x, max(f0.y, f0.z)) * 0.5 + metal * 0.5 + (1.0 - rough) * 0.25, 0.1, 0.9);
     var l: vec3f;
     let bs = basis(n);
     if (rnd() < ps) {
@@ -363,6 +435,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let pdf = ps * pdfS + (1.0 - ps) * pdfD;
     if (pdf < 1e-6) { break; }
     thr *= bsdf(n, v, l, albedo, rough, metal) / pdf;
+    sinceScatter = 0.0; portalPdf = 0.0; lastPdfB = pdf;
     ro = po; rd = l;
     bounce++;
     if (bounce > 2u) {
@@ -539,6 +612,9 @@ export class PathTracer {
       mats: this.buffer(sc.materials, S),
       lights: this.buffer(lights, S),
       nLights: sc.lights.length / 16,
+      portals: this.buffer(sc.portals?.length ? sc.portals : new Float32Array(12), S),
+      nPortals: (sc.portals?.length ?? 0) / 12,
+      portalArea: sc.portalArea ?? 0,
       base: this.textureArray(sc.baseLayers, sc.texSize, true),
       norm: this.textureArray(sc.normalLayers, sc.texSize, false),
       texSize: sc.texSize,
@@ -551,7 +627,7 @@ export class PathTracer {
   destroyScene() {
     const s = this.scene;
     if (!s) return;
-    for (const k of ["nodes", "tris", "attrs", "mats", "lights", "base", "norm"]) s[k].destroy();
+    for (const k of ["nodes", "tris", "attrs", "mats", "lights", "portals", "base", "norm"]) s[k].destroy();
     this.scene = null;
   }
 
@@ -565,11 +641,11 @@ export class PathTracer {
     const W = o.width, H = o.height, N = W * H;
     const S = GPUBufferUsage.STORAGE;
     const accum = d.createBuffer({ size: N * 16, usage: S | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
-    const aux = d.createBuffer({ size: N * 32, usage: S | GPUBufferUsage.COPY_DST });
+    const aux = d.createBuffer({ size: N * 32, usage: S | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
     const tmpA = d.createBuffer({ size: N * 16, usage: S | GPUBufferUsage.COPY_SRC });
     const tmpB = d.createBuffer({ size: N * 16, usage: S | GPUBufferUsage.COPY_SRC });
-    const pbuf = d.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const P = new ArrayBuffer(256), pf = new Float32Array(P), pu = new Uint32Array(P);
+    const pbuf = d.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const P = new ArrayBuffer(512), pf = new Float32Array(P), pu = new Uint32Array(P);
     const v3 = (off, v, w, asU) => {
       pf[off] = v[0]; pf[off + 1] = v[1]; pf[off + 2] = v[2];
       if (asU) pu[off + 3] = w; else pf[off + 3] = w;
@@ -589,6 +665,10 @@ export class PathTracer {
     pf[41] = o.clampIndirect ?? 6e4;
     pu[42] = (o.seed ?? 1) >>> 0;
     pu[43] = o.debug ?? 0;
+    pu[44] = o.portals === false ? 0 : s.nPortals;
+    pf[45] = s.portalArea;
+    if (o.sky.preetham) pf.set(o.sky.preetham, 48); // 24 floats: perezY, perezX, perezYy, perezE, zenith (w = on), perezN
+    pf[72] = c.shift ?? 0;
     const bg = d.createBindGroup({
       layout: this.trace.getBindGroupLayout(0),
       entries: [
@@ -603,6 +683,7 @@ export class PathTracer {
         { binding: 8, resource: s.base.createView({ dimension: "2d-array" }) },
         { binding: 9, resource: s.norm.createView({ dimension: "2d-array" }) },
         { binding: 10, resource: this.sampler },
+        { binding: 11, resource: { buffer: s.portals } },
       ],
     });
     const spp = Math.max(1, o.spp ?? 64);
@@ -647,6 +728,28 @@ export class PathTracer {
       pass.end();
       d.queue.submit([enc.finish()]);
     };
+    if (o.aov) {
+      // raw image plus the albedo / normal guides, for an external denoiser
+      const rb = d.createBuffer({ size: N * 48, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+      const enc = d.createCommandEncoder();
+      enc.copyBufferToBuffer(accum, 0, rb, 0, N * 16);
+      enc.copyBufferToBuffer(aux, 0, rb, N * 16, N * 32);
+      d.queue.submit([enc.finish()]);
+      await rb.mapAsync(GPUMapMode.READ);
+      const all = new Float32Array(rb.getMappedRange().slice(0));
+      rb.unmap();
+      const color = new Float32Array(N * 4), albedo = new Float32Array(N * 4), normal = new Float32Array(N * 4);
+      for (let i = 0; i < N; i++) {
+        for (let c = 0; c < 3; c++) {
+          color[i * 4 + c] = all[i * 4 + c] / spp;
+          albedo[i * 4 + c] = Math.min(1, all[N * 4 + i * 8 + c] / spp);
+          normal[i * 4 + c] = all[N * 4 + i * 8 + 4 + c] / spp;
+        }
+        color[i * 4 + 3] = albedo[i * 4 + 3] = normal[i * 4 + 3] = 1;
+      }
+      for (const b of [accum, aux, tmpA, tmpB, pbuf, dpb, rb]) b.destroy();
+      return Object.assign(color, { albedo, normal });
+    }
     let out = tmpA;
     const its = o.denoise === false ? 0 : (o.denoiseIterations ?? (spp >= 256 ? 3 : 4));
     if (its) {
@@ -690,8 +793,12 @@ function downsample(src, s, srgb) {
   return out;
 }
 
-/** Linear HDR → sRGB 8-bit with automatic exposure (key 0.18 on the log-average) and ACES filmic. */
-export function tonemap(hdr, W, H, ev = 0) {
+/**
+ * Linear HDR → sRGB 8-bit: automatic exposure (key 0.18 on the log-average), bloom (the glow real lenses put
+ * around bright lights and sun on glass), vignette, then ACES filmic.
+ * fx: { bloom (strength, default 0.05), vignette (default 0.18), warmth (−1..1 white balance, default 0) }
+ */
+export function tonemap(hdr, W, H, ev = 0, fx = {}) {
   const N = W * H;
   let sum = 0, n = 0;
   for (let i = 0; i < N; i += 7) {
@@ -703,12 +810,57 @@ export function tonemap(hdr, W, H, ev = 0) {
   }
   const avg = n ? Math.exp(sum / n) : 1;
   const exposure = (0.18 / avg) * Math.pow(2, ev);
+  const warm = fx.warmth ?? 0;
+  const wb = [1 + 0.08 * warm, 1, 1 - 0.1 * warm];
+  const col = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) for (let c = 0; c < 3; c++) col[i * 3 + c] = Math.min(hdr[i * 4 + c] * exposure * wb[c], 1e4);
+  // bloom: the part above white, blurred over a 6-level pyramid
+  const strength = fx.bloom ?? 0.05;
+  if (strength > 0) {
+    let lw = W, lh = H;
+    let cur = new Float32Array(N * 3);
+    for (let i = 0; i < N * 3; i++) cur[i] = Math.max(0, col[i] - 1);
+    const levels = [];
+    for (let k = 0; k < 6 && lw > 4 && lh > 4; k++) {
+      const nw = lw >> 1, nh = lh >> 1, nx = new Float32Array(nw * nh * 3);
+      for (let y = 0; y < nh; y++)
+        for (let x = 0; x < nw; x++)
+          for (let c = 0; c < 3; c++) {
+            const at = (xx, yy) => cur[(Math.min(lh - 1, yy) * lw + Math.min(lw - 1, xx)) * 3 + c];
+            nx[(y * nw + x) * 3 + c] = (at(2 * x, 2 * y) + at(2 * x + 1, 2 * y) + at(2 * x, 2 * y + 1) + at(2 * x + 1, 2 * y + 1)) / 4;
+          }
+      levels.push({ w: nw, h: nh, d: nx });
+      cur = nx;
+      lw = nw;
+      lh = nh;
+    }
+    // sample every level back at full resolution (bilinear) and add, wider levels weigh more
+    for (const [k, L] of levels.entries()) {
+      const wgt = strength * (0.5 + k * 0.25) / levels.length;
+      for (let y = 0; y < H; y++) {
+        const fy = Math.max(0, ((y + 0.5) * L.h) / H - 0.5), y0 = Math.min(L.h - 1, Math.floor(fy)), y1 = Math.min(L.h - 1, y0 + 1), ty = fy - y0;
+        for (let x = 0; x < W; x++) {
+          const fxx = Math.max(0, ((x + 0.5) * L.w) / W - 0.5), x0 = Math.min(L.w - 1, Math.floor(fxx)), x1 = Math.min(L.w - 1, x0 + 1), tx = fxx - x0;
+          for (let c = 0; c < 3; c++) {
+            const v = (L.d[(y0 * L.w + x0) * 3 + c] * (1 - tx) + L.d[(y0 * L.w + x1) * 3 + c] * tx) * (1 - ty) + (L.d[(y1 * L.w + x0) * 3 + c] * (1 - tx) + L.d[(y1 * L.w + x1) * 3 + c] * tx) * ty;
+            col[(y * W + x) * 3 + c] += v * wgt;
+          }
+        }
+      }
+    }
+  }
+  const vig = fx.vignette ?? 0.18;
   const out = new Uint8Array(N * 4);
   const aces = (x) => Math.min(1, Math.max(0, (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14)));
   const srgb = (x) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
-  for (let i = 0; i < N; i++) {
-    for (let c = 0; c < 3; c++) out[i * 4 + c] = Math.round(srgb(aces(hdr[i * 4 + c] * exposure)) * 255);
-    out[i * 4 + 3] = 255;
-  }
+  const asp = W / H;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      const dx = ((x + 0.5) / W - 0.5) * 2 * Math.min(1, asp / 1.5), dy = ((y + 0.5) / H - 0.5) * 2;
+      const f = 1 - vig * Math.pow(Math.min(1, (dx * dx + dy * dy) / 2), 1.5);
+      for (let c = 0; c < 3; c++) out[i * 4 + c] = Math.round(srgb(aces(col[i * 3 + c] * f)) * 255);
+      out[i * 4 + 3] = 255;
+    }
   return { rgba: out, exposure, avg };
 }

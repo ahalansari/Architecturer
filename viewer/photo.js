@@ -20,6 +20,7 @@ function overlay() {
         <option value="06-21">21 Jun (high summer sun)</option>
         <option value="09-21">21 Sep</option>
       </select></label>
+      <label>Light <select id="phLight"><option value="auto">as the view</option><option value="day">Day</option><option value="golden">Golden hour</option><option value="dusk">Dusk</option><option value="night">Night</option></select></label>
       <label>Quality <select id="phSpp"><option value="64">Draft</option><option value="192" selected>Good</option><option value="512">Final</option></select></label>
       <button id="phRender">Render</button>
       <a id="phSave" class="button" download="photo.png" hidden>Save PNG</a>
@@ -57,11 +58,13 @@ export function initPhoto({ camera, controls, lighting, cut }) {
       w: String(w),
       h: String(h),
       spp: $("phSpp").value,
-      lighting: mode === "night" ? (+$("phTime").value.split(":")[0] < 19 ? "dusk" : "night") : "day",
+      lighting: $("phLight").value === "auto" ? (mode === "night" ? (+$("phTime").value.split(":")[0] < 19 ? "dusk" : "night") : "day") : $("phLight").value,
       time: $("phTime").value,
       date: $("phDate").value,
     });
     if (cut()) q.set("level", cut());
+    // golden hour picks its own time (45 min before sunset)
+    if (q.get("lighting") === "golden") q.delete("time");
     $("phStatus").textContent = "Rendering… (path tracing on the server)";
     $("phStatus").className = "muted";
     $("phRender").disabled = true;

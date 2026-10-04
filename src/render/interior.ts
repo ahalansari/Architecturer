@@ -23,7 +23,7 @@ export interface InteriorView {
   elevationRoom?: string;
 }
 
-function findRoom(c: Compiled, key: string) {
+export function findRoom(c: Compiled, key: string) {
   const want = key.toLowerCase();
   for (const [li, lv] of c.project!.levels.entries())
     for (const r of lv.rooms)

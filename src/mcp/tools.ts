@@ -458,11 +458,13 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         elevation: z.string().optional().describe("Interior review: square-on orthographic view of this wall id (kitchen runs, wardrobes, tiling, art)"),
         elevationRoom: z.string().optional().describe("With elevation: which room's side of the wall"),
         lighting: z
-          .enum(["day", "night", "dusk", "both"])
+          .enum(["day", "golden", "dusk", "night", "both"])
           .default("day")
-          .describe("night / dusk: lit only by the plan's light fixtures and lamps (walls block light) — use to judge a lighting design; both = day + night images"),
-        eye: z.tuple([z.number(), z.number(), z.number()]).optional(),
+          .describe("golden: 45 min before sunset with the lamps on (the warm architectural-photography look); dusk / night: lit by the plan's light fixtures and lamps — use to judge a lighting design; both = day + night images"),
+        eye: z.tuple([z.number(), z.number(), z.number()]).optional().describe("Custom camera position [x, y, z] (z up; 1.6 = eye level)"),
         target: z.tuple([z.number(), z.number(), z.number()]).optional(),
+        lens: z.number().min(10).max(200).optional().describe("Focal length in mm (35 mm equivalent) for eye / room cameras: 16–20 wide interiors, 24 exteriors, 35–50 details"),
+        straight: z.boolean().optional().describe("Two-point perspective: verticals stay vertical (default on for eye-level and room cameras)"),
         width: z.number().int().min(200).max(2000).default(1024),
         height: z.number().int().min(200).max(2000).default(700),
         renderer: z.enum(["auto", "gpu", "cpu"]).default("auto").describe("auto: GPU path tracer when available; cpu: fast rasteriser (quick checks)"),
@@ -473,9 +475,9 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
       },
       annotations: READ,
     },
-    guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, width, height, renderer, samples, time, date, exposure }, extra) => {
+    guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, lens, straight, width, height, renderer, samples, time, date, exposure }, extra) => {
       const file = ws.plan(path);
-      const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, width, height, renderer, samples, time, date, exposure, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
+      const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, lens, straight, width, height, renderer, samples, time, date, exposure, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
       const modes = lighting === "both" ? ["day", "night"] : [lighting];
       const r = await job(file, await load(file), { op: "render_view", view: opts, modes }, extra, "Rendering");
       if (!r.ok) return fail(r.summary);

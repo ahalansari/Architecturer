@@ -12,6 +12,9 @@ import { collectLights } from "../elements/lighting.js";
 import type { MaterialDef, TextureSet } from "../materials/types.js";
 import { encodePNG, type Camera, type MaterialLookup } from "./raster.js";
 import { prepareView, type ViewOptions } from "./view.js";
+import { findRoom } from "./interior.js";
+import { oidnBinary, oidnDenoise } from "./oidn.js";
+import { pointInPolygon, pointSegment } from "../geometry/math.js";
 import { PathTracer, tonemap, type PTScene } from "../../viewer/gpu/pathtracer.js";
 
 const KUWAIT = { lat: 29.37, lon: 47.98, utc: 3 };
@@ -67,7 +70,7 @@ export async function gpuInfo(): Promise<string | null> {
 const srgb2lin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 
 /** Flatten a scene: world-space triangles, per-corner normals / UVs, tangents, materials and texture layers. */
-export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: number, lightsOn: boolean): PTScene {
+export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: number, lightsOn: boolean, portalFilter?: (p: Vec3, n: Vec3) => boolean): PTScene {
   let n = 0;
   walkMeshes(root, (m) => (n += m.indices.length / 3));
   const tris = new Float32Array(n * 9), attrs = new Float32Array(n * 20), triMat = new Uint32Array(n);
@@ -109,8 +112,10 @@ export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: num
     return i;
   };
   let t = 0;
-  walkMeshes(root, (m, _node, world) => {
+  const portalTris: number[] = [];
+  walkMeshes(root, (m, node, world) => {
     const mi = material(m.material);
+    const glass = mats[mi * 16 + 3] < 0.99 && (node.kind === "opening" || node.kind === "door_leaf");
     const P = m.positions, N = m.normals, U = m.uvs;
     const wp = (k: number): Vec3 => m4.point(world, [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]]);
     const o = m4.point(world, [0, 0, 0]);
@@ -137,7 +142,26 @@ export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: num
       const sign = cx[0] * B[0] + cx[1] * B[1] + cx[2] * B[2] < 0 ? -1 : 1;
       attrs.set([uv[1][1], uv[2][0], uv[2][1], sign, T[0], T[1], T[2], 0], a + 12);
       triMat[t] = mi;
+      if (glass && portalFilter) {
+        const fn = norm(cross([p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]], [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]]));
+        if (portalFilter([(p[0][0] + p[1][0] + p[2][0]) / 3, (p[0][1] + p[1][1] + p[2][1]) / 3, (p[0][2] + p[1][2] + p[2][2]) / 3], fn)) portalTris.push(t);
+      }
     }
+  });
+  // window panes (both faces' worth of a pane is one triangle pair): portals for the sky
+  const portals = new Float32Array(portalTris.length * 12);
+  let portalArea = 0;
+  const areas = portalTris.map((ti) => {
+    const q = tris.subarray(ti * 9, ti * 9 + 9);
+    const e1 = [q[3] - q[0], q[4] - q[1], q[5] - q[2]], e2 = [q[6] - q[0], q[7] - q[1], q[8] - q[2]];
+    return Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]) / 2;
+  });
+  portalArea = areas.reduce((a, b) => a + b, 0);
+  let cum = 0;
+  portalTris.forEach((ti, k) => {
+    const q = tris.subarray(ti * 9, ti * 9 + 9);
+    cum += areas[k];
+    portals.set([q[0], q[1], q[2], cum / Math.max(portalArea, 1e-9), q[3] - q[0], q[4] - q[1], q[5] - q[2], areas[k], q[6] - q[0], q[7] - q[1], q[8] - q[2], 0], k * 12);
   });
   const lights: number[] = [];
   if (lightsOn)
@@ -150,7 +174,7 @@ export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: num
         Math.cos(L.innerConeAngle ?? 0), 0, 0, 0,
       );
     }
-  return { tris, attrs, triMat, materials: new Float32Array(mats), lights: new Float32Array(lights), texSize, baseLayers, normalLayers };
+  return { tris, attrs, triMat, materials: new Float32Array(mats), lights: new Float32Array(lights), texSize, baseLayers, normalLayers, portals, portalArea };
 }
 
 /** Sun direction (plan: x east, y north, z up) and elevation for Kuwait at a local date and time. */
@@ -171,6 +195,37 @@ export function sunPosition(date = "03-21", time = "10:30", where = KUWAIT): { d
   return { dir: [Math.sin(az) * Math.cos(alt), Math.cos(az) * Math.cos(alt), sinA], elevation: (alt * 180) / Math.PI };
 }
 
+/**
+ * Preetham et al. (1999) daylight sky for a sun direction and turbidity (Kuwait: hazy, ~3.5): Perez coefficients
+ * for Y, x, y, the zenith xyY (Y in cd/m²) and each channel's F(0, θs), packed for the path tracer's uniforms.
+ */
+export function preethamSky(sunDir: Vec3, T = 3.5): number[] | undefined {
+  const ts = Math.acos(Math.max(-1, Math.min(1, sunDir[2])));
+  if (sunDir[2] < 0.02) return undefined;
+  const Y = [0.1787 * T - 1.463, -0.3554 * T + 0.4275, -0.0227 * T + 5.3251, 0.1206 * T - 2.5771, -0.067 * T + 0.3703];
+  const x = [-0.0193 * T - 0.2592, -0.0665 * T + 0.0008, -0.0004 * T + 0.2125, -0.0641 * T - 0.8989, -0.0033 * T + 0.0452];
+  const y = [-0.0167 * T - 0.2608, -0.095 * T + 0.0092, -0.0079 * T + 0.2102, -0.0441 * T - 1.6537, -0.0109 * T + 0.0529];
+  const chi = (4 / 9 - T / 120) * (Math.PI - 2 * ts);
+  const Yz = ((4.0453 * T - 4.971) * Math.tan(chi) - 0.2155 * T + 2.4192) * 1000;
+  const t2 = ts * ts, t3 = t2 * ts;
+  const xz = T * T * (0.00166 * t3 - 0.00375 * t2 + 0.00209 * ts) + T * (-0.02903 * t3 + 0.06377 * t2 - 0.03202 * ts + 0.00394) + (0.11693 * t3 - 0.21196 * t2 + 0.06052 * ts + 0.25886);
+  const yz = T * T * (0.00275 * t3 - 0.0061 * t2 + 0.00317 * ts) + T * (-0.04214 * t3 + 0.0897 * t2 - 0.04153 * ts + 0.00516) + (0.15346 * t3 - 0.26756 * t2 + 0.0667 * ts + 0.26688);
+  const F = (c: number[]) => (1 + c[0] * Math.exp(c[1])) * (1 + c[2] * Math.exp(c[3] * ts) + c[4] * Math.cos(ts) ** 2);
+  return [...Y.slice(0, 4), ...x.slice(0, 4), ...y.slice(0, 4), Y[4], x[4], y[4], T, Math.max(Yz, 0), xz, yz, 1, F(Y), F(x), F(y), 1];
+}
+
+/** Local time of sunset (HH:MM) for a date, Kuwait. */
+export function sunset(date = "03-21"): string {
+  let lo = 15 * 60, hi = 21 * 60;
+  const el = (m: number) => sunPosition(date, `${Math.floor(m / 60)}:${String(Math.round(m % 60)).padStart(2, "0")}`).elevation;
+  for (let k = 0; k < 20; k++) {
+    const mid = (lo + hi) / 2;
+    if (el(mid) > 0) lo = mid;
+    else hi = mid;
+  }
+  return `${Math.floor(lo / 60)}:${String(Math.round(lo % 60)).padStart(2, "0")}`;
+}
+
 /** Sun illuminance and sky radiance for a sun elevation (hazy Gulf air). */
 export function skyFor(sunDir: Vec3) {
   const s = sunDir[2];
@@ -188,6 +243,7 @@ export function skyFor(sunDir: Vec3) {
   return {
     sun: { dir: sunDir, E, cos: Math.cos(0.0047 * 1.5) },
     sky: {
+      preetham: preethamSky(sunDir),
       zenith: night ? [0.0015, 0.002, 0.004] : zenith,
       horizon: night ? [0.004, 0.004, 0.006] : horizon,
       ground: (night ? [0.001, 0.001, 0.001] : [0.36, 0.31, 0.24].map((c) => (c * (E[1] * Math.max(s, 0) + Math.PI * k)) / Math.PI)),
@@ -205,7 +261,7 @@ function cameraBasis(c: Camera) {
   }
   r = norm(r);
   const u = cross(r, f);
-  return { eye: c.eye, right: r, up: u, fwd: f, tanHalf: Math.tan(((c.fov ?? 45) * Math.PI) / 360), ortho: c.ortho && c.ortho > 0 ? c.ortho : 0 };
+  return { eye: c.eye, right: r, up: u, fwd: f, tanHalf: Math.tan(((c.fov ?? 45) * Math.PI) / 360), ortho: c.ortho && c.ortho > 0 ? c.ortho : 0, shift: c.shift ?? 0 };
 }
 const cross = (a: number[], b: number[]): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a: number[]): Vec3 => {
@@ -223,20 +279,41 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
   const v = prepareView(c, { ...o, textureSize: o.textureSize ?? 512 });
   const mode = o.lighting ?? "day";
   const lightsOn = mode !== "day";
-  const time = o.time ?? (mode === "night" ? "21:00" : mode === "dusk" ? "17:45" : "10:30");
-  const sp = sunPosition(o.date ?? "03-21", time);
+  const date = o.date ?? "03-21";
+  // golden hour: 45 minutes before sunset, lamps on
+  const golden = (() => {
+    const [h, m] = sunset(date).split(":").map(Number);
+    const t = h * 60 + m - 45;
+    return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+  })();
+  const time = o.time ?? (mode === "night" ? "21:00" : mode === "dusk" ? "17:45" : mode === "golden" ? golden : "10:30");
+  const sp = sunPosition(date, time);
   const env = skyFor(sp.dir);
   // one scene on the GPU at a time: re-upload only when the plan, the cut or the lamps change
   if (!ids.has(c)) ids.set(c, nextId++);
-  const key = `${ids.get(c)}|${v.root.children.length}|${v.texSize}|${lightsOn}`;
+  // interior shots: that room's own window panes are the portals for the sky
+  const room = o.interior?.room ? findRoom(c, o.interior.room) : undefined;
+  const rc = room ? room.polygon.reduce((a, p) => [a[0] + p[0] / room.polygon.length, a[1] + p[1] / room.polygon.length], [0, 0]) : [0, 0];
+  const portalFilter = room
+    ? (q: Vec3, n: Vec3) => {
+        const L = c.levels[room.li];
+        if (q[2] < L.elevation - 0.1 || q[2] > L.elevation + L.height + 0.1) return false;
+        const pg = room.polygon;
+        if (!pointInPolygon([q[0], q[1]], pg) && !pg.some((a, k) => pointSegment([q[0], q[1]], a, pg[(k + 1) % pg.length]).dist < 0.5)) return false;
+        // the pane itself, not the thin edges of a glass box
+        const d = norm([rc[0] - q[0], rc[1] - q[1], 0]);
+        return Math.abs(n[0] * d[0] + n[1] * d[1]) > 0.5;
+      }
+    : undefined;
+  const key = `${ids.get(c)}|${v.root.children.length}|${v.texSize}|${lightsOn}|${room ? `${room.li}:${room.room.name}` : ""}`;
   if (uploaded.key !== key || !pt.scene) {
-    pt.setScene(buildScene(v.root, v.lookup, v.texSize, lightsOn));
+    pt.setScene(buildScene(v.root, v.lookup, v.texSize, lightsOn, portalFilter));
     uploaded.key = key;
   }
   const W = v.opts.width, H = v.opts.height;
   const t0 = Date.now();
   const spp = Math.max(4, Math.min(4096, o.samples ?? 128));
-  const hdr = await pt.render({
+  const opts = {
     width: W,
     height: H,
     camera: cameraBasis(v.camera),
@@ -247,15 +324,29 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
     sky: env.sky,
     emitScale: 1500,
     denoise: o.denoise,
+    // aiming at the windows only pays off inside
+    portals: !!room && !process.env.PT_NO_PORTALS,
     debug: Number(process.env.PT_DEBUG_VIEW ?? 0),
-  });
+  };
+  // the AI denoiser when it is installed (raw image + guides), else the built-in one
+  const useOidn = o.denoise !== false && !process.env.PT_NO_OIDN && !!oidnBinary();
+  let hdr = await pt.render({ ...opts, aov: useOidn });
+  let denoiser = o.denoise === false ? "no denoiser" : "à-trous denoiser";
+  if (useOidn) {
+    const g = hdr as Float32Array & { albedo: Float32Array; normal: Float32Array };
+    const r = await oidnDenoise(g, g.albedo, g.normal, W, H);
+    if (r) {
+      hdr = r.image;
+      denoiser = `OIDN${r.device ? ` (${r.device})` : ""}`;
+    } else hdr = await pt.render(opts);
+  }
   // night and dusk keep their mood: expose a little under the average
-  const ev = (o.exposure ?? 0) + (mode === "night" ? -1.3 : mode === "dusk" ? -0.6 : 0);
-  const img = tonemap(hdr, W, H, ev);
+  const ev = (o.exposure ?? 0) + (mode === "night" ? -1.3 : mode === "dusk" ? -0.6 : mode === "golden" ? -0.2 : 0);
+  const img = tonemap(hdr, W, H, ev, { bloom: mode === "day" ? 0.04 : 0.08, vignette: 0.18, warmth: mode === "golden" ? 0.25 : 0 });
   const i = pt.adapterInfo;
   const gpuName = [i.vendor, i.architecture, i.description].filter(Boolean).join(" ") || "GPU";
   return {
     png: encodePNG({ width: W, height: H, rgba: img.rgba }),
-    renderer: `gpu path tracer (${gpuName}), ${spp} spp, ${pt.scene!.triangles} triangles, ${((Date.now() - t0) / 1000).toFixed(1)} s; sun ${sp.elevation.toFixed(0)}° at ${time}`,
+    renderer: `gpu path tracer (${gpuName}), ${spp} spp, ${denoiser}, ${pt.scene!.triangles} triangles, ${((Date.now() - t0) / 1000).toFixed(1)} s; sun ${sp.elevation.toFixed(0)}° at ${time}`,
   };
 }

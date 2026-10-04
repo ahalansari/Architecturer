@@ -27,6 +27,8 @@ export interface Camera {
   fov?: number;
   /** If set: orthographic projection, half-height of the view in meters. */
   ortho?: number;
+  /** Vertical lens shift in half-heights of the frame (two-point perspective: verticals stay vertical). */
+  shift?: number;
 }
 
 export interface RenderOptions {
@@ -53,8 +55,8 @@ export interface RenderOptions {
   occluders?: LightOccluderLevel[];
 }
 
-export type LightingMode = "day" | "night" | "dusk";
-export const LIGHTING_MODES: readonly LightingMode[] = ["day", "night", "dusk"];
+export type LightingMode = "day" | "night" | "dusk" | "golden";
+export const LIGHTING_MODES: readonly LightingMode[] = ["day", "golden", "dusk", "night"];
 
 /** Walls of one level, for light occlusion: light from a lamp on this level stays between z0 and z1. */
 export interface LightOccluderLevel {
@@ -155,7 +157,7 @@ interface LightingPreset {
   emissive: number;
 }
 
-const PRESETS: Record<LightingMode, LightingPreset> = {
+const PRESETS: Record<Exclude<LightingMode, "golden">, LightingPreset> = {
   day: {
     sun: nrm(0.45, -0.75, 1.1), sunC: [1.0, 0.96, 0.88], fillC: [0.1, 0.11, 0.13], skyC: [0.4, 0.45, 0.55], groundC: [0.23, 0.22, 0.21],
     bounceC: [0.44, 0.435, 0.42], bgTop: [0.47, 0.63, 0.84], bgBot: [0.86, 0.9, 0.94], lights: false, emissive: 1,
@@ -1122,7 +1124,7 @@ export function renderScene(
   opts: RenderOptions = {},
 ): RenderedImage {
   const mode: LightingMode = opts.lighting ?? "day";
-  const preset = PRESETS[mode] ?? PRESETS.day;
+  const preset = PRESETS[mode === "golden" ? "dusk" : mode] ?? PRESETS.day;
   SUN = preset.sun; SUN_C = preset.sunC; FILL_C = preset.fillC; SKY_C = preset.skyC; GROUND_C = preset.groundC; BOUNCE_C = preset.bounceC;
   const outW = Math.max(1, Math.round(opts.width ?? 1280));
   const outH = Math.max(1, Math.round(opts.height ?? 800));
@@ -1150,7 +1152,8 @@ export function renderScene(
   persp = !(camera.ortho && camera.ortho > 0);
   focal = persp ? H / 2 / Math.tan(((camera.fov ?? 45) * Math.PI) / 360) : H / 2 / camera.ortho!;
   cxs = W / 2;
-  cys = H / 2;
+  // lens shift: the principal point moves so the shifted direction lands mid-frame
+  cys = (H / 2) * (1 + (persp ? camera.shift ?? 0 : 0));
   clipOn = typeof opts.clipZ === "number" && isFinite(opts.clipZ);
   clipZv = clipOn ? opts.clipZ! : 0;
   const cap = opts.capColor ?? [0.16, 0.16, 0.18];

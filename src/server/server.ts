@@ -226,7 +226,7 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
           const n = Math.round(Number(query.get(k) ?? d));
           return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
         };
-        const lighting = ["day", "night", "dusk"].includes(query.get("lighting") ?? "") ? (query.get("lighting") as "day" | "night" | "dusk") : "day";
+        const lighting = ["day", "golden", "night", "dusk"].includes(query.get("lighting") ?? "") ? (query.get("lighting") as "day" | "golden" | "night" | "dusk") : "day";
         const time = /^\d{1,2}:\d{2}$/.test(query.get("time") ?? "") ? query.get("time")! : undefined;
         const date = /^\d{1,2}-\d{1,2}$/.test(query.get("date") ?? "") ? query.get("date")! : undefined;
         const level = /^[\w-]{1,64}$/.test(query.get("level") ?? "") ? query.get("level")! : undefined;

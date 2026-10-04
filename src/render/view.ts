@@ -29,11 +29,17 @@ export interface ViewOptions {
   interior?: InteriorView;
   /** auto (GPU path tracer when there is a GPU) | gpu | cpu (rasteriser). */
   renderer?: "auto" | "gpu" | "cpu";
-  /** Path tracer: samples per pixel (default 128), local time "HH:MM" and date "MM-DD" for the sun, exposure in EV. */
+  /** Path tracer: samples per pixel (default 128), local time "HH:MM" and date "MM-DD" for the sun, exposure in EV.
+   *  lighting "golden" = 45 min before sunset with the lamps on. */
   samples?: number;
   time?: string;
   date?: string;
   exposure?: number;
+  /** Lens focal length in mm (35 mm equivalent), for eye / target and interior cameras: 16–24 wide, 35 natural. */
+  lens?: number;
+  /** Two-point perspective: keep the camera level and shift the lens, so verticals stay vertical (default on for
+   *  interiors and eye-level cameras). */
+  straight?: boolean;
   /** Path tracer: false skips the denoiser (debugging, or very high sample counts). */
   denoise?: boolean;
 }
@@ -98,12 +104,24 @@ export function prepareView(c: Compiled, o: ViewOptions = {}): PreparedView {
     opts.clipZ = shot.clipZ;
   }
   let camera: Camera;
-  if (shot) camera = shot.camera;
-  else if (o.eye) camera = { eye: o.eye, target: o.target ?? (bounds.min.map((v, i) => (v + bounds.max[i]) / 2) as Vec3), fov: o.fov };
+  const lensFov = o.lens ? (2 * Math.atan(12 / o.lens) * 180) / Math.PI : undefined;
+  if (shot) camera = { ...shot.camera, fov: lensFov ?? shot.camera.fov };
+  else if (o.eye) camera = { eye: o.eye, target: o.target ?? (bounds.min.map((v, i) => (v + bounds.max[i]) / 2) as Vec3), fov: lensFov ?? o.fov };
   else {
     const b = { min: [...bounds.min] as Vec3, max: [...bounds.max] as Vec3 };
     if (typeof opts.clipZ === "number") b.max[2] = Math.max(b.min[2], Math.min(b.max[2], opts.clipZ));
     camera = presetCamera(b, o.view ?? "iso", width / height);
+  }
+  // architectural photography: level the camera and shift the lens instead of tilting it (when the camera is
+  // roughly level to begin with: interiors and eye-level shots, not aerial views)
+  if (!camera.ortho && (o.straight ?? !!(shot || o.eye))) {
+    const d = [camera.target[0] - camera.eye[0], camera.target[1] - camera.eye[1], camera.target[2] - camera.eye[2]];
+    const hd = Math.hypot(d[0], d[1]);
+    const pitch = Math.atan2(d[2], hd);
+    if (hd > 1e-3 && Math.abs(pitch) < (35 * Math.PI) / 180 && !shot?.clipZ) {
+      const tanHalf = Math.tan(((camera.fov ?? 45) * Math.PI) / 360);
+      camera = { ...camera, target: [camera.target[0], camera.target[1], camera.eye[2]], shift: Math.tan(pitch) / tanHalf };
+    }
   }
   return { root, camera, lookup, opts, texSize };
 }

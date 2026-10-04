@@ -8,22 +8,29 @@ export interface PTScene {
   texSize: number;
   baseLayers: Uint8Array[];
   normalLayers: Uint8Array[];
+  /** Window glass for sky sampling: 12 floats per triangle (v0 + cumulative area share, e1 + area, e2 + 0). */
+  portals?: Float32Array;
+  portalArea?: number;
 }
 export interface PTRender {
   width: number;
   height: number;
-  camera: { eye: number[]; right: number[]; up: number[]; fwd: number[]; tanHalf?: number; ortho?: number };
+  camera: { eye: number[]; right: number[]; up: number[]; fwd: number[]; tanHalf?: number; ortho?: number; shift?: number };
   spp?: number;
   maxBounce?: number;
   clipZ?: number;
   sun: { dir: number[]; E: number[]; cos?: number };
-  sky: { zenith: number[]; horizon: number[]; ground: number[] };
+  sky: { zenith: number[]; horizon: number[]; ground: number[]; preetham?: number[] };
   cap?: number[];
   emitScale?: number;
   clampIndirect?: number;
   seed?: number;
   denoise?: boolean;
   debug?: number;
+  /** Return the raw image with albedo / normal guides (Float32Array & {albedo, normal}) instead of denoising. */
+  aov?: boolean;
+  /** false: no window portals (exterior views). */
+  portals?: boolean;
   denoiseIterations?: number;
   onProgress?: (done: number, total: number) => void;
   signal?: AbortSignal;
@@ -37,4 +44,4 @@ export class PathTracer {
   destroyScene(): void;
   render(o: PTRender): Promise<Float32Array>;
 }
-export function tonemap(hdr: Float32Array, W: number, H: number, ev?: number): { rgba: Uint8Array; exposure: number; avg: number };
+export function tonemap(hdr: Float32Array, W: number, H: number, ev?: number, fx?: { bloom?: number; vignette?: number; warmth?: number }): { rgba: Uint8Array; exposure: number; avg: number };

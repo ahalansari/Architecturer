@@ -12,6 +12,14 @@ COPY tsconfig.json ./
 COPY src ./src
 # the path tracer is shared with the browser viewer (types for tsc)
 COPY viewer/gpu ./viewer/gpu
+# Intel Open Image Denoise (AI denoiser for the path tracer; CUDA on NVIDIA): x86-64 only, arm64 uses the built-in one
+ARG TARGETARCH
+ARG OIDN_VERSION=2.5.1
+RUN mkdir -p /opt/oidn && if [ "$TARGETARCH" = "amd64" ]; then \
+      node -e "fetch(process.argv[1]).then(r=>{if(!r.ok)throw new Error(r.status);return r.arrayBuffer()}).then(b=>require('fs').writeFileSync('/tmp/oidn.tgz',Buffer.from(b)))" \
+        "https://github.com/RenderKit/oidn/releases/download/v${OIDN_VERSION}/oidn-${OIDN_VERSION}.x86_64.linux.tar.gz" \
+      && tar xzf /tmp/oidn.tgz -C /opt/oidn --strip-components=1 && rm /tmp/oidn.tgz && rm -rf /opt/oidn/include /opt/oidn/lib/cmake /opt/oidn/lib/*hip* /opt/oidn/lib/*sycl* /opt/oidn/bin/oidnBenchmark /opt/oidn/bin/oidnTest; \
+    fi
 RUN npx tsc -p . && npm prune --omit=dev \
  # Dawn (WebGPU) ships every platform's binary: keep this image's
  && cd node_modules/webgpu/dist && for d in *; do [ "$d" = "linux-$(node -p process.arch)" ] || rm -rf "$d"; done
@@ -36,6 +44,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /opt/oidn /opt/oidn
 COPY package.json ./
 COPY bin ./bin
 COPY viewer ./viewer
