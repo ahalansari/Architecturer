@@ -137,6 +137,11 @@ export interface PipeRun {
   pts: Vec2[];
   /** mm */
   size: number;
+  /** What the run serves (for the hydraulics): its room, the outlet at its end, the heater it feeds or leaves, its stack. */
+  room?: number;
+  fixture?: string;
+  heater?: string;
+  stack?: string;
 }
 
 export interface Circuit {
@@ -887,11 +892,11 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
     const st = stackFor.get(f.room);
     if (f.drain > 0 && st) {
       const pts = st.room === f.room ? alongOutline(roomPath(f.room, 0.08), f.at, st.at) : lRoute(f.at, st.at, inside(f.room));
-      pipes.push({ kind: f.kind === "wc" ? "soil" : "waste", pts, size: f.drain });
+      pipes.push({ kind: f.kind === "wc" ? "soil" : "waste", pts, size: f.drain, room: f.room, fixture: f.id, stack: st.id });
     }
     if (f.hot) {
       const wh = heaterFor.get(f.room);
-      if (wh) pipes.push({ kind: "hot", pts: alongOutline(roomPath(f.room, 0.24), wh.at, f.at), size: 15 });
+      if (wh) pipes.push({ kind: "hot", pts: alongOutline(roomPath(f.room, 0.24), wh.at, f.at), size: 15, room: f.room, fixture: f.id, heater: wh.id });
     }
   }
   // cold: inlet → each wet room's entry (its stack corner / heater), then branches along the walls
@@ -901,12 +906,12 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
       if (!fx.length) continue;
       const entry = (stackFor.get(ri)?.room === ri ? stackFor.get(ri)!.at : null) ?? heaterFor.get(ri)?.at ?? fx[0].at;
       const entryIn = roomPath(ri, 0.16).reduce((a, b) => (v2.dist(b, entry) < v2.dist(a, entry) ? b : a));
-      if (ri !== inlet.room) pipes.push({ kind: "cold", pts: lRoute(inlet.at, entryIn), size: 22 });
-      for (const f of fx) pipes.push({ kind: "cold", pts: alongOutline(roomPath(ri, 0.16), ri === inlet.room ? inlet.at : entryIn, f.at), size: 15 });
+      if (ri !== inlet.room) pipes.push({ kind: "cold", pts: lRoute(inlet.at, entryIn), size: 22, room: ri });
+      for (const f of fx) pipes.push({ kind: "cold", pts: alongOutline(roomPath(ri, 0.16), ri === inlet.room ? inlet.at : entryIn, f.at), size: 15, room: ri, fixture: f.id });
       const wh = heaterFor.get(ri);
-      if (wh) pipes.push({ kind: "cold", pts: alongOutline(roomPath(ri, 0.16), ri === inlet.room ? inlet.at : entryIn, wh.at), size: 15 });
+      if (wh) pipes.push({ kind: "cold", pts: alongOutline(roomPath(ri, 0.16), ri === inlet.room ? inlet.at : entryIn, wh.at), size: 15, room: ri, heater: wh.id });
     }
-    for (const f of fixtures.filter((x) => x.room < 0 && x.cold)) pipes.push({ kind: "cold", pts: lRoute(inlet.at, f.at), size: 15 });
+    for (const f of fixtures.filter((x) => x.room < 0 && x.cold)) pipes.push({ kind: "cold", pts: lRoute(inlet.at, f.at), size: 15, room: -1, fixture: f.id });
   }
 
   if (set.auto) {

@@ -128,3 +128,27 @@ test("cost section J, the hvac contract package and the plan sheet", () => {
   const elec = renderPlanSVG(c, "g", { sheet: "electrical" });
   if (c.levels[0].services.electrical.some((e) => e.type === "db")) assert.match(elec, /AC-1/);
 });
+
+test("air side: index runs, fan static, noise and air changes", async () => {
+  const { diffuserNC, ductLoss } = await import("../src/elements/airside.js");
+  // a 300 × 200 duct at 200 L/s: about 3.3 m/s, under 1 Pa/m
+  const d = ductLoss(200, 0.3, 0.2, 1, 0);
+  assert.ok(d.v > 3.2 && d.v < 3.4 && d.paPerM > 0.4 && d.paPerM < 1, JSON.stringify(d));
+  assert.equal(diffuserNC(2.5), 25);
+  assert.ok(diffuserNC(4) > 33);
+  const { readFileSync } = await import("node:fs");
+  const c = compile(JSON.parse(readFileSync("examples/villa.json", "utf8")));
+  const air = c.hvac!.air!;
+  const u = air.units[0];
+  assert.ok(u.supplyPa > 30 && u.returnPa > 20 && u.riserPa > 0, JSON.stringify(u));
+  assert.equal(u.espPa, Math.round((u.supplyPa + u.returnPa) * 1.15));
+  assert.ok(u.fanW > 200 && u.sfp > 0.3 && u.sfp < 3);
+  assert.ok(u.indexSupply && u.indexReturn);
+  // every duct has a velocity and friction; every supplied room has a neck within its NC limit
+  assert.equal(air.ducts.length, c.hvac!.levels.reduce((a, l) => a + l.ducts.length, 0));
+  for (const r of air.rooms) {
+    assert.ok(r.ach > 2 && r.ach < 20, `${r.name} ${r.ach}`);
+    assert.ok(r.neckVelocity <= (r.ncTarget <= 30 ? 2.5 : r.ncTarget <= 35 ? 3 : 3.5) + 1e-9 || r.neck === 400);
+  }
+  if (u.espPa > u.standardPa) assert.ok(air.issues.some((i) => /high-static/.test(i)));
+});

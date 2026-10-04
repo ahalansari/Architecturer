@@ -17,6 +17,7 @@ import { ProductSchema } from "../elements/products.js";
 import { HvacSchema } from "../elements/hvac.js";
 import { LIFT_DRIVES } from "../elements/lifts.js";
 import { GardenSchema, LandscapeSchema } from "../elements/landscape.js";
+import { WaterSchema } from "../elements/water.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 import { applyConstructionDefaults, ConstructionSchema, WALL_ASSEMBLY_IDS } from "../elements/construction.js";
@@ -425,6 +426,7 @@ export const ProjectSchema = z
     products: z.array(ProductSchema).default([]).describe("Vendor / library items (import_product) placed with furniture.product; shopping_list totals them"),
     hvac: HvacSchema,
     landscape: LandscapeSchema,
+    water: WaterSchema,
     contract: z
       .object({
         owner: PartySchema.optional().describe("First party (the owner); generate_contract fills it in every contract"),

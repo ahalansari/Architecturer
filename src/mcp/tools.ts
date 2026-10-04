@@ -776,7 +776,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
       title: "Air conditioning design",
       description:
         "Cooling loads per room and the air-conditioning design: rooftop packaged units by default (ducted, one per floor or shared by small floors through one riser; split when a floor needs more than maxUnitTR), or ducted splits / wall splits. " +
-        "Loads use Kuwait design conditions (48 °C / 24 °C), the walls' construction, glazing by orientation, the roof, people, the lighting design, appliances and fresh air. Returns units (TR, airflow, kW, breaker), room loads, coordination issues (duct depth vs ceiling void, exposed ducts, roof space) and assumptions. " +
+        "Loads use Kuwait design conditions (48 °C / 24 °C), the walls' construction, glazing by orientation, the roof, people, the lighting design, appliances and fresh air. Returns units (TR, airflow, kW, breaker), room loads, the air side (duct pressure drops, index runs, external static pressure vs the standard fan, fan power, diffuser necks with NC noise, air changes, throw), coordination issues (duct depth vs ceiling void, exposed ducts, roof space) and assumptions. " +
         "Settings in project.hvac; the layout drawing is render_plan sheet 'hvac'; the cost is section J of cost_estimate; the contract is generate_contract package 'hvac'.",
       inputSchema: { path: PathArg, rooms: z.boolean().default(true).describe("Include the per-room load table") },
       annotations: READ,
@@ -784,6 +784,26 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
     guard(async ({ path, rooms }, extra) => {
       const file = ws.plan(path);
       const r = await job(file, await load(file), { op: "hvac", detail: rooms }, extra, "Calculating loads");
+      if (!r.ok) return fail(r.summary);
+      return ok(text(r.text!));
+    }),
+  );
+
+  tool(
+    "water_design",
+    {
+      title: "Water supply and drainage hydraulics",
+      description:
+        "Hydraulics of the plumbing layout: peak flows (DIN 1988-300), pipe sizes (PPR / PEX / copper, by velocity), pressure at every outlet at peak against EN 806 minimums, booster set duty and setting, transfer pump, " +
+        "hot-water wait time and litres run off at each hot outlet, hot / cold balance at mixers, the summer temperature of the 'cold' water from roof tanks, roof and ground tank sizes (occupants + garden), heater sizes, " +
+        "and drainage stack flows (EN 12056-2) with stacks that do not line up between floors. Settings in project.water {supply: tank_booster | tank_gravity | mains, boosterBar, tank: exposed | shaded | insulated, pipe, occupants}. " +
+        "The plumbing sheet of render_plan shows the sizes, the riser and each outlet's pressure and hot wait; the plant is in section G of cost_estimate.",
+      inputSchema: { path: PathArg, pipes: z.boolean().default(true).describe("Include the pipe sizing table") },
+      annotations: READ,
+    },
+    guard(async ({ path, pipes }, extra) => {
+      const file = ws.plan(path);
+      const r = await job(file, await load(file), { op: "water", detail: pipes }, extra, "Calculating hydraulics");
       if (!r.ok) return fail(r.summary);
       return ok(text(r.text!));
     }),

@@ -35,7 +35,8 @@ export type JobRequest =
   // works contract (Word and/or HTML) for a trade package
   | (Base & { op: "contract"; options: ContractOptions; out: { docx?: string; html?: string } })
   | (Base & { op: "hvac"; detail: boolean })
-  | (Base & { op: "landscape" });
+  | (Base & { op: "landscape" })
+  | (Base & { op: "water"; detail: boolean });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -141,6 +142,11 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
       const { hvacReport } = await import("../elements/hvac-report.js");
       if (!c.hvac) return { ok: false, summary: sum };
       return { ok: true, summary: sum, text: hvacReport(c.hvac, c.levels.map((l) => l.name), req.detail) };
+    }
+    case "water": {
+      const { waterReport } = await import("../elements/water.js");
+      if (!c.water) return { ok: false, summary: sum + " (no plumbing: the plan has no wet rooms)" };
+      return { ok: true, summary: sum, text: waterReport(c.water, c.levels.map((l) => l.name), req.detail) };
     }
     case "landscape": {
       const { landscapeReport } = await import("../elements/landscape.js");

@@ -1,0 +1,72 @@
+[
+{
+"key": "lift:base",
+"value": 4000,
+"low": 3500,
+"high": 10000,
+"unit": "each",
+"basis": "supply+install",
+"source": "elevatorskw.com (Kuwaiti home-lift installer) price article, Wayback copy Apr 2025; cross-checked against matrixkw1.com (Kuwait) 2026 villa budget",
+"url": "http://web.archive.org/web/20250418195026/https://elevatorskw.com/%D8%A7%D8%B3%D8%B9%D8%A7%D8%B1-%D8%A7%D9%84%D9%85%D8%B5%D8%A7%D8%B9%D8%AF/",
+"quote": "يمكن أن تتراوح أسعار المصاعد المنزلية من حوالي 4000 دينار كويتي إلى 10000 دينار كويتي أو أكثر",
+"accessed": "2026-10-04",
+"confidence": "medium",
+"note": "A Kuwaiti installer (Italian hydraulic and electric lifts) gives 4,000–10,000+ KD for home lifts and 3,500–4,000 KD for small ones; the live site is now offline, so the Wayback copy of 18 Apr 2025 was read. Cross-check: matrixkw1.com (Kuwaiti contractor, 2026) budgets 4,500 KD for the lift of a basement + 3¼-floor house (about 5 stops), so a 2-stop G+1 lift from a local installer (Italian/Turkish/Chinese components, 4–6 persons, 320–450 kg, MRL traction or hydraulic) is about 4,000 KD; the top of the elevatorskw range (up to 10,000+) is for larger cars, luxury finishes and branded (e.g. Otis) lifts. Includes car, landing doors, controller, rails, installation and testing; excludes the civil shaft, pit, shaft lighting and the power supply (see lift:power_supply). Brands seen on Kuwaiti company pages: Otis (Kuwait office), Sigma, Kleemann and IGV Domus Lift (Marafie Group), Sharp and Asia Fuji (Al-Modayan), Fuji Lift, Atlas, Italian packages (elevatorskw); Schindler, KONE and Mitsubishi were not found with Kuwaiti prices in this research. Typical villa shaft (Al-Modayan, Kuwait): 110 cm wide for a 70 cm door or 120 cm for an 80 cm door; pit 120 cm; top floor 380 cm floor-to-tile (400 cm structural) for the overhead; structural door opening 240 cm high. maswada.com recommends ~180 × 180 cm for a comfortable residential shaft and a 1.0–2.0 m pit. No VAT in Kuwait."
+},
+{
+"key": "lift:per_stop",
+"value": 300,
+"low": 170,
+"high": 1200,
+"unit": "each additional stop",
+"basis": "supply+install",
+"source": "matrixkw1.com (Kuwait, 2026) 5-stop villa lift budget vs elevatorskw.com small-lift price; UAE per-floor adder (morrisgcc.com) as the upper bound",
+"url": "https://matrixkw1.com/blog/cost-building-plot-kuwait-budget?lang=ar",
+"quote": "المصعد | 4,500 د.ك (تكلفة بناء سرداب + 3 أدوار وربع في الكويت)",
+"accessed": "2026-10-04",
+"confidence": "low",
+"note": "No Kuwaiti per-stop price was published. Derived: matrixkw1 budgets 4,500 KD for a basement + G + 2 floors + roof lift (≈5 stops), while elevatorskw puts small lifts at 3,500–4,000 KD; (4,500 − 3,750) / 3 extra stops ≈ 250 KD, range ≈ 170–300 KD per stop (extra landing door, rails, wiring, longer travel). Upper bound from the UAE: morrisgcc.com says each extra floor adds AED 15,000–25,000 (×0.0836 = 1,254–2,090 KD; /1.05 VAT ≈ 1,190–1,990 KD), which reflects premium imported home lifts, not local Kuwaiti packages; high set at ~1,200 KD for branded lifts."
+},
+{
+"key": "lift:home_lift",
+"value": 4000,
+"low": 2500,
+"high": 7350,
+"unit": "each (2 stops)",
+"basis": "supply+install",
+"source": "elevatorskw.com (Kuwait) small home lifts, Wayback copy Apr 2025; GCC comparisons (harajelevators.com KSA, morrisgcc.com and cibeslift.ae UAE)",
+"url": "http://web.archive.org/web/20250418195026/https://elevatorskw.com/%D8%A7%D8%B3%D8%B9%D8%A7%D8%B1-%D8%A7%D9%84%D9%85%D8%B5%D8%A7%D8%B9%D8%AF/",
+"quote": "يمكن أن تبدأ أسعار المصاعد الصغيرة من حوالي 3.500دينار كويتي وتصل إلى 4000 دينار كويتي أو أكثر",
+"accessed": "2026-10-04",
+"confidence": "low",
+"note": "Kuwait: small home lifts 3,500–4,000+ KD (elevatorskw; the site also advertises small lifts without a foundation/pit). GCC comparisons, low confidence: KSA lifts without a foundation from 35,000 SAR (harajelevators.com 2026; /1.15 VAT ×0.0818 ≈ 2,490 KD) → low; UAE vacuum home lift G+1 AED 50,000–92,200 (morrisgcc.com; /1.05 ×0.0836 ≈ 3,980–7,340 KD) → high; branded Cibes screw-drive lifts 2 stops AED 88,000–170,000 (cibeslift.ae; ≈ 7,000–14,200 KD) sit above the range. Marafie Group (Kuwait) distributes IGV Domus Lift hydraulic home lifts (no price published). maswada.com gives ~40 cm pit for pit-less home lifts vs 1.0–2.0 m for conventional residential lifts; compact lifts usually carry 2–4 persons."
+},
+{
+"key": "lift:maintenance_year",
+"value": 200,
+"low": 85,
+"high": 430,
+"unit": "year",
+"basis": "supply+install",
+"source": "GCC annual maintenance contract prices (harajelevators.com KSA 2026; asansir-sa.com KSA; cibeslift.ae UAE) cross-checked with 4Sale Kuwait elevator technician call-outs",
+"url": "https://harajelevators.com/%D8%AA%D9%83%D9%84%D9%81%D8%A9-%D8%AA%D8%B1%D9%83%D9%8A%D8%A8-%D9%85%D8%B5%D8%B9%D8%AF-%D9%85%D9%86%D8%B2%D9%84%D9%8A/",
+"quote": "تكاليف الصيانة السنوية: من 2000 إلى 6000 ريال سعودي",
+"accessed": "2026-10-04",
+"confidence": "low",
+"note": "No Kuwaiti annual contract price was published (Al-Modayan, Al-Quds, Abyat and others quote on request; Al-Modayan's contract includes a monthly inspection). GCC prices, low confidence: KSA 2,000–6,000 SAR/yr (harajelevators; /1.15 ×0.0818 ≈ 142–427 KD); KSA residential contract with 12 monthly visits 1,199 SAR (asansir-sa.com; ≈ 85 KD) → low; UAE Cibes AMC ≈ AED 4,500 (/1.05 ×0.0836 ≈ 358 KD). Kuwait check: 4Sale (Kuwait City) elevator-technician ads list 10 KD per call-out, so 12 monthly visits ≈ 120 KD before parts. Value ≈ 200 KD/yr for a 2–3 stop villa lift with monthly visits, parts extra."
+},
+{
+"key": "lift:power_supply",
+"value": 120,
+"low": 75,
+"high": 200,
+"unit": "each",
+"basis": "supply+install",
+"source": "Forsa Kuwait installation price list (1- or 3-phase power point) + allowance for the longer run to the lift controller",
+"url": "https://forsakw.com/product/gree-split-ac-economic-18000/",
+"quote": "Power Point (1 Phase and 3 Phase): 75.000 KD",
+"accessed": "2026-10-04",
+"confidence": "low",
+"note": "No Kuwaiti price for a lift supply was found. A Kuwaiti retailer charges 75 KD for a new 1- or 3-phase power point (short retrofit run). A villa lift needs a dedicated 3-phase supply (MRL traction motor ~3–5.5 kW, hydraulic power pack ~4–7.5 kW) from the main DB: 3P MCB/MCCB, 4-core 6–10 mm² cable run up to the controller (top landing for MRL, next to the pit for hydraulic), a lockable 3-pole isolator at the controller, plus a 1-phase circuit for car/shaft lighting. With a 15–30 m run this is estimated at ~120 KD (200 for long runs or a separate sub-board). The higher figures are estimates, not sourced prices. Do not also count mep.json point:* or circuit for this supply."
+}
+]

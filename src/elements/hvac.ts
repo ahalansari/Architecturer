@@ -140,6 +140,10 @@ export interface Duct {
   /** Width × height, m. */
   w: number;
   h: number;
+  /** Tree links within the unit's supply / return tree on this level: node 0 is the riser; the terminal it ends at. */
+  node?: number;
+  parent?: number;
+  term?: string;
 }
 
 export interface LevelHvac {
@@ -162,6 +166,8 @@ export interface HvacDesign {
   issues: string[];
   totals: { tr: number; kw: number; area: number; m2PerTR: number; wPerM2: number };
   assumptions: string[];
+  /** Air side: duct pressure drops, fan static, noise, air changes (designAirside). */
+  air?: import("./airside.js").AirsideDesign;
 }
 
 /** What the HVAC design needs from each built level. */
@@ -631,7 +637,7 @@ export function designHvac(
             const maxH = Math.max(0.15, Math.min(0.35, Math.floor((avail + 1e-6) / 0.05) * 0.05));
             const h = Math.min(maxH, Math.max(0.15, Math.round(Math.sqrt(area / 2) / 0.05) * 0.05));
             const w = Math.max(h, Math.ceil(area / h / 0.05) * 0.05);
-            L.ducts.push({ kind, unit: id, pts: e.pts, airflow: Math.round(e.airflow), w: r2(w), h: r2(h) });
+            L.ducts.push({ kind, unit: id, pts: e.pts, airflow: Math.round(e.airflow), w: r2(w), h: r2(h), node: e.node, parent: e.parent, term: terms[e.node - 1]?.id });
           }
         }
       }
@@ -708,7 +714,7 @@ function nearEdge(p: Vec2, poly: Vec2[]): number {
  * A duct tree: minimum spanning tree (Manhattan) from the root through the terminals, each edge drawn as an L
  * (bend chosen to stay inside rooms) and carrying the air of everything downstream.
  */
-function ductTree(root: Vec2, terms: { at: Vec2; airflow: number }[], inside: (p: Vec2) => boolean): { pts: Vec2[]; airflow: number; leaf: boolean }[] {
+function ductTree(root: Vec2, terms: { at: Vec2; airflow: number }[], inside: (p: Vec2) => boolean): { pts: Vec2[]; airflow: number; leaf: boolean; node: number; parent: number }[] {
   const nodes = [root, ...terms.map((t) => t.at)];
   const n = nodes.length;
   const parent = new Array<number>(n).fill(-1);
@@ -731,14 +737,14 @@ function ductTree(root: Vec2, terms: { at: Vec2; airflow: number }[], inside: (p
   const children = Array.from({ length: n }, () => [] as number[]);
   for (let i = 1; i < n; i++) children[parent[i]].push(i);
   const down = (i: number): number => flow[i] + children[i].reduce((a, c) => a + down(c), 0);
-  const out: { pts: Vec2[]; airflow: number; leaf: boolean }[] = [];
+  const out: { pts: Vec2[]; airflow: number; leaf: boolean; node: number; parent: number }[] = [];
   for (let i = 1; i < n; i++) {
     const a = nodes[parent[i]], b = nodes[i];
     const bends: Vec2[] = [[b[0], a[1]], [a[0], b[1]]];
     const score = (m: Vec2) => [0.25, 0.5, 0.75].filter((t) => inside(v2.lerp(a, m, t)) && inside(v2.lerp(m, b, t))).length + (inside(m) ? 1 : 0);
     const bend = score(bends[0]) >= score(bends[1]) ? bends[0] : bends[1];
     const pts = v2.dist(a, bend) < 0.01 || v2.dist(bend, b) < 0.01 ? [a, b] : [a, bend, b];
-    out.push({ pts, airflow: down(i), leaf: children[i].length === 0 });
+    out.push({ pts, airflow: down(i), leaf: children[i].length === 0, node: i, parent: parent[i] });
   }
   return out;
 }

@@ -749,6 +749,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         L.push({ lines: [{ text: short, size, color: "#8a8a8a" }], prio: 5, optional: true, cands: [{ x: q[0], y: q[1] + (e.n ? 0 : er + size), cost: 0 }, { x: q[0] + er * 2, y: q[1], cost: 4 }, { x: q[0] - er * 2, y: q[1], cost: 4 }] });
       }
   }
+  const water = c.water;
   if (sheet === "plumbing") {
     const order = { soil: 0, waste: 1, cold: 2, hot: 3 };
     for (const p of [...svc.pipes].sort((a, b) => order[a.kind] - order[b.kind])) out.push(pipeSVG(p, px));
@@ -762,7 +763,29 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       if (!labels) continue;
       const text = `${FIXTURE_LABEL[f.kind]}${f.drain ? ` Ø${f.drain}` : ""}`;
       const c = f.poly ? px(polygonCentroid(f.poly)) : [x, y + er * 2];
+      // hydraulics: flow pressure at peak and the hot-water wait
+      const wo = water?.outlets.find((o) => o.level === li && o.id === f.id);
+      const low = wo && ((wo.cold ?? 9) < wo.required || (wo.hot ?? 9) < wo.required);
+      const sub = wo ? `${Math.min(wo.cold ?? 9, wo.hot ?? 9).toFixed(1)} bar${wo.waitS !== undefined ? ` · hot ${wo.waitS} s` : ""}` : "";
+      if (sub) L.push({ lines: [{ text: sub, size: size - 1, color: low || (wo?.waitS ?? 0) > 15 ? "#c0392b" : "#4a6f94" }], prio: 4.5, optional: true, cands: [{ x, y: y + er * 2.4, cost: 0 }, { x, y: y - er * 2.4, cost: 1 }, { x: x + er * 5, y, cost: 2 }, { x: x - er * 5, y, cost: 2 }] });
       L.push({ lines: [{ text, size, color: f.kind === "wc" ? PL.soil : "#5a4632" }], prio: 2.5, optional: true, cands: [{ x: c[0], y: c[1], cost: 0 }, { x: c[0], y: c[1] + size * 1.3, cost: 5 }, { x: c[0], y: c[1] - size * 1.3, cost: 5 }, { x: x, y: y + er * 2, cost: 10 }] });
+    }
+    // riser and main sizes from the hydraulics
+    const wd = c.water;
+    if (wd && labels) {
+      for (const sg of wd.segments.filter((sg) => sg.level === li && sg.kind === "main" && sg.length > 1.5)) {
+        let best: [Vec2, Vec2] | undefined;
+        for (let k = 1; k < sg.pts.length; k++) if (!best || v2.dist(sg.pts[k - 1], sg.pts[k]) > v2.dist(best[0], best[1])) best = [sg.pts[k - 1] as Vec2, sg.pts[k] as Vec2];
+        if (!best) continue;
+        const [x, y] = px(v2.lerp(best[0], best[1], 0.5));
+        L.push({ lines: [{ text: `Ø${sg.od}`, size: size - 1, color: PL.cold, bold: true }], prio: 4, optional: true, cands: [{ x, y: y - 7, cost: 0 }, { x, y: y + 9, cost: 1 }, { x: x + 14, y, cost: 2 }] });
+      }
+      const rs = wd.segments.filter((sg) => sg.level === li && sg.kind === "riser");
+      if (rs.length) {
+        const [x, y] = px(rs[0].pts[0]);
+        out.push(`<circle cx="${x}" cy="${y}" r="${er * 1.3}" fill="#fff" stroke="${PL.cold}" stroke-width="1.6"/><text x="${x}" y="${y + 3}" font-size="${Math.max(7, er * 1.3)}" font-weight="bold" fill="${PL.cold}" text-anchor="middle">R</text>`);
+        L.push({ lines: [{ text: `riser Ø${Math.max(...rs.map((r) => r.od))}`, size, color: PL.cold, bold: true }], prio: 2, optional: true, cands: [{ x, y: y + er * 3.2, cost: 0 }, { x, y: y - er * 3.2, cost: 1 }, { x: x + er * 5, y, cost: 2 }] });
+      }
     }
     for (const p of svc.points) {
       const [x, y] = px(p.at);
@@ -849,7 +872,12 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       const rl = ci >= 0 ? hvRooms.get(ci) : undefined;
       if (!rl) return [];
       if (!rl.conditioned) return [{ text: rl.reason?.split(":")[0] ?? "not conditioned", size: small, color: "#999" }];
-      return [{ text: `${rl.tr} TR · ${(rl.total / 1000).toFixed(1)} kW`, size: small, color: AC.supply, bold: true }, { text: `${rl.supply} L/s · ${rl.zone ?? ""}`, size: small, color: "#666" }];
+      const ar = hv?.air?.rooms.find((a) => a.level === li && a.room === ci);
+      return [
+        { text: `${rl.tr} TR · ${(rl.total / 1000).toFixed(1)} kW`, size: small, color: AC.supply, bold: true },
+        { text: `${rl.supply} L/s · ${rl.zone ?? ""}`, size: small, color: "#666" },
+        ...(ar ? [{ text: `NC ${ar.nc} · ${ar.ach} ACH`, size: small, color: ar.nc > ar.ncTarget + 2 ? "#b33" : "#666" }] : []),
+      ];
     }
     if (sheet === "plumbing") {
       const fx = svc.fixtures.filter((f) => f.room === ci && ci >= 0);
@@ -1129,8 +1157,13 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       head("Pipes");
       const line = (kind: "soil" | "waste" | "cold" | "hot", t: string, sub: string) =>
         row(pipeSVG({ kind, pts: [[x0 + 2, y], [x0 + 26, y]], size: kind === "cold" ? 15 : 50 }, (p) => p), t, sub);
-      line("cold", "cold water supply", "15 mm branches, 22 mm main");
-      line("hot", "hot water supply", "15 mm from the water heater");
+      const wd = c.water;
+      const sizes = (f: (sg: NonNullable<typeof wd>["segments"][number]) => boolean) => {
+        const o = [...new Set(wd?.segments.filter(f).map((sg) => sg.od))].sort((a, b) => a - b);
+        return o.length ? `Ø${o.join("/")}` : "";
+      };
+      line("cold", "cold water supply", wd ? `${sizes((sg) => sg.kind === "branch")} branches, ${sizes((sg) => sg.kind === "main" || sg.kind === "riser")} mains (${wd.pipe})` : "15 mm branches, 22 mm main");
+      line("hot", "hot water supply", wd ? `${sizes((sg) => sg.kind === "hot")} from the water heater` : "15 mm from the water heater");
       line("waste", "waste drain", "40–50 mm, fall 1:40 to the stack");
       line("soil", "soil drain (WC)", "100 mm, fall 1:40");
       y += 4;
@@ -1156,6 +1189,24 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         y += 15;
       }
       y += 8;
+      if (c.water) {
+        const wd = c.water;
+        head("Water supply");
+        const src = wd.supply === "tank_booster" ? `roof tanks + booster ${wd.booster?.setBar} bar` : wd.supply === "tank_gravity" ? "roof tanks by gravity" : "street supply";
+        for (const [t, sub] of [
+          [src, `peak ${wd.peak.total} L/s · ${wd.storage.roof.tanks} on the roof`],
+          [`ground tank ${wd.storage.ground.m3} m³`, `${wd.storage.occupants} people · ${wd.storage.litresPerDay} L/day`],
+          [`summer cold water ≈ ${wd.coldSummerC} °C`, "label under each fixture: bar at peak · hot wait"],
+        ] as const) {
+          lg.push(`<text x="${x0}" y="${y}" font-size="10.5" fill="#222">${esc(t)}</text><text x="${x0}" y="${y + 11}" font-size="9" fill="#777">${esc(sub)}</text>`);
+          y += 26;
+        }
+        const mine = wd.issues.length;
+        if (mine) {
+          lg.push(`<text x="${x0}" y="${y}" font-size="10" fill="#c0392b">${mine} hydraulic issue(s): see water_design</text>`);
+          y += 18;
+        }
+      }
     } else if (sheet === "landscape") {
       head("Garden");
       const ar = ls ? Object.entries(ls.areas).filter(([, v]) => v > 0) : [];
@@ -1208,6 +1259,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       for (const u of hv?.units ?? []) {
         lg.push(`<text x="${x0}" y="${y}" font-size="10.5" font-weight="bold" fill="${AC.unit}">${esc(u.id)}</text><text x="${x0 + 46}" y="${y}" font-size="10.5" fill="#222">${u.size} TR · load ${u.load} TR · ${u.airflow} L/s</text>`);
         lg.push(`<text x="${x0 + 46}" y="${y + 11}" font-size="9" fill="#777">${u.freshAir ? `fresh air ${u.freshAir} L/s · ` : ""}${u.kw} kW · ${u.phase}-ph ${u.breaker} A</text>`);
+        const au = hv?.air?.units.find((a) => a.unit === u.id);
+        if (au) {
+          lg.push(`<text x="${x0 + 46}" y="${y + 22}" font-size="9" fill="${au.standardPa && au.espPa > au.standardPa ? "#b33" : "#777"}">ESP ${au.espPa} Pa${au.standardPa ? ` (standard ${au.standardPa})` : ""} · fan ${au.fanW} W</text>`);
+          y += 11;
+        }
         y += 26;
         if (y > H - 40) break;
       }
@@ -1222,9 +1278,10 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
           y += 14;
         }
       }
-      if (hv?.issues.length) {
+      const nIss = (hv?.issues.length ?? 0) + (hv?.air?.issues.length ?? 0);
+      if (nIss) {
         y += 8;
-        lg.push(`<text x="${x0}" y="${y}" font-size="10" font-weight="bold" fill="#b33">${hv.issues.length} coordination issue${hv.issues.length > 1 ? "s" : ""}: see hvac_design</text>`);
+        lg.push(`<text x="${x0}" y="${y}" font-size="10" font-weight="bold" fill="#b33">${nIss} coordination issue${nIss > 1 ? "s" : ""}: see hvac_design</text>`);
         y += 16;
       }
     } else if (sheet === "lighting") {

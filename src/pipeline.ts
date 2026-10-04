@@ -6,9 +6,11 @@ import type { MaterialDef, TextureSet } from "./materials/types.js";
 import { parseProject, type Project } from "./schema/schema.js";
 import { checkLayout } from "./validate/layout.js";
 import { designHvac, hvacNode, type HvacDesign } from "./elements/hvac.js";
+import { designAirside } from "./elements/airside.js";
 import { applyLifts, designLifts, liftSpec, liftsNode, type LiftDesign } from "./elements/lifts.js";
 import type { Circuit } from "./elements/services.js";
 import { designLandscape, type LandscapeDesign } from "./elements/landscape.js";
+import { designWater, type WaterDesign } from "./elements/water.js";
 import { constructionSystem } from "./elements/construction.js";
 import { applyStyles } from "./elements/styles.js";
 import { applyProducts } from "./elements/products.js";
@@ -37,6 +39,8 @@ export interface Compiled {
   liftCircuits?: Circuit[];
   /** Gardens: areas, plants, irrigation zones and water demand. */
   landscape?: LandscapeDesign;
+  /** Water supply hydraulics: pipe sizes, pressures, hot-water waits, storage, drainage stacks. */
+  water?: WaterDesign;
 }
 
 const MISSING: MaterialDef = {
@@ -98,10 +102,19 @@ export function compile(input: unknown): Compiled {
     warnings.push(`landscape design failed: ${(e as Error).message}`);
   }
 
+  // water: hydraulics of the plumbing layout
+  let water: WaterDesign | undefined;
+  try {
+    if (levels.some((l) => l.services.points.some((p) => p.type === "inlet"))) water = designWater(project as never, levels, landscape?.demand.litresPerDay ?? 0);
+  } catch (e) {
+    warnings.push(`water design failed: ${(e as Error).message}`);
+  }
+
   // air conditioning: loads, units, ducted layout, and the equipment in 3D
   let hvac: HvacDesign | undefined;
   try {
     hvac = designHvac(project as never, levels, project.construction?.exteriorWall ?? constructionSystem(project.construction).exteriorWall);
+    hvac.air = designAirside(hvac, levels, project.levels.map((l) => l.rooms));
     const node = hvacNode(hvac, levels, (l) => project.levels[l].rooms.length);
     if (node) root.children.push(node);
   } catch (e) {
@@ -143,6 +156,7 @@ export function compile(input: unknown): Compiled {
     lifts,
     liftCircuits,
     landscape,
+    water,
     notes: lifts.length ? lifts.map((l) => liftSpec(l)) : undefined,
     materials,
     errors,

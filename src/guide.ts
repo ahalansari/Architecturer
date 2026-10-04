@@ -152,6 +152,9 @@ Call get_schema for every field; this guide covers conventions and good practice
   "ducted_split", "split" (wall units per room) or "none". Bathrooms (extract), garages and outdoor rooms are not cooled.
 - hvac_design: units (TR, L/s, kW, breaker), room loads, coordination issues; render_plan sheet "hvac": ducts to scale,
   diffusers, return grilles, the riser, thermostat, roof units. Cost: section J of cost_estimate. Contract: package hvac.
+- Air side (in hvac_design): duct velocities and pressure drops, supply / return index runs, the external static
+  pressure the fan needs vs a standard unit (high-static option flagged), fan power, diffuser necks with NC noise
+  against the room (bedrooms NC 30), air changes per hour and throw.
 - Ducts run in false ceilings: give conditioned rooms a ceilingHeight about 0.3–0.4 m below the slab soffit, or the
   design reports where ducts would be exposed. Steer it with hvac {zones:[{rooms:[...], shaft:[x,y]}], omitRooms,
   maxUnitTR, glazing:{u, shgc}, outdoorTemp}.
@@ -165,6 +168,15 @@ Call get_schema for every field; this guide covers conventions and good practice
   overhead 2.6 m). Checks: landing inside a room and clear (1.2 m, 1.5 m for 630 kg+), furniture in the shaft,
   doors / windows blocked, walls or stairs through the shaft. Cost section K, contract package "lifts".
 - Without shaft, an elevator only links levels for the circulation check (stops need at).
+
+## Water supply and drainage (project.water)
+- Hydraulics of the plumbing layout, automatic: peak flows, pipe sizes, pressure at each outlet, booster set, hot-water
+  wait at each hot outlet, summer cold-water temperature, roof / ground tanks, heaters, drainage stacks lining up.
+- project.water {supply: "tank_booster" (default: roof tanks + booster set) | "tank_gravity" | "mains", boosterBar
+  2.5, tank: "exposed" | "shaded" | "insulated", pipe: "ppr" | "pex" | "copper", occupants, litresPerPersonDay 450}.
+- water_design (arch water) reports it; render_plan sheet "plumbing" shows sizes, the riser (R) and under each
+  fixture its pressure and hot wait (red when low / slow). Fix slow hot water by moving the heater (level.plumbing
+  water_heater) nearer the outlets; fix stacks that do not line up by stacking the bathrooms.
 
 ## Gardens and irrigation (level.gardens, project.landscape)
 - level.gardens: [{polygon, surface: "lawn"|"turf"|"planting"|"gravel"|"mulch"|"paving"|"sand", irrigation: true}]

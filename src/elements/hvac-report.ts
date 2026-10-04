@@ -1,3 +1,4 @@
+import { airsideReport } from "./airside.js";
 /** Plain-text HVAC report (MCP hvac_design, arch hvac): units, room loads, coordination issues, assumptions. */
 import type { HvacDesign } from "./hvac.js";
 
@@ -25,8 +26,10 @@ export function hvacReport(h: HvacDesign, levelNames: string[], detail = true): 
       out.push(`  ${where} — ${(r.total / 1000).toFixed(1)} kW, ${r.tr} TR, ${r.supply} L/s, ${r.freshAir} L/s (${p.walls} / ${p.glassSolar} / ${p.roof} / ${p.people} / ${p.lighting} / ${p.equipment} / ${p.freshAir}) → ${r.zone ?? ""}`);
     }
   }
-  if (h.issues.length) out.push("", "Coordination issues:", ...h.issues.map((i) => `  - ${i}`));
-  out.push("", "Assumptions:", ...h.assumptions.map((a) => `  - ${a}`));
+  if (h.air) out.push(...airsideReport(h.air, levelNames));
+  const all = [...h.issues, ...(h.air?.issues ?? [])];
+  if (all.length) out.push("", "Coordination issues:", ...all.map((i) => `  - ${i}`));
+  out.push("", "Assumptions:", ...[...h.assumptions, ...(h.air?.assumptions ?? [])].map((a) => `  - ${a}`));
   out.push("", "Change: project.hvac {system packaged|ducted_split|split|none, outdoorTemp, indoorTemp, glazing {u, shgc}, roofU, safetyFactor, diversity, maxUnitTR, zones [{rooms, shaft}], omitRooms}. Sheet: render_plan sheet 'hvac'. A licensed MEP engineer's calculation is still needed for the MEW submission.");
   return out.join("\n");
 }

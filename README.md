@@ -49,6 +49,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch bom plan.json [--csv]` | Shopping list of placed products |
 | `arch estimate plan.json -o bill.html` | Cost estimate / bill of quantities measured from the model (also `.md`, `.csv`, `.json`) |
 | `arch hvac plan.json` | Air conditioning: cooling loads per room, rooftop packaged units (or ducted / wall splits), coordination issues; drawing: `arch plan --sheet hvac` |
+| `arch water plan.json` | Water hydraulics: pipe sizes, pressures, hot-water waits, booster and tanks, summer cold-water temperature, drainage stacks |
 | `arch landscape plan.json` | Gardens and irrigation: areas, plants, spray / drip / bubbler zones, controller, summer water use; drawing: `arch plan --sheet landscape` |
 | `arch contract plan.json --package plaster --labour` | Bilingual works contract (English then Arabic) as `.docx` and print-ready `.html`, see [docs/CONTRACTS.md](docs/CONTRACTS.md) |
 | `arch fetch plan.json` | Download all online assets into the cache (then builds work offline) |
@@ -88,6 +89,7 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 | `render_plan`, `render_view` | Return PNG images so the model can see its work |
 | `search_assets`, `search_products`, `import_product`, `shopping_list`, `cost_estimate` | Scanned CC0 materials / models, IKEA catalogue search, vendor product import with 3D models, bill of materials, cost estimate |
 | `hvac_design` | Air conditioning: room cooling loads, units, airflow, electrical supplies, coordination checks (with `render_plan` sheet `hvac`) |
+| `water_design` | Water hydraulics: pressure and hot-water wait at every outlet, pipe sizes, booster, tanks, stacks (with `render_plan` sheet `plumbing`) |
 | `landscape_design` | Gardens and irrigation: areas, plants, zones, run times, water use (with `render_plan` sheet `landscape`) |
 | `generate_contract` | Works contract per trade package, English and Arabic, Word + HTML |
 | `export_model` | `.glb` / `.gltf` for game engines (`export_status` on the remote server) |

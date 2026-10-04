@@ -435,6 +435,18 @@ const COMMANDS: Record<string, Command> = {
       console.log(hvacReport(c.hvac, c.levels.map((l) => l.name), !f.brief));
     },
   },
+  water: {
+    usage: "arch water <plan.json> [--brief]",
+    desc: "Water hydraulics: pipe sizes, pressure and hot-water wait at every outlet, booster and tanks, summer cold-water temperature, drainage stacks",
+    file: true,
+    flags: [{ name: "brief", desc: "no pipe sizing table" }],
+    async run(file, f) {
+      const c = await compiled(file);
+      const { waterReport } = await import("../elements/water.js");
+      if (!c.water) throw new Error("no water design: the plan has no wet rooms");
+      console.log(waterReport(c.water, c.levels.map((l) => l.name), !f.brief));
+    },
+  },
   landscape: {
     usage: "arch landscape <plan.json>",
     desc: "Gardens and irrigation: areas, plants, spray / drip / bubbler zones, controller and summer water use; the drawing is `arch plan --sheet landscape`",
