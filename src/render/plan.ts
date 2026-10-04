@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { LevelInfo } from "../build.js";
 import { segDir } from "../elements/walls.js";
 import { FURNITURE } from "../elements/furniture.js";
@@ -1341,7 +1342,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 
 export async function svgToPng(svg: string): Promise<Buffer> {
   const { Resvg } = await import("@resvg/resvg-js");
-  return Buffer.from(new Resvg(svg, { font: { loadSystemFonts: true, defaultFontFamily: "Helvetica" } }).render().asPng());
+  // macOS has Helvetica; the Linux image ships Liberation Sans (Arial / Helvetica metrics) and DejaVu Sans.
+  // resvg's own system scan needs fontconfig, which a slim image lacks: name the font folders too.
+  const sans = process.platform === "darwin" ? "Helvetica" : "Liberation Sans";
+  const fontDirs = ["/usr/share/fonts", "/usr/local/share/fonts"].filter((d) => existsSync(d));
+  return Buffer.from(new Resvg(svg, { font: { loadSystemFonts: true, fontDirs, defaultFontFamily: sans, sansSerifFamily: sans } }).render().asPng());
 }
 
 /** Plan fill of a garden surface (stronger on the landscape sheet). */

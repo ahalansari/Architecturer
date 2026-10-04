@@ -18,7 +18,8 @@ RUN npx tsc -p . && npm prune --omit=dev \
 
 FROM node:22-bookworm-slim
 # Vulkan loader for the GPU path tracer; the NVIDIA runtime mounts the driver and its Vulkan ICD into the container
-RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 libglvnd0 libegl1 libx11-6 libxext6 \
+# fonts: plan sheets are SVG rasterised on the server (Liberation Sans = Arial / Helvetica metrics; DejaVu for Arabic)
+RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 libglvnd0 libegl1 libx11-6 libxext6 fonts-liberation2 fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/* \
  # the NVIDIA runtime mounts libGLX_nvidia (with "graphics") but not always the ICD file that points Vulkan at it
  && mkdir -p /usr/share/vulkan/icd.d \
