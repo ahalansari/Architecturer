@@ -123,7 +123,7 @@ export async function renderView(c: Compiled, o: ViewOptions = {}): Promise<{ pn
     const r = await gpuRender(c, o).catch((e: Error) => ({ error: e.message }));
     if ("png" in r) return r;
     if (want === "gpu") throw new Error(`GPU render failed: ${r.error}`);
-    return { png: renderViewPNG(c, o), renderer: "cpu", note: `GPU unavailable (${r.error}); used the CPU renderer` };
+    return { png: renderViewPNG(c, o), renderer: "cpu", note: `the CPU rasteriser — GPU unavailable: ${r.error}` };
   }
   return { png: renderViewPNG(c, o), renderer: "cpu" };
 }

@@ -4,6 +4,7 @@
  * with the graphics capability), D3D12 on Windows. Global illumination, sun and sky for Kuwait at a given date and
  * time, daylight through glass, the lighting design's lamps in candela, texture and normal maps, denoising.
  */
+import { existsSync, readdirSync } from "node:fs";
 import type { Compiled } from "../pipeline.js";
 import { walkMeshes, type SceneNode } from "../geometry/scene.js";
 import { m4, type Vec3 } from "../geometry/math.js";
@@ -32,11 +33,24 @@ export function gpuTracer(): Promise<PathTracer> {
     Object.assign(globalThis, wg.globals);
     instance = wg.create([]);
     const pt = await PathTracer.create(instance);
-    if (!pt) throw new Error("no GPU adapter (Vulkan / Metal / D3D12 driver)");
+    if (!pt) throw new Error(`no GPU adapter${gpuHint()}`);
     return pt;
   })();
   tracer.catch(() => (tracer = undefined));
   return tracer;
+}
+
+/** Why there is no adapter, in a container: which of device / driver / Vulkan ICD is missing. */
+function gpuHint(): string {
+  if (process.platform !== "linux") return "";
+  const dev = existsSync("/dev/nvidiactl");
+  const libDirs = ["/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/usr/lib64", "/usr/lib"];
+  const driver = libDirs.some((d) => existsSync(`${d}/libGLX_nvidia.so.0`));
+  const icds = ["/etc/vulkan/icd.d", "/usr/share/vulkan/icd.d"].flatMap((d) => (existsSync(d) ? readdirSync(d).map((f) => `${d}/${f}`) : []));
+  if (!dev) return ": the container sees no NVIDIA device — add --runtime=nvidia and NVIDIA_VISIBLE_DEVICES=all";
+  if (!driver) return ": an NVIDIA device is visible but not its Vulkan driver (libGLX_nvidia) — set NVIDIA_DRIVER_CAPABILITIES=all (it must include graphics)";
+  if (!icds.length) return ": NVIDIA driver present but no Vulkan ICD file";
+  return `: NVIDIA device and driver present (ICDs: ${icds.join(", ")}) but Vulkan reported no adapter — check the host driver supports Vulkan`;
 }
 
 /** Describe the GPU for logs and the health check. */

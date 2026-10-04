@@ -18,9 +18,13 @@ RUN npx tsc -p . && npm prune --omit=dev \
 
 FROM node:22-bookworm-slim
 # Vulkan loader for the GPU path tracer; the NVIDIA runtime mounts the driver and its Vulkan ICD into the container
-RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 libglvnd0 libegl1 libx11-6 libxext6 \
+ && rm -rf /var/lib/apt/lists/* \
+ # the NVIDIA runtime mounts libGLX_nvidia (with "graphics") but not always the ICD file that points Vulkan at it
+ && mkdir -p /usr/share/vulkan/icd.d \
+ && printf '{"file_format_version":"1.0.0","ICD":{"library_path":"libGLX_nvidia.so.0","api_version":"1.3"}}\n' > /usr/share/vulkan/icd.d/nvidia_icd.json
 ENV NODE_ENV=production \
-    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics \
+    NVIDIA_DRIVER_CAPABILITIES=all \
     TZ=Asia/Kuwait \
     HOST=0.0.0.0 \
     PORT=5178 \
