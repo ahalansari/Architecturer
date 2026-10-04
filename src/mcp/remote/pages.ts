@@ -52,13 +52,13 @@ ${o.error ? `<p class="err">${esc(o.error)}</p>` : ""}<div class="row"><button c
   );
 }
 
-export function consentPage(o: { id: string; clientName: string; redirectHost: string; username: string; csrf: string }): string {
+export function consentPage(o: { request: string; clientName: string; redirectHost: string; username: string; csrf: string; note?: string }): string {
   return page(
     "Allow access?",
     `<div class="card"><h1>Allow ${esc(o.clientName)}?</h1>
 <p><strong>${esc(o.clientName)}</strong> wants to use Architecturer as <strong>${esc(o.username)}</strong>: read, create and change your projects, render them and export models.</p>
 <p class="muted">After you allow it, you'll be sent back to <code>${esc(o.redirectHost)}</code>. You can revoke access at any time on the <a href="/admin">admin page</a>.</p>
-<form method="post" action="/authorize/decision"><input type="hidden" name="id" value="${esc(o.id)}"><input type="hidden" name="csrf" value="${esc(o.csrf)}">
+${o.note ? `<p><strong>${esc(o.note)}</strong></p>` : ""}<form method="post" action="/authorize/decision"><input type="hidden" name="request" value="${esc(o.request)}"><input type="hidden" name="csrf" value="${esc(o.csrf)}">
 <div class="row"><button class="primary" name="decision" value="allow">Allow</button><button name="decision" value="deny">Deny</button></div></form></div>`,
   );
 }

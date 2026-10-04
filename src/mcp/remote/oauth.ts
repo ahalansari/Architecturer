@@ -4,21 +4,23 @@
  * LM Studio register themselves (dynamic client registration, or a client ID metadata document URL), send
  * you to the consent page, and get short-lived access tokens with rotating refresh tokens.
  */
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Request, Response } from "express";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
+import { redirectUriMatches } from "@modelcontextprotocol/sdk/server/auth/handlers/authorize.js";
 import { InvalidClientMetadataError, InvalidGrantError, InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type { AuthorizationParams, OAuthServerProvider } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthClientInformationFull, OAuthTokenRevocationRequest, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { download } from "../../assets/cache.js";
-import type { Login } from "./login.js";
+import type { Identity, Login } from "./login.js";
 import { consentPage, messagePage } from "./pages.js";
 import { ACCESS_TTL, type AuthStore, type StoredClient } from "./store.js";
 
 export const SCOPES = ["plans"];
 const CODE_TTL = 5 * 60_000;
-const PENDING_TTL = 15 * 60_000;
+/** How long the Allow page stays valid; an older one is simply shown again (the user is logged in anyway). */
+const REQUEST_TTL = 2 * 3600;
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** Redirect URIs a client may use: https anywhere, http only to this machine, or a native app scheme. */
@@ -44,20 +46,18 @@ const hostOf = (uri: string) => {
   }
 };
 
-interface Pending {
-  client: OAuthClientInformationFull;
-  params: AuthorizationParams;
-  expires: number;
-}
-interface Code {
-  clientId: string;
-  params: AuthorizationParams;
-  expires: number;
+/** An authorization request carried by the Allow form itself (signed): survives server restarts. */
+interface SignedRequest {
+  client: string;
+  redirect: string;
+  challenge: string;
+  state?: string;
+  scopes?: string[];
+  resource?: string;
+  exp: number;
 }
 
 export class ArchOAuthProvider implements OAuthServerProvider {
-  private pending = new Map<string, Pending>();
-  private codes = new Map<string, Code>();
   /** Client ID metadata documents, cached for an hour. */
   private cimd = new Map<string, { client?: OAuthClientInformationFull; error?: string; expires: number }>();
 
@@ -71,8 +71,6 @@ export class ArchOAuthProvider implements OAuthServerProvider {
 
   private sweep() {
     const t = Date.now();
-    for (const [k, v] of this.pending) if (v.expires < t) this.pending.delete(k);
-    for (const [k, v] of this.codes) if (v.expires < t) this.codes.delete(k);
     for (const [k, v] of this.cimd) if (v.expires < t) this.cimd.delete(k);
   }
 
@@ -112,6 +110,35 @@ export class ArchOAuthProvider implements OAuthServerProvider {
     return client;
   }
 
+  private sign(r: SignedRequest): string {
+    const body = Buffer.from(JSON.stringify(r)).toString("base64url");
+    return `${body}.${createHmac("sha256", this.store.secret).update(`authreq:${body}`).digest("base64url")}`;
+  }
+
+  private unsign(token: string): SignedRequest | undefined {
+    const [body, sig] = token.split(".");
+    if (!body || !sig) return undefined;
+    const want = Buffer.from(createHmac("sha256", this.store.secret).update(`authreq:${body}`).digest("base64url"));
+    const got = Buffer.from(sig);
+    if (want.length !== got.length || !timingSafeEqual(want, got)) return undefined;
+    try {
+      return JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as SignedRequest;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private consent(res: Response, who: Identity, client: OAuthClientInformationFull, r: SignedRequest, note?: string) {
+    const token = this.sign({ ...r, exp: Math.floor(Date.now() / 1000) + REQUEST_TTL });
+    res
+      .status(200)
+      .type("html")
+      .set("cache-control", "no-store")
+      .set("x-frame-options", "DENY")
+      .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+      .send(consentPage({ request: token, clientName: client.client_name || hostOf(r.redirect), redirectHost: hostOf(r.redirect), username: who.username, csrf: this.login.csrf(who, "consent"), note }));
+  }
+
   /** Step 1 (GET /authorize): log in if needed, then ask whether to allow the client. */
   async authorize(client: OAuthClientInformationFull, params: AuthorizationParams, res: Response): Promise<void> {
     const req = res.req as Request;
@@ -122,33 +149,41 @@ export class ArchOAuthProvider implements OAuthServerProvider {
       res.redirect(302, this.loginUrl(`/authorize?${q}`));
       return;
     }
-    const id = randomBytes(18).toString("base64url");
-    this.pending.set(id, { client, params, expires: Date.now() + PENDING_TTL });
-    res
-      .status(200)
-      .type("html")
-      .set("x-frame-options", "DENY")
-      .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
-      .send(consentPage({ id, clientName: client.client_name || hostOf(params.redirectUri), redirectHost: hostOf(params.redirectUri), username: who.username, csrf: this.login.csrf(who, `consent:${id}`) }));
+    this.consent(res, who, client, {
+      client: client.client_id,
+      redirect: params.redirectUri,
+      challenge: params.codeChallenge,
+      state: params.state,
+      scopes: params.scopes,
+      resource: params.resource?.href,
+      exp: 0,
+    });
   }
 
   /** Step 2 (POST /authorize/decision): the consent form's answer; redirects back to the client. */
   async decide(req: Request, res: Response) {
     res.setHeader("cache-control", "no-store");
     const who = await this.login.identify(req);
-    const { id, decision, csrf } = (req.body ?? {}) as Record<string, string>;
-    if (!who || !id || !this.login.checkCsrf(who, `consent:${id}`, csrf)) {
-      res.status(403).type("html").send(messagePage("Not allowed", "Log in again and retry from the app."));
+    const { request, decision, csrf } = (req.body ?? {}) as Record<string, string>;
+    if (!who) {
+      res.status(403).type("html").send(messagePage("Not logged in", "Your session ended. Start the connection again from the app."));
       return;
     }
-    const p = this.pending.get(id);
-    this.pending.delete(id);
-    if (!p || p.expires < Date.now()) {
-      res.status(400).type("html").send(messagePage("Request expired", "Start the connection again from the app."));
+    if (!this.login.checkCsrf(who, "consent", csrf)) {
+      res.status(403).type("html").send(messagePage("Not allowed", "This form did not come from this server. Start the connection again from the app."));
       return;
     }
-    const back = new URL(p.params.redirectUri);
-    if (p.params.state !== undefined) back.searchParams.set("state", p.params.state);
+    const r = request ? this.unsign(request) : undefined;
+    const client = r ? await this.clientsStore.getClient(r.client) : undefined;
+    // the redirect must still be one the client registered (the SDK's rule: exact, or loopback on any port)
+    if (!r || !client || !client.redirect_uris.some((u) => redirectUriMatches(r.redirect, String(u)))) {
+      res.status(400).type("html").send(messagePage("Invalid request", "This sign-in request is not valid any more. Start the connection again from the app."));
+      return;
+    }
+    // an old Allow page: ask again rather than fail (the user is logged in, the request is ours)
+    if (r.exp < Date.now() / 1000) return this.consent(res, who, client, r, "This page had been open a long time; confirm once more.");
+    const back = new URL(r.redirect);
+    if (r.state !== undefined) back.searchParams.set("state", r.state);
     if (decision !== "allow") {
       back.searchParams.set("error", "access_denied");
       back.searchParams.set("error_description", "The user denied access");
@@ -156,29 +191,28 @@ export class ArchOAuthProvider implements OAuthServerProvider {
       return;
     }
     const code = randomBytes(24).toString("base64url");
-    this.codes.set(code, { clientId: p.client.client_id, params: p.params, expires: Date.now() + CODE_TTL });
-    if (this.store.getClient(p.client.client_id)) this.store.markApproved(p.client.client_id);
+    this.store.saveCode(code, { clientId: r.client, redirectUri: r.redirect, challenge: r.challenge, scopes: r.scopes ?? [] }, CODE_TTL / 1000);
+    if (this.store.getClient(r.client)) this.store.markApproved(r.client);
     back.searchParams.set("code", code);
     res.redirect(302, back.href);
   }
 
   async challengeForAuthorizationCode(client: OAuthClientInformationFull, code: string): Promise<string> {
-    const c = this.codes.get(code);
-    if (!c || c.clientId !== client.client_id || c.expires < Date.now()) throw new InvalidGrantError("invalid or expired authorization code");
-    return c.params.codeChallenge;
+    const c = this.store.peekCode(code);
+    if (!c || c.clientId !== client.client_id) throw new InvalidGrantError("invalid or expired authorization code");
+    return c.challenge;
   }
 
   async exchangeAuthorizationCode(client: OAuthClientInformationFull, code: string, _verifier?: string, redirectUri?: string): Promise<OAuthTokens> {
-    const c = this.codes.get(code);
-    this.codes.delete(code); // single use, even when the exchange fails
-    if (!c || c.clientId !== client.client_id || c.expires < Date.now()) throw new InvalidGrantError("invalid or expired authorization code");
-    if (redirectUri !== undefined && redirectUri !== c.params.redirectUri) throw new InvalidGrantError("redirect_uri does not match the authorization request");
-    const scopes = c.params.scopes?.length ? c.params.scopes.filter((s) => SCOPES.includes(s)) : SCOPES;
+    const c = this.store.takeCode(code); // single use, even when the exchange fails
+    if (!c || c.clientId !== client.client_id) throw new InvalidGrantError("invalid or expired authorization code");
+    if (redirectUri !== undefined && redirectUri !== c.redirectUri) throw new InvalidGrantError("redirect_uri does not match the authorization request");
+    const scopes = c.scopes.length ? c.scopes.filter((s) => SCOPES.includes(s)) : SCOPES;
     const { access, refresh } = this.store.createGrant({
       clientId: client.client_id,
-      name: client.client_name || hostOf(c.params.redirectUri),
+      name: client.client_name || hostOf(c.redirectUri),
       scopes: scopes.length ? scopes : SCOPES,
-      redirectHost: hostOf(c.params.redirectUri),
+      redirectHost: hostOf(c.redirectUri),
     });
     return { access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL, refresh_token: refresh, scope: (scopes.length ? scopes : SCOPES).join(" ") };
   }

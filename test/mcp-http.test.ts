@@ -22,6 +22,7 @@ const freePort = () =>
   });
 
 let srv: RemoteServer;
+let cfg: ReturnType<typeof loadConfig>;
 let base: string;
 let work: string;
 
@@ -29,7 +30,7 @@ before(async () => {
   const root = mkdtempSync(join(tmpdir(), "arch-http-"));
   work = join(root, "plans");
   const port = await freePort();
-  const cfg = loadConfig(
+  cfg = loadConfig(
     { ARCHITECTURER_STATE: join(root, "state"), ARCHITECTURER_WORKERS: "1" },
     { port, workdir: work, publicUrl: `http://localhost:${port}` },
   );
@@ -78,7 +79,7 @@ test("first account: setup needs the code from the log", async () => {
 });
 
 /** Register, log in, approve and exchange the code, like Claude / ChatGPT do. */
-async function oauthLogin(): Promise<{ access: string; refresh: string; clientId: string }> {
+async function oauthLogin(opts: { restart?: boolean } = {}): Promise<{ access: string; refresh: string; clientId: string }> {
   const redirect = "http://127.0.0.1:33389/mcp-oauth-callback";
   let r = await fetch(`${base}/register`, {
     method: "POST",
@@ -103,14 +104,22 @@ async function oauthLogin(): Promise<{ access: string; refresh: string; clientId
   r = await fetch(`${base}/authorize?${q}`, { headers: { cookie } });
   const html = await r.text();
   assert.match(html, /Allow Test client\?/);
-  const id = /name="id" value="([^"]+)"/.exec(html)![1];
+  const request = /name="request" value="([^"]+)"/.exec(html)![1];
   const csrf = /name="csrf" value="([^"]+)"/.exec(html)![1];
 
-  // a forged form (no csrf) is refused
-  r = await fetch(`${base}/authorize/decision`, { method: "POST", redirect: "manual", headers: { cookie }, body: new URLSearchParams({ id, decision: "allow" }) });
+  // a forged form (no csrf) is refused; so is a tampered request
+  r = await fetch(`${base}/authorize/decision`, { method: "POST", redirect: "manual", headers: { cookie }, body: new URLSearchParams({ request, decision: "allow" }) });
   assert.equal(r.status, 403);
+  r = await fetch(`${base}/authorize/decision`, { method: "POST", redirect: "manual", headers: { cookie }, body: new URLSearchParams({ request: request.replace(/^./, "x"), csrf, decision: "allow" }) });
+  assert.equal(r.status, 400);
 
-  r = await fetch(`${base}/authorize/decision`, { method: "POST", redirect: "manual", headers: { cookie }, body: new URLSearchParams({ id, csrf, decision: "allow" }) });
+  // the Allow page survives a server restart (the request travels in the form, codes and sessions are on disk)
+  if (opts.restart) {
+    await srv.close();
+    srv = await startRemoteServer(cfg);
+  }
+
+  r = await fetch(`${base}/authorize/decision`, { method: "POST", redirect: "manual", headers: { cookie }, body: new URLSearchParams({ request, csrf, decision: "allow" }) });
   assert.equal(r.status, 302);
   const back = new URL(r.headers.get("location")!);
   assert.equal(back.searchParams.get("state"), "xyz");
@@ -148,6 +157,12 @@ test("unauthenticated MCP requests point to the OAuth metadata", async () => {
     request(`${base}/healthz`, { headers: { host: "attacker.example" } }, (res) => ok(res.statusCode!)).on("error", fail).end(),
   );
   assert.equal(status, 403);
+});
+
+test("connecting survives a server restart in the middle of the sign-in", async () => {
+  const { access } = await oauthLogin({ restart: true });
+  const r = await fetch(`${base}/mcp`, { method: "POST", headers: { authorization: `Bearer ${access}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+  assert.equal(r.status, 200);
 });
 
 test("registration refuses non-loopback http redirects", async () => {

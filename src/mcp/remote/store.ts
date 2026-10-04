@@ -69,11 +69,20 @@ interface State {
   /** By SHA-256 of the session id. */
   sessions: Record<string, Session>;
   clients: Record<string, StoredClient>;
+  /** Authorization codes (by hash), single use, minutes long: kept on disk so a restart can't lose one. */
+  codes?: Record<string, AuthCode & { expiresAt: number }>;
   grants: Record<string, Grant>;
   tokens: Record<string, TokenRecord>;
 }
 
 export const SESSION_TTL = 14 * 24 * 3600;
+
+export interface AuthCode {
+  clientId: string;
+  redirectUri: string;
+  challenge: string;
+  scopes: string[];
+}
 
 export const ACCESS_TTL = 3600;
 export const REFRESH_TTL = 30 * 24 * 3600;
@@ -234,6 +243,33 @@ export class AuthStore {
 
   deleteSession(key: string) {
     this.mutate((s) => void delete s.sessions[key]);
+  }
+
+  // ---- authorization codes ----
+
+  saveCode(code: string, c: AuthCode, ttl: number) {
+    this.mutate((s) => {
+      s.codes ??= {};
+      const t = now();
+      for (const [k, v] of Object.entries(s.codes)) if (v.expiresAt < t) delete s.codes[k];
+      s.codes[hashToken(code)] = { ...c, expiresAt: t + ttl };
+    });
+  }
+
+  peekCode(code: string): AuthCode | undefined {
+    this.reload();
+    const c = this.state.codes?.[hashToken(code)];
+    return c && c.expiresAt >= now() ? c : undefined;
+  }
+
+  /** Use a code (once). */
+  takeCode(code: string): AuthCode | undefined {
+    return this.mutate((s) => {
+      const k = hashToken(code);
+      const c = s.codes?.[k];
+      if (c) delete s.codes![k];
+      return c && c.expiresAt >= now() ? c : undefined;
+    });
   }
 
   // ---- clients ----
