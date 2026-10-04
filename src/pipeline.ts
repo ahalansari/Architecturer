@@ -6,6 +6,8 @@ import type { MaterialDef, TextureSet } from "./materials/types.js";
 import { parseProject, type Project } from "./schema/schema.js";
 import { checkLayout } from "./validate/layout.js";
 import { designHvac, hvacNode, type HvacDesign } from "./elements/hvac.js";
+import { applyLifts, designLifts, liftSpec, liftsNode, type LiftDesign } from "./elements/lifts.js";
+import type { Circuit } from "./elements/services.js";
 import { constructionSystem } from "./elements/construction.js";
 import { applyStyles } from "./elements/styles.js";
 import { applyProducts } from "./elements/products.js";
@@ -28,6 +30,10 @@ export interface Compiled {
   notes?: string[];
   /** Air conditioning: cooling loads, units, ducted layout and coordination issues. */
   hvac?: HvacDesign;
+  /** Lifts with a shaft: spec, checks, geometry for plans and the bill. */
+  lifts?: LiftDesign[];
+  /** Power supplies for the lifts (electrical schedule). */
+  liftCircuits?: Circuit[];
 }
 
 const MISSING: MaterialDef = {
@@ -48,7 +54,9 @@ export function compile(input: unknown): Compiled {
   // to tell explicit values from defaults)
   const prod = applyProducts(input);
   if (prod.errors.length) return { ok: false, errors: prod.errors, ...empty };
-  const parsed = parseProject(applyStyles(prod.input));
+  const lifted = applyLifts(prod.input);
+  if (lifted.errors.length) return { ok: false, errors: lifted.errors, ...empty };
+  const parsed = parseProject(applyStyles(lifted.input));
   if (!parsed.ok || !parsed.project) return { ok: false, errors: parsed.errors, ...empty };
   const project = parsed.project;
   let built;
@@ -62,6 +70,20 @@ export function compile(input: unknown): Compiled {
     warnings.push(...checkLayout(project, levels));
   } catch (e) {
     warnings.push(`layout checks failed: ${(e as Error).message}`);
+  }
+
+  // lifts: spec, checks, power supply; car, landing doors and roof overrun in 3D
+  let lifts: LiftDesign[] = [];
+  let liftCircuits: Circuit[] = [];
+  try {
+    const d = designLifts(project as never, levels);
+    lifts = d.lifts;
+    liftCircuits = d.circuits;
+    for (const l of lifts) for (const i of l.issues) warnings.push(`elevator '${l.id}': ${i}`);
+    const node = liftsNode(lifts, levels);
+    if (node) root.children.push(node);
+  } catch (e) {
+    warnings.push(`lift design failed: ${(e as Error).message}`);
   }
 
   // air conditioning: loads, units, ducted layout, and the equipment in 3D
@@ -106,6 +128,9 @@ export function compile(input: unknown): Compiled {
     root,
     levels,
     hvac,
+    lifts,
+    liftCircuits,
+    notes: lifts.length ? lifts.map((l) => liftSpec(l)) : undefined,
     materials,
     errors,
     warnings,
@@ -122,7 +147,7 @@ export async function compileWithAssets(input: unknown, opts: { baseDir: string 
   const prep = await prepareAssets(input, opts);
   const c = compile(prep.input);
   c.warnings.unshift(...prep.warnings);
-  c.notes = prep.notes;
+  c.notes = [...prep.notes, ...(c.notes ?? [])];
   return c;
 }
 

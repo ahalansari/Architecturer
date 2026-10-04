@@ -156,6 +156,16 @@ Call get_schema for every field; this guide covers conventions and good practice
   design reports where ducts would be exposed. Steer it with hvac {zones:[{rooms:[...], shaft:[x,y]}], omitRooms,
   maxUnitTR, glazing:{u, shgc}, outdoorTemp}.
 
+## Lifts (project.elevators)
+- {id, stops:[{level},{level},...], shaft:{at:[x,y], facing:"south"}, capacity: 5, drive: "mrl_traction"} builds the
+  lift: a 200 mm RC shaft on every level between the lowest and highest stop, a landing opening at each stop, slab
+  openings, the car, landing doors, and an overrun on the roof when the top floor is lower than the lift's overhead.
+  capacity (persons) sets the car / shaft / door (4: 1.4 × 1.6 m shaft, 5: 1.5 × 1.65, 6: 1.55 × 1.75, 8: 1.65 × 1.9
+  wheelchair, 13: 1.7 × 2.55); drive mrl_traction (pit 1.1 m, overhead 3.5 m) | hydraulic | home_lift (pit 0.15 m,
+  overhead 2.6 m). Checks: landing inside a room and clear (1.2 m, 1.5 m for 630 kg+), furniture in the shaft,
+  doors / windows blocked, walls or stairs through the shaft. Cost section K, contract package "lifts".
+- Without shaft, an elevator only links levels for the circulation check (stops need at).
+
 ## Works contracts
 - generate_contract (arch contract): bilingual contract (English, then Arabic, Arabic prevails) per trade package as
   .docx + print-ready .html: main, structure (هيكل أسود), blockwork, plaster, waterproofing, tiling, painting, ceilings,

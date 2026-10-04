@@ -21,6 +21,8 @@ The contracts are drafts based on common Kuwaiti residential practice. Have a la
 | `doors_windows` | Doors, aluminium windows, window treatments | supply |
 | `electrical` | Conduits, wiring, boards, accessories, fittings, testing | labour, supply |
 | `plumbing` | Drainage, water pipework, sanitary ware, heaters, tests | labour, supply |
+| `hvac` | Air conditioning: units, ductwork, diffusers, grilles, controls, balancing | supply |
+| `lifts` | Lifts: supply, installation, safety devices, testing and certification | supply |
 | `joinery` | Kitchens, wardrobes, built-in units | supply |
 | `external` | Terraces, paving, balustrades | labour, supply |
 

@@ -141,7 +141,7 @@ export interface PipeRun {
 
 export interface Circuit {
   id: string;
-  kind: "lighting" | "power" | "kitchen" | "cooker" | "appliance" | "detectors" | "hvac";
+  kind: "lighting" | "power" | "kitchen" | "cooker" | "appliance" | "detectors" | "hvac" | "lift";
   rating: number;
   label: string;
   rooms: string[];

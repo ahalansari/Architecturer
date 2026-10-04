@@ -95,7 +95,8 @@ export const DEFAULT_RATES: Record<string, number> = {
   // joinery (parametric runs without products)
   "joinery:kitchen_base": 150, "joinery:kitchen_upper": 105, "joinery:kitchen_tall": 280, "joinery:worktop": 85, "joinery:wardrobe": 240,
   "joinery:vanity": 220, "joinery:media": 200, "joinery:shelving": 140, "joinery:desk": 120, "joinery:bench": 120,
-  "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "hvac:packaged_tr": 320, "hvac:ducted_split_tr": 300, "hvac:split_tr": 220, "hvac:duct_m2": 9, "hvac:diffuser": 15, "hvac:return_grille": 12, "hvac:thermostat": 25, "hvac:power_supply": 120, "hvac:commissioning": 60,
+  "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "lift:base": 9500, "lift:per_stop": 1200, "lift:home_lift": 8000, "lift:pit": 650, "lift:overrun": 900, "lift:power_supply": 150,
+  "hvac:packaged_tr": 320, "hvac:ducted_split_tr": 300, "hvac:split_tr": 220, "hvac:duct_m2": 9, "hvac:diffuser": 15, "hvac:return_grille": 12, "hvac:thermostat": 25, "hvac:power_supply": 120, "hvac:commissioning": 60,
   "appliance:dishwasher": 180, "appliance:extractor": 90, "appliance:oven": 160, "appliance:hob": 110, "appliance:fridge": 260, "appliance:microwave": 60,
   // electrical
   "point:switch": 12, "point:switch_2way": 16, "point:dimmer": 22, "point:double_socket": 14, "point:socket": 12, "point:usb_socket": 18,
@@ -611,6 +612,26 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
     const I = sec("I", "Terraces & outdoor");
     for (const [m, a] of decks) add(I, { description: `Terrace deck: ${label(m)}`, qty: a, unit: "m²", rate: rate(`floor:${m}`, `floor:${pattern(m)}`), basis: "measured", key: `floor:${pattern(m)}` });
     for (const [st, m] of railings) add(I, { description: `Balustrade: ${st}`, qty: m, unit: "m", rate: rate(`railing:${st}`), basis: "measured", key: `railing:${st}` });
+  }
+
+  // ---- K. lifts (the shaft walls are in the structure, as RC walls) ----
+  if (c.lifts?.length) {
+    const K = sec("K", "Lifts");
+    for (const l of c.lifts) {
+      const home = l.drive === "home_lift";
+      add(K, {
+        description: `Lift '${l.id}': ${l.persons}-person ${l.kg} kg ${l.driveLabel.split(" (")[0]}, car, landing doors, controller, 2 stops, testing and handover`,
+        qty: 1,
+        unit: "no",
+        rate: rate(home ? "lift:home_lift" : "lift:base"),
+        basis: "count",
+        key: home ? "lift:home_lift" : "lift:base",
+      });
+      add(K, { description: `Lift '${l.id}': additional stops`, qty: l.stops - 2, unit: "no", rate: rate("lift:per_stop"), basis: "count", key: "lift:per_stop" });
+      if (l.pit > 0.3) add(K, { description: `Lift '${l.id}': pit ${l.pit} m deep — excavation, waterproofed RC, ladder`, qty: 1, unit: "no", rate: rate("lift:pit"), basis: "count", key: "lift:pit" });
+      if (l.overrun > 0) add(K, { description: `Lift '${l.id}': RC overrun ${l.overrun} m above the roof, with waterproofing`, qty: 1, unit: "no", rate: rate("lift:overrun"), basis: "count", key: "lift:overrun" });
+      add(K, { description: `Lift '${l.id}': 3-phase power supply, isolator and shaft lighting`, qty: 1, unit: "no", rate: rate("lift:power_supply"), basis: "count", key: "lift:power_supply" });
+    }
   }
 
   // ---- J. air conditioning, from the HVAC design ----

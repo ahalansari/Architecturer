@@ -950,6 +950,23 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
   }
 
+  // lifts: car outline and the cross through the shaft, on every level the shaft passes
+  for (const l of ceilingSheet ? [] : (c.lifts ?? []).filter((l) => l.levels.includes(li))) {
+    const [a0, a1, a2, a3] = l.inner;
+    out.push(`<polygon points="${poly(l.inner)}" fill="#f4f4f4" stroke="none"/>`);
+    out.push(line(a0, a2, `stroke="#777" stroke-width="1"`), line(a1, a3, `stroke="#777" stroke-width="1"`));
+    if (l.stopLevels.includes(li)) {
+      // the car, against the door side
+      const s0: Vec2 = [-l.f[1], l.f[0]];
+      const cc: Vec2 = [(a0[0] + a2[0]) / 2, (a0[1] + a2[1]) / 2];
+      const at = (u: number, v: number): Vec2 => v2.add(cc, v2.add(v2.scale(s0, u), v2.scale(l.f, v)));
+      const off = l.shaft[1] / 2 - l.car[1] / 2 - 0.05;
+      out.push(`<polygon points="${poly([at(-l.car[0] / 2, off - l.car[1] / 2), at(l.car[0] / 2, off - l.car[1] / 2), at(l.car[0] / 2, off + l.car[1] / 2), at(-l.car[0] / 2, off + l.car[1] / 2)])}" fill="none" stroke="#444" stroke-width="1.3"/>`);
+    }
+    const cp = px(polygonCentroid(l.inner));
+    L.push({ lines: [{ text: `LIFT ${l.id}`, size: fs - 2, color: "#333", bold: true }, { text: `${l.persons} p · ${l.kg} kg`, size: fs - 4, color: "#666" }], plate: "#ffffffd8", prio: 1, cands: [{ x: cp[0], y: cp[1], cost: 0 }] });
+  }
+
   // ---- label layer (drawn last) ----
   out.push(...placeLabels(L, wallPx, W0, H));
 
@@ -1060,7 +1077,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       head("Circuits");
       // air-conditioning supplies come from the board on the floor that has it
       const hasDb = (l: LevelInfo) => l.services.electrical.some((e) => e.type === "db");
-      const acCircuits = hasDb(info) || (li === 0 && !c.levels.some(hasDb)) ? hv?.circuits ?? [] : [];
+      const acCircuits = hasDb(info) || (li === 0 && !c.levels.some(hasDb)) ? [...(hv?.circuits ?? []), ...(c.liftCircuits ?? [])] : [];
       for (const cc of [...svc.circuits, ...acCircuits]) {
         lg.push(`<text x="${x0}" y="${y}" font-size="10.5" font-weight="bold" fill="#222">${esc(cc.id)}</text><text x="${x0 + 28}" y="${y}" font-size="10.5" fill="#222">${cc.rating} A · ${esc(cc.label)} · ${cc.points} pt${cc.points > 1 ? "s" : ""}</text>`);
         lg.push(`<text x="${x0 + 28}" y="${y + 11}" font-size="9" fill="#777">${esc(cc.rooms.join(", ").slice(0, 44))}</text>`);

@@ -95,7 +95,7 @@ export const PACKAGES: TradePackage[] = [
     id: "main",
     title: bi("Main building contract: complete construction of the building", "عقد مقاولة رئيسي: تنفيذ المبنى كاملاً"),
     modes: ["supply", "labour"],
-    match: (l) => ["A", "B", "C", "D", "F", "G", "I", "J"].includes(l.section),
+    match: (l) => ["A", "B", "C", "D", "F", "G", "I", "J", "K"].includes(l.section),
     scope: [
       bi("Setting out, excavation, foundations, ground slab and all reinforced-concrete structure (columns, beams, slabs, stairs, roof) to the approved structural drawings", "التخطيط والحفر والأساسات والأرضية الخرسانية وجميع أعمال الهيكل الخرساني المسلح (الأعمدة والجسور والأسقف والدرج والسطح) حسب المخططات الإنشائية المعتمدة"),
       bi("Blockwork to external and internal walls and parapets", "أعمال البناء بالطابوق للجدران الخارجية والداخلية والدراوي"),
@@ -492,6 +492,38 @@ export const PACKAGES: TradePackage[] = [
         ["On delivery and installation of the units", "عند توريد وتركيب الوحدات", 30],
         ["On diffusers, grilles, controls, testing and balancing", "عند تركيب الفتحات ومنظمات الحرارة والفحص والموازنة", 15],
         ["On commissioning and handover", "عند التشغيل والتسليم", 5],
+      ),
+  },
+  {
+    id: "lifts",
+    title: bi("Lifts (elevators)", "أعمال المصاعد"),
+    modes: ["supply"],
+    match: (l) => l.section === "K",
+    scope: [
+      bi("Shop drawings of the lift, shaft, pit and overrun requirements, for approval and coordination with the structure", "تقديم المخططات التنفيذية للمصعد ومتطلبات البئر والحفرة والغرفة العلوية للاعتماد والتنسيق مع الهيكل"),
+      bi("Supply and installation of the lift scheduled: car, guide rails, drive, controller, landing doors and fixtures at every stop", "توريد وتركيب المصعد الوارد بالجدول: الكابينة والسكك والماكينة ولوحة التحكم وأبواب الأدوار والإكسسوارات في كل وقفة"),
+      bi("Pit ladder, buffers, shaft lighting and the electrical connection from the isolator", "سلم الحفرة والمصدات وإنارة البئر والتوصيل الكهربائي من مفتاح العزل"),
+      bi("Safety devices: overspeed governor and safety gear, door interlocks, alarm and intercom, automatic rescue to the nearest floor on power failure", "أجهزة الأمان: منظم السرعة والكوابح وأقفال الأبواب وجرس الإنذار والاتصال، والإنقاذ التلقائي لأقرب دور عند انقطاع الكهرباء"),
+      bi("Testing, inspection by the competent authority, certification and handover with manuals", "الفحص والتفتيش من الجهة المختصة والشهادات والتسليم مع الكتالوجات"),
+      bi("Free maintenance and breakdown service during the defects period", "الصيانة المجانية وخدمة الأعطال خلال فترة الضمان"),
+    ],
+    spec: [
+      bi("Lift to EN 81-20 / 81-50 (or the equivalent standard approved in Kuwait); home lifts to EN 81-41", "يكون المصعد مطابقاً للمواصفة EN 81-20 / 81-50 أو ما يعادلها المعتمد في الكويت، والمصاعد المنزلية للمواصفة EN 81-41"),
+      bi("Capacity, speed, car and door sizes not less than the schedule; stainless-steel car and landing doors unless the owner approves otherwise", "لا تقل الحمولة والسرعة ومقاسات الكابينة والأبواب عن الجدول، والكابينة وأبواب الأدوار من الستانلس ستيل ما لم يعتمد المالك غير ذلك"),
+      bi("Levelling accuracy ±10 mm at every stop; noise in the car below 55 dB(A)", "دقة توقف ±10 مم في كل دور، ولا يزيد الضجيج داخل الكابينة على 55 ديسيبل"),
+      bi("Shaft, pit and overrun dimensions checked by the lift contractor before the structure is cast", "يتحقق مقاول المصعد من أبعاد البئر والحفرة والغرفة العلوية قبل صب الهيكل"),
+    ],
+    ownerSupplies: [],
+    contractorProvides: [TOOLS, LABOUR, CLEAN, bi("Scaffolding in the shaft, hoisting and all testing instruments", "السقالات داخل البئر والرفع وجميع أجهزة الفحص")],
+    measurement: bi("Lifts by number with their stops; pit, overrun and power supply as itemised", "تحسب المصاعد بالعدد مع عدد الوقفات، والحفرة والغرفة العلوية والتغذية حسب البنود"),
+    labourShare: 0.25,
+    durationDays: () => 75,
+    milestones: () =>
+      simple(
+        ["Advance payment on approval of shop drawings and the lift submittal", "دفعة مقدمة عند اعتماد المخططات والمصعد", 30],
+        ["On delivery of the lift materials to site", "عند توريد مواد المصعد للموقع", 40],
+        ["On completion of installation", "عند الانتهاء من التركيب", 20],
+        ["On testing, certification and handover", "عند الفحص والشهادات والتسليم", 10],
       ),
   },
   {

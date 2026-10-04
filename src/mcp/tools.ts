@@ -794,14 +794,14 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
       title: "Generate a works contract",
       description:
         "Bilingual works contract (English, then Arabic; the Arabic text prevails) for one trade package of the plan, as Word (.docx) and print-ready HTML (save as PDF). " +
-        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, hvac (air conditioning), joinery (kitchens, wardrobes), external (terraces, balustrades). " +
+        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, hvac (air conditioning), lifts, joinery (kitchens, wardrobes), external (terraces, balustrades). " +
         "mode 'labour' = labour only (مصنعية فقط: the owner supplies materials, listed in the contract); 'supply' = supply and installation. The schedule of quantities is measured from the model (full-scope cost estimate); labour-only rates come from researched Kuwait labour rates, otherwise they are estimated as a share of the supply & install rate and marked * (pass rates {'labour:<key>': rate} with the contractor's prices). " +
         "Includes scope steps, specification, materials split, payment stages tied to the work (per slab for structural work), programme, delay penalty, retention, defects period (and decennial liability for structural work), variations, safety, termination and Kuwaiti law. Owner and site address default to project.contract. " +
         (remote ? "Returns download links." : "Writes the files next to the plan (contracts/) unless `output` is given."),
       inputSchema: {
         path: PathArg,
         package: z.enum(PACKAGE_IDS),
-        mode: z.enum(["labour", "supply"]).optional().describe("Default: supply for main, doors_windows, hvac and joinery (always supply & install); labour for the other trades"),
+        mode: z.enum(["labour", "supply"]).optional().describe("Default: supply for main, doors_windows, hvac, lifts and joinery (always supply & install); labour for the other trades"),
         contractor: Party.optional(),
         owner: Party.optional().describe("Default: project.contract.owner"),
         location: z

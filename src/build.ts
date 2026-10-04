@@ -8,6 +8,7 @@ import { buildShape, shapeFootprint } from "./elements/shapes.js";
 import { addLampLight, buildLights, checkUnlitRooms } from "./elements/lighting.js";
 import { buildRoomFinishes, prepareFinishes, type CeilingLayout } from "./elements/finishes.js";
 import { buildServices, type ServicesLayout } from "./elements/services.js";
+import { shaftFrame } from "./elements/lifts.js";
 import { getModel } from "./assets/registry.js";
 import { fitModel } from "./assets/place.js";
 import type { ResolvedRun } from "./elements/casework/layout.js";
@@ -86,6 +87,14 @@ export function buildProject(project: Project): BuildOutput {
 
   // stairwells: stairs on one level cut the slabs of the level they arrive at
   const holesByLevel = new Map<number, Vec2[][]>();
+  // lift shafts open the slabs of every served level above the lowest stop
+  for (const e of project.elevators) {
+    if (!e.shaft) continue;
+    const idx = e.stops.map((st) => project.levels.findIndex((l) => l.id === st.level)).filter((i) => i >= 0);
+    if (idx.length < 2) continue;
+    const { inner } = shaftFrame(e);
+    for (let li = Math.min(...idx) + 1; li <= Math.max(...idx); li++) holesByLevel.set(li, [...(holesByLevel.get(li) ?? []), inner]);
+  }
 
   const ids = new Set<string>();
   const checkId = (id: string | undefined, where: string) => {

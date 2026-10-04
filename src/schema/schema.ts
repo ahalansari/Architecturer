@@ -15,6 +15,7 @@ import { LightSchema } from "../elements/lighting.js";
 import { ElectricalSchema, PlumbingSchema, ServicesSchema } from "../elements/services.js";
 import { ProductSchema } from "../elements/products.js";
 import { HvacSchema } from "../elements/hvac.js";
+import { LIFT_DRIVES } from "../elements/lifts.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 import { applyConstructionDefaults, ConstructionSchema, WALL_ASSEMBLY_IDS } from "../elements/construction.js";
@@ -346,12 +347,21 @@ export const ElevatorSchema = z
       .array(
         z.object({
           level: Id,
-          at: Point.describe("Landing point in front of the elevator doors on that level (must be inside a room or floor)"),
+          at: Point.optional().describe("Landing point in front of the doors on that level (default with a shaft: 0.75 m in front of the doors)"),
         }),
       )
       .min(2),
+    shaft: z
+      .object({
+        at: Point.describe("Centre of the shaft"),
+        facing: Direction.default("south").describe("Side the doors open to, toward the landing"),
+      })
+      .optional()
+      .describe("Build the lift: 200 mm RC shaft on every level it serves, a landing opening at each stop, slab openings, car, landing doors, roof overrun when needed. Without it the elevator only links levels for circulation checks"),
+    capacity: z.number().int().min(3).max(21).default(5).describe("Persons (4 = 320 kg, 5 = 400, 6 = 450, 8 = 630 wheelchair, 13 = 1000 stretcher). Sets car, shaft and door sizes"),
+    drive: z.enum(LIFT_DRIVES).default("mrl_traction").describe("mrl_traction (machine-room-less, pit 1.1 m, overhead 3.5 m) | hydraulic (pit 1.0, overhead 3.3, pump room) | home_lift (compact screw / hydraulic, pit 0.15, overhead 2.6, slow)"),
   })
-  .describe("Connects levels for circulation checks (rooms reached only by elevator). Model the shaft and doors with walls/openings/shapes");
+  .describe("A lift. With `shaft` it is built and designed (sizes, pit, overhead, checks, power, cost); without, it only connects levels for circulation checks");
 
 /** A party to a works contract (owner or contractor). Arabic fields are used in the Arabic text. */
 export const PartySchema = z
