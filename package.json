@@ -1,6 +1,6 @@
 {
   "name": "architecturer",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
