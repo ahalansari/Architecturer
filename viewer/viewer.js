@@ -8,6 +8,7 @@ import { DayNight } from "./lighting.js";
 import { PlanViewer } from "./plans.js";
 import { initContracts } from "./contracts.js";
 import { initPhoto } from "./photo.js";
+import { initSim } from "./sim.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("view");
@@ -250,6 +251,8 @@ document.querySelectorAll("button[data-view]").forEach((b) => (b.onclick = () =>
 const plans = new PlanViewer();
 initContracts();
 initPhoto({ camera, controls, lighting: () => dayNight.mode, cut: () => $("cut").value });
+const frameHooks = [];
+initSim({ scene, cut: () => $("cut").value, levels: () => levels, addFrameHook: (f) => frameHooks.push(f) });
 document.querySelectorAll("#panel button[data-sheet]").forEach(
   (b) => (b.onclick = () => plans.show(b.dataset.sheet, plans.isOpen ? plans.level : $("cut").value || levels[0]?.id)),
 );
@@ -334,7 +337,7 @@ function startWalk(at) {
 
 $("walkBtn").onclick = () => startWalk();
 // handy for scripting / debugging from the console
-window.architecturer = { walk, startWalk, camera };
+window.architecturer = { walk, startWalk, camera, controls, scene };
 $("walkExit").onclick = () => walk.exit();
 $("walkResume").onclick = () => walk.lock();
 canvas.addEventListener("dblclick", (e) => {
@@ -357,6 +360,7 @@ renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
   if (walk.active) walk.update(dt);
   else controls.update();
+  for (const f of frameHooks) f(Math.min(dt, 0.1));
   renderer.render(scene, camera);
 });
 

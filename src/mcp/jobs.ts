@@ -36,7 +36,12 @@ export type JobRequest =
   | (Base & { op: "contract"; options: ContractOptions; out: { docx?: string; html?: string } })
   | (Base & { op: "hvac"; detail: boolean })
   | (Base & { op: "landscape" })
-  | (Base & { op: "water"; detail: boolean });
+  | (Base & { op: "water"; detail: boolean })
+  // airflow study of a floor (GPU): report + sheet image, or the 3D field for the viewer
+  | (Base & { op: "airflow"; level?: string; seconds?: number; height?: number })
+  | (Base & { op: "airflow_field"; level?: string })
+  // the water network for the viewer's flow animation
+  | (Base & { op: "water_net" });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -151,6 +156,32 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
       const { hvacReport } = await import("../elements/hvac-report.js");
       if (!c.hvac) return { ok: false, summary: sum };
       return { ok: true, summary: sum, text: hvacReport(c.hvac, c.levels.map((l) => l.name), req.detail) };
+    }
+    case "airflow": {
+      const { airflowStudy, airflowReport } = await import("../sim/airflow.js");
+      const { airflowSVG } = await import("../sim/airflow-svg.js");
+      const r = await airflowStudy(c, req.level, { seconds: req.seconds });
+      return { ok: true, summary: sum, text: airflowReport(r, c.levels[r.level].name), images: [await svgToPng(airflowSVG(c, r, { height: req.height }))] };
+    }
+    case "airflow_field": {
+      const { airflowStudy, packField } = await import("../sim/airflow.js");
+      const r = await airflowStudy(c, req.level);
+      return { ok: true, summary: sum, bytes: packField(c, r) };
+    }
+    case "water_net": {
+      if (!c.water) return { ok: false, summary: sum + " (no plumbing: the plan has no wet rooms)" };
+      const w = c.water;
+      const z = (l: number) => c.levels[l].elevation;
+      return {
+        ok: true,
+        summary: sum,
+        data: {
+          coldSummerC: w.coldSummerC,
+          segments: w.segments.map((s) => ({ level: s.level, kind: s.kind, water: s.water, pts: s.pts, z: s.z, floorZ: z(s.level), flow: s.flow, od: s.od, velocity: s.velocity, length: s.length, label: s.label })),
+          outlets: w.outlets.map((o) => ({ id: o.id, level: o.level, room: o.room, label: o.label, at: o.at, z: o.z, cold: o.cold, hot: o.hot, waitS: o.waitS, waitL: o.waitL, coldPath: o.coldPath, hotPath: o.hotPath })),
+          heaters: w.heaters.map((h) => ({ id: h.id, level: h.level, at: h.at, litres: h.litres, z: z(h.level) + 1.6 })),
+        },
+      };
     }
     case "water": {
       const { waterReport } = await import("../elements/water.js");

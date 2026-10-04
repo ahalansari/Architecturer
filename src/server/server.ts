@@ -191,6 +191,21 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
         createReadStream(join(contractsDir, name)).pipe(res);
         return;
       }
+      if (path === "airflow.png" || path === "airflow.bin") {
+        const level = /^[\w-]{1,64}$/.test(query.get("level") ?? "") ? query.get("level")! : undefined;
+        const r = path === "airflow.png" ? await run(`airflow:${level ?? ""}`, { op: "airflow", level }) : await run(`airflowf:${level ?? ""}`, { op: "airflow_field", level });
+        if (!r.ok || (path === "airflow.png" ? !r.images?.length : !r.bytes)) return void res.writeHead(422, { "content-type": "text/plain; charset=utf-8" }).end(r.summary);
+        res.writeHead(200, { "content-type": path === "airflow.png" ? "image/png" : "application/octet-stream", "cache-control": "no-store" });
+        res.end(path === "airflow.png" ? r.images![0] : r.bytes);
+        return;
+      }
+      if (path === "water.json") {
+        const r = await run("water_net", { op: "water_net" });
+        if (!r.ok) return void res.writeHead(422, { "content-type": "text/plain; charset=utf-8" }).end(r.summary);
+        res.writeHead(200, { "content-type": MIME[".json"], "cache-control": "no-store" });
+        res.end(JSON.stringify(r.data));
+        return;
+      }
       if (path === "photo.png") {
         // path-traced still of the viewer's current camera (plan coordinates, z up)
         const vec = (k: string) => {

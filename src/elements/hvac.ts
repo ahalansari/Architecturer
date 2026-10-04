@@ -601,6 +601,19 @@ export function designHvac(
             }
           } else rp = v2.lerp(c, poly[0], 0.35);
           rp = clearPoint(li, poly, rp);
+          // keep the return 2 m+ from this room's diffusers (else the cold air short-circuits back to the unit):
+          // by the door when that is far enough, else the spot farthest from them
+          const mine = supplies.filter((t) => t.room === r.room).map((t) => t.at);
+          const gap = (p: Vec2) => Math.min(Infinity, ...mine.map((q) => v2.dist(p, q)));
+          if (mine.length && gap(rp) < 2) {
+            const cands: Vec2[] = [rp];
+            for (let q = 0; q < poly.length; q++) {
+              const a0 = poly[q], b0 = poly[(q + 1) % poly.length];
+              for (const t of [0.15, 0.5, 0.85]) cands.push(v2.lerp(v2.lerp(a0, b0, t), c, 0.6 / Math.max(0.6, v2.dist(v2.lerp(a0, b0, t), c))));
+            }
+            const best = cands.filter((p) => pointInPolygon(p, poly)).map((p) => clearPoint(li, poly, p)).reduce((x, y) => (gap(y) > gap(x) + 0.05 ? y : x), rp);
+            rp = best;
+          }
           returns.push({ id: `${id}.R${L.terminals.filter((t) => t.unit === id && t.kind === "return").length + returns.length + 1}`, kind: "return", room: r.room, at: rp, airflow: Math.round(r.supply * 0.85), unit: id });
         }
         L.terminals.push(...supplies, ...returns);

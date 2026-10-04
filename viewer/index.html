@@ -65,6 +65,21 @@
           <a class="button" href="estimate.csv?scope=full" title="The full-build bill as a spreadsheet">CSV</a>
         </div>
       </section>
+      <section id="sim">
+        <h2>Simulate</h2>
+        <div class="buttons">
+          <button id="airBtn" aria-pressed="false" title="Airflow on the floor you cut above (else the first with diffusers): GPU simulation of the AC supply, returns and heat gains">🌬 Airflow</button>
+          <button id="waterBtn" aria-pressed="false" title="Water supply network: flow at design velocity, hot and cold; open a hot tap to see the wait">💧 Water</button>
+        </div>
+        <div id="airLegend" class="muted" hidden>
+          <span class="tbar"></span> 16 °C · 24 · 31 °C &nbsp;<a id="airSheet" target="_blank">plan sheet ↗</a>
+        </div>
+        <div id="tapRow" hidden>
+          <select id="tapSel" aria-label="Hot outlet"></select>
+          <button id="tapBtn" title="Run this hot tap and watch the hot water arrive">🚿 Open hot tap</button>
+        </div>
+        <div id="simStatus" class="muted" aria-live="polite"></div>
+      </section>
       <section id="contracts">
         <h2>Contracts</h2>
         <select id="ctPackage" aria-label="Contract package" title="Trade package"></select>

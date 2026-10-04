@@ -169,6 +169,16 @@ Call get_schema for every field; this guide covers conventions and good practice
   doors / windows blocked, walls or stairs through the shaft. Cost section K, contract package "lifts".
 - Without shaft, an elevator only links levels for the circulation check (stops need at).
 
+## Airflow study and rendering (GPU)
+- airflow_study (arch airflow): 3D simulation of how the conditioned air moves on a floor — the HVAC diffusers and
+  returns, the rooms' heat gains, interior doors open. Per room: occupied-zone temperature, head-to-ankle difference,
+  air speed, draught / stagnant shares, ADPI (aim 80%+); issues such as rooms that run warm, draughts, a return beside
+  a supply. Image: temperature and air movement at 1.1 m. Fix by moving diffusers / returns (hvac zones) or splitting
+  airflow over more diffusers, then re-run. Needs the server's GPU.
+- render_view path-traces on the GPU when there is one: time "HH:MM" and date "MM-DD" place the Kuwaiti sun
+  (06-21 high summer sun, 12-21 low winter sun), samples 128 default (256+ for final images). renderer "cpu" for a
+  quick rasterised check.
+
 ## Water supply and drainage (project.water)
 - Hydraulics of the plumbing layout, automatic: peak flows, pipe sizes, pressure at each outlet, booster set, hot-water
   wait at each hot outlet, summer cold-water temperature, roof / ground tanks, heaters, drainage stacks lining up.

@@ -815,6 +815,30 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
   );
 
   tool(
+    "airflow_study",
+    {
+      title: "Airflow study (GPU)",
+      description:
+        "Simulate how the conditioned air moves through one floor: the HVAC design's diffusers and return grilles, each room's summer heat gains (façade at the exterior walls, people / lights / equipment in the occupied zone), interior doors open — a 3D fluid simulation on the server's GPU. " +
+        "Returns per room the occupied-zone temperature, head-to-ankle stratification, mean and 95th-percentile air speed, draughty and stagnant shares and the ADPI comfort index, issues (rooms that run warm, draughts, poor mixing, returns beside supplies), and a plan image of temperature and air movement at `height`. " +
+        "Needs a GPU; indicative, not certified CFD. Change the layout with project.hvac (zones, shafts) and re-run.",
+      inputSchema: {
+        path: PathArg,
+        level: LevelArg.optional().describe("Default: the first floor with supply diffusers"),
+        seconds: z.number().int().min(30).max(900).optional().describe("Simulated time (default 240 s)"),
+        height: z.number().min(0.1).max(4).optional().describe("Height of the plan slice, m (default 1.1, seated head height)"),
+      },
+      annotations: READ,
+    },
+    guard(async ({ path, level, seconds, height }, extra) => {
+      const file = ws.plan(path);
+      const r = await job(file, await load(file), { op: "airflow", level, seconds, height }, extra, "Simulating airflow");
+      if (!r.ok) return fail(r.summary);
+      return ok(...(await images(r)), text(r.text!));
+    }),
+  );
+
+  tool(
     "landscape_design",
     {
       title: "Garden and irrigation design",

@@ -449,6 +449,27 @@ const COMMANDS: Record<string, Command> = {
       console.log(hvacReport(c.hvac, c.levels.map((l) => l.name), !f.brief));
     },
   },
+  airflow: {
+    usage: "arch airflow <plan.json> [--level id] [--seconds 240] [--height 1.1] [-o airflow.png]",
+    desc: "Airflow study on the GPU: how the conditioned air moves and mixes on a floor; per-room temperature, draught, ADPI; plan image",
+    file: true,
+    flags: [
+      { name: "level", arg: "id", desc: "floor to simulate (default: the first with supply diffusers)" },
+      { name: "seconds", arg: "n", desc: "simulated time (default 240)" },
+      { name: "height", arg: "m", desc: "plan slice height (default 1.1)" },
+      OUT,
+    ],
+    async run(file, f) {
+      const c = await compiled(file);
+      const { airflowStudy, airflowReport } = await import("../sim/airflow.js");
+      const { airflowSVG } = await import("../sim/airflow-svg.js");
+      const r = await airflowStudy(c, f.level as string | undefined, { seconds: f.seconds ? num(f.seconds, "seconds") : undefined });
+      console.log(airflowReport(r, c.levels[r.level].name));
+      const out = (f.o as string) ?? `${base(file)}.airflow.${c.levels[r.level].id}.png`;
+      const svg = airflowSVG(c, r, { height: f.height ? num(f.height, "height") : undefined });
+      await write(out, out.endsWith(".svg") ? svg : await svgToPng(svg));
+    },
+  },
   water: {
     usage: "arch water <plan.json> [--brief]",
     desc: "Water hydraulics: pipe sizes, pressure and hot-water wait at every outlet, booster and tanks, summer cold-water temperature, drainage stacks",
