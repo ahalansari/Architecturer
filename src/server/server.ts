@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, watch, type FSWatcher } from "node:fs";
+import { createReadStream, existsSync, statSync, watch, type FSWatcher } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { basename, dirname, extname, join, normalize, resolve, sep } from "node:path";
@@ -22,7 +22,11 @@ const MIME: Record<string, string> = {
   ".wasm": "application/wasm",
 };
 
-function sendFile(res: ServerResponse, base: string, rel: string) {
+/**
+ * Viewer files: revalidated on every load (a 304 when unchanged) and never kept by shared caches, so an update
+ * reaches the browser at once even behind Cloudflare, which otherwise caches .js / .css for hours.
+ */
+function sendFile(req: IncomingMessage, res: ServerResponse, base: string, rel: string) {
   let p: string;
   try {
     p = normalize(join(base, decodeURIComponent(rel)));
@@ -33,7 +37,11 @@ function sendFile(res: ServerResponse, base: string, rel: string) {
     res.writeHead(404).end("not found");
     return;
   }
-  res.writeHead(200, { "content-type": MIME[extname(p)] ?? "application/octet-stream" });
+  const st = statSync(p);
+  const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  const headers = { "content-type": MIME[extname(p)] ?? "application/octet-stream", "cache-control": "private, no-cache", etag };
+  if (req.headers["if-none-match"] === etag) return void res.writeHead(304, headers).end();
+  res.writeHead(200, headers);
   createReadStream(p).pipe(res);
 }
 
@@ -97,10 +105,10 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
       for (const c of clients) c.end();
     },
     async handle(req, res, path, query) {
-      if (path === "" || path === "index.html") return sendFile(res, VIEWER, "index.html");
-      if (path.startsWith("viewer/")) return sendFile(res, VIEWER, path.slice(7));
-      if (path.startsWith("three/")) return sendFile(res, THREE, path.slice(6));
-      if (path.startsWith("vendor/three-mesh-bvh/")) return sendFile(res, BVH, path.slice(22));
+      if (path === "" || path === "index.html") return sendFile(req, res, VIEWER, "index.html");
+      if (path.startsWith("viewer/")) return sendFile(req, res, VIEWER, path.slice(7));
+      if (path.startsWith("three/")) return sendFile(req, res, THREE, path.slice(6));
+      if (path.startsWith("vendor/three-mesh-bvh/")) return sendFile(req, res, BVH, path.slice(22));
       if (path === "events") {
         res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
         res.write(": hi\n\n");
