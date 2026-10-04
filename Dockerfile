@@ -10,10 +10,17 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY tsconfig.json ./
 COPY src ./src
-RUN npx tsc -p . && npm prune --omit=dev
+# the path tracer is shared with the browser viewer (types for tsc)
+COPY viewer/gpu ./viewer/gpu
+RUN npx tsc -p . && npm prune --omit=dev \
+ # Dawn (WebGPU) ships every platform's binary: keep this image's
+ && cd node_modules/webgpu/dist && for d in *; do [ "$d" = "linux-$(node -p process.arch)" ] || rm -rf "$d"; done
 
 FROM node:22-bookworm-slim
+# Vulkan loader for the GPU path tracer; the NVIDIA runtime mounts the driver and its Vulkan ICD into the container
+RUN apt-get update && apt-get install -y --no-install-recommends libvulkan1 && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics \
     TZ=Asia/Kuwait \
     HOST=0.0.0.0 \
     PORT=5178 \

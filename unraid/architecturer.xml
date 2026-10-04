@@ -17,7 +17,7 @@ Memory: a big furnished plan can need ~3.5 GB per render worker while exporting 
   <WebUI>http://[IP]:[PORT:5178]/admin</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/ahalansari/Architecturer/main/unraid/architecturer.xml</TemplateURL>
   <Icon/>
-  <ExtraParams>--memory=4g --cpus=2</ExtraParams>
+  <ExtraParams>--memory=4g --cpus=2 --runtime=nvidia</ExtraParams>
   <PostArgs/>
   <CPUset/>
   <DateInstalled/>
@@ -30,5 +30,8 @@ Memory: a big furnished plan can need ~3.5 GB per render worker while exporting 
   <Config Name="Render workers" Target="ARCHITECTURER_WORKERS" Default="1" Mode="" Description="Parallel render/export workers. Each can need ~3.5 GB on big plans: raise --memory in Extra Parameters with it (2 workers: --memory=8g)." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
   <Config Name="Allow private network fetches" Target="ARCHITECTURER_ALLOW_PRIVATE_FETCH" Default="" Mode="" Description="Set to 1 to let plans load models / textures from LAN addresses (a NAS). Off by default." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Extra allowed hosts" Target="ARCHITECTURER_ALLOWED_HOSTS" Default="" Mode="" Description="Comma-separated extra host names accepted (e.g. tower.local). The public host, localhost and IP addresses are always accepted." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="NVIDIA GPU" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="GPU for the path-traced renders (needs the Nvidia Driver plugin): all, or a GPU UUID from the plugin's page. Without an NVIDIA card remove --runtime=nvidia from Extra Parameters; renders then use the CPU rasteriser." Type="Variable" Display="always" Required="false" Mask="false">all</Config>
+  <Config Name="NVIDIA capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,utility,graphics" Mode="" Description="graphics is what mounts the Vulkan driver the renderer uses." Type="Variable" Display="advanced" Required="false" Mask="false">compute,utility,graphics</Config>
+  <Config Name="Renderer" Target="ARCHITECTURER_RENDERER" Default="auto" Mode="" Description="auto: GPU path tracer when a GPU is visible, else the CPU rasteriser; gpu: GPU only (fail otherwise); cpu: always the rasteriser." Type="Variable" Display="advanced" Required="false" Mask="false">auto</Config>
   <Config Name="Viewer texture size" Target="ARCHITECTURER_VIEWER_TEXTURE_SIZE" Default="512" Mode="" Description="Texture resolution of the model the live viewer loads." Type="Variable" Display="advanced" Required="false" Mask="false">512</Config>
 </Container>

@@ -191,6 +191,29 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
         createReadStream(join(contractsDir, name)).pipe(res);
         return;
       }
+      if (path === "photo.png") {
+        // path-traced still of the viewer's current camera (plan coordinates, z up)
+        const vec = (k: string) => {
+          const v = (query.get(k) ?? "").split(",").map(Number);
+          return v.length === 3 && v.every((x) => Number.isFinite(x) && Math.abs(x) < 1e5) ? (v as [number, number, number]) : undefined;
+        };
+        const eye = vec("eye"), target = vec("target");
+        if (!eye || !target) return void res.writeHead(400, { "content-type": "text/plain" }).end("eye and target: x,y,z");
+        const int = (k: string, lo: number, hi: number, d: number) => {
+          const n = Math.round(Number(query.get(k) ?? d));
+          return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
+        };
+        const lighting = ["day", "night", "dusk"].includes(query.get("lighting") ?? "") ? (query.get("lighting") as "day" | "night" | "dusk") : "day";
+        const time = /^\d{1,2}:\d{2}$/.test(query.get("time") ?? "") ? query.get("time")! : undefined;
+        const date = /^\d{1,2}-\d{1,2}$/.test(query.get("date") ?? "") ? query.get("date")! : undefined;
+        const level = /^[\w-]{1,64}$/.test(query.get("level") ?? "") ? query.get("level")! : undefined;
+        const view = { eye, target, fov: int("fov", 10, 120, 45), width: int("w", 200, 2400, 1280), height: int("h", 200, 2400, 800), samples: int("spp", 16, 1024, 192), level, time, date };
+        const r = await run(`photo:${JSON.stringify(view)}:${lighting}`, { op: "render_view", view, modes: [lighting] });
+        if (!r.ok || !r.images?.length) return void res.writeHead(422, { "content-type": "text/plain; charset=utf-8" }).end(r.summary);
+        res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store", "x-renderer": encodeURIComponent(r.summary.split("\n").pop() ?? "") });
+        res.end(r.images[0]);
+        return;
+      }
       if (path === "plan.svg") {
         const sheet = query.get("sheet") || "plan";
         if (!(PLAN_SHEETS as readonly string[]).includes(sheet)) return void res.writeHead(400).end(`sheet must be one of ${PLAN_SHEETS.join(", ")}`);

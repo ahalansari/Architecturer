@@ -71,7 +71,8 @@ Notes for both:
 - **Memory.**
   - Measured on a large furnished plan (the showcase apartment: 14 IKEA models, 1024 px textures): an export peaked at about **3.5 GB** and a 3D render at about **1.8 GB**. Simple plans use far less.
   - Keep `ARCHITECTURER_WORKERS=1` with `ARCHITECTURER_MEMORY=4g`. For two exports at once, use 2 workers and about 8 GB.
-- **CPU.** Each worker uses one core while busy and nothing when idle. There's no GPU use: renders are a software rasterizer, and the 3D viewer draws on the visitor's GPU.
+- **CPU.** Each worker uses one core while busy and nothing when idle. The 3D viewer draws on the visitor's GPU.
+- **GPU (optional, recommended).** `render_view` path-traces on the server's GPU through WebGPU (Dawn on Vulkan): real sun and sky for Kuwait at any date and time, daylight through windows, light bouncing between surfaces, the lighting design's lamps in candela, denoised. On Unraid with an NVIDIA card: install the **Nvidia Driver** plugin, keep `--runtime=nvidia` in Extra Parameters and `NVIDIA_VISIBLE_DEVICES` = `all` (or the card's UUID), and `NVIDIA_DRIVER_CAPABILITIES` must include `graphics` (it mounts the Vulkan driver). With compose, the `deploy.resources.reservations.devices` block does the same. A 1024×700 view at 128 samples takes about a second on a mid-range card; the render reply says which renderer drew it. Without a GPU (or `ARCHITECTURER_RENDERER=cpu`) renders use the software rasteriser.
 
 ## Your account
 

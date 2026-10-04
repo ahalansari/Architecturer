@@ -21,6 +21,15 @@ services:
     # one export of a big furnished plan peaks around 3.5 GB; allow ~3.5 GB per worker plus 0.5 GB
     mem_limit: ${ARCHITECTURER_MEMORY:-4g}
     cpus: ${ARCHITECTURER_CPUS:-2}
+    # NVIDIA GPU for the path-traced renders (NVIDIA Container Toolkit / Unraid Nvidia Driver plugin).
+    # Without one, delete this block: renders fall back to the CPU rasteriser.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility, graphics]
 
   cloudflared:
     image: cloudflare/cloudflared:latest

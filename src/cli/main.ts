@@ -8,7 +8,7 @@ import { loadAndCompile, readJson } from "../io.js";
 import { vendorNotice, type Compiled } from "../pipeline.js";
 import { PLAN_SHEETS, renderPlanSVG, svgToPng, type PlanSheet } from "../render/plan.js";
 import { LIGHTING_MODES, VIEW_PRESETS, type LightingMode, type ViewPreset } from "../render/raster.js";
-import { renderViewPNG } from "../render/view.js";
+import { renderView } from "../render/view.js";
 import { projectJsonSchema } from "../schema/schema.js";
 import { STARTER_PROJECT } from "../templates.js";
 
@@ -98,6 +98,11 @@ const COMMANDS: Record<string, Command> = {
       { name: "elevation", arg: "wall-id", desc: "interior: square-on orthographic view of a wall (kitchens, wardrobes, tiling, art)" },
       { name: "elevation-room", arg: "name|id", desc: "with --elevation: which room's side of the wall to look at" },
       { name: "lighting", arg: "day|night|dusk|both", desc: "night/dusk: lit by the plan's light fixtures and lamps (judge a lighting design); both = day + night images" },
+      { name: "renderer", arg: "auto|gpu|cpu", desc: "auto: GPU path tracer when there is a GPU (default); cpu: fast rasteriser" },
+      { name: "samples", arg: "n", desc: "path tracer samples per pixel (default 128)" },
+      { name: "time", arg: "HH:MM", desc: "local time for the sun (Kuwait; default 10:30)" },
+      { name: "date", arg: "MM-DD", desc: "date for the sun (default 03-21)" },
+      { name: "exposure", arg: "EV", desc: "exposure compensation (default 0, automatic)" },
       OUT,
     ],
     async run(file, f) {
@@ -121,6 +126,11 @@ const COMMANDS: Record<string, Command> = {
         eye: f.eye ? (nums(f.eye, "eye", 3) as [number, number, number]) : undefined,
         target: f.target ? (nums(f.target, "target", 3) as [number, number, number]) : undefined,
         fov: f.fov ? num(f.fov, "fov") : undefined,
+        renderer: f.renderer as "auto" | "gpu" | "cpu" | undefined,
+        samples: f.samples ? num(f.samples, "samples") : undefined,
+        time: f.time as string | undefined,
+        date: f.date as string | undefined,
+        exposure: f.exposure !== undefined ? num(f.exposure, "exposure") : undefined,
         interior:
           f.room || f.elevation
             ? {
@@ -131,9 +141,13 @@ const COMMANDS: Record<string, Command> = {
               }
             : undefined,
       };
-      if (lighting === "both")
-        for (const m of ["day", "night"] as const) await write(out.replace(/(\.png)?$/i, `.${m}.png`), renderViewPNG(c, { ...viewOpts, lighting: m }));
-      else await write(out, renderViewPNG(c, { ...viewOpts, lighting: lighting as LightingMode }));
+      const shoot = async (o: string, m: LightingMode) => {
+        const r = await renderView(c, { ...viewOpts, lighting: m });
+        console.error(r.note ?? r.renderer);
+        await write(o, r.png);
+      };
+      if (lighting === "both") for (const m of ["day", "night"] as const) await shoot(out.replace(/(\.png)?$/i, `.${m}.png`), m);
+      else await shoot(out, lighting as LightingMode);
     },
   },
   build: {

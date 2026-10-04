@@ -1,7 +1,7 @@
 import { sceneBounds, type SceneNode } from "../geometry/scene.js";
 import type { Vec3 } from "../geometry/math.js";
 import { texturesFor, type Compiled } from "../pipeline.js";
-import { encodePNG, renderPreset, renderScene, type LightingMode, type LightOccluderLevel, type MaterialLookup, type ViewPreset } from "./raster.js";
+import { encodePNG, presetCamera, renderScene, type Camera, type LightingMode, type LightOccluderLevel, type MaterialLookup, type RenderOptions, type ViewPreset } from "./raster.js";
 import { interiorCamera, type InteriorView } from "./interior.js";
 
 export interface ViewOptions {
@@ -27,10 +27,25 @@ export interface ViewOptions {
   lighting?: LightingMode;
   /** Interior review: eye-level shot of a room, or a square-on wall elevation (see interior.ts). */
   interior?: InteriorView;
+  /** auto (GPU path tracer when there is a GPU) | gpu | cpu (rasteriser). */
+  renderer?: "auto" | "gpu" | "cpu";
+  /** Path tracer: samples per pixel (default 128), local time "HH:MM" and date "MM-DD" for the sun, exposure in EV. */
+  samples?: number;
+  time?: string;
+  date?: string;
+  exposure?: number;
 }
 
-/** Render the compiled building to a PNG (pure JS, headless). */
-export function renderViewPNG(c: Compiled, o: ViewOptions = {}): Buffer {
+/** A view ready to render: what to draw, from where, and how (shared by the CPU and GPU renderers). */
+export interface PreparedView {
+  root: SceneNode;
+  camera: Camera;
+  lookup: MaterialLookup;
+  opts: RenderOptions & { width: number; height: number };
+  texSize: number;
+}
+
+export function prepareView(c: Compiled, o: ViewOptions = {}): PreparedView {
   if (!c.root || !c.project) throw new Error("project failed to compile: " + c.errors.join("; "));
   const texSize = o.textureSize ?? 256;
   // textures are untinted; the renderer multiplies them by def.color
@@ -80,10 +95,35 @@ export function renderViewPNG(c: Compiled, o: ViewOptions = {}): Buffer {
     root = { ...c.root, children: c.root.children.filter((n) => n.kind !== "level" || c.root!.children.indexOf(n) <= shot.level) };
     opts.clipZ = shot.clipZ;
   }
-  const img = shot
-    ? renderScene(root, lookup, shot.camera, opts)
-    : o.eye
-    ? renderScene(root, lookup, { eye: o.eye, target: o.target ?? bounds.min.map((v, i) => (v + bounds.max[i]) / 2) as Vec3, fov: o.fov }, opts)
-    : renderPreset(root, lookup, o.view ?? "iso", bounds, opts);
-  return encodePNG(img);
+  let camera: Camera;
+  if (shot) camera = shot.camera;
+  else if (o.eye) camera = { eye: o.eye, target: o.target ?? (bounds.min.map((v, i) => (v + bounds.max[i]) / 2) as Vec3), fov: o.fov };
+  else {
+    const b = { min: [...bounds.min] as Vec3, max: [...bounds.max] as Vec3 };
+    if (typeof opts.clipZ === "number") b.max[2] = Math.max(b.min[2], Math.min(b.max[2], opts.clipZ));
+    camera = presetCamera(b, o.view ?? "iso", width / height);
+  }
+  return { root, camera, lookup, opts, texSize };
+}
+
+/** Render the compiled building to a PNG with the CPU rasteriser (pure JS, headless). */
+export function renderViewPNG(c: Compiled, o: ViewOptions = {}): Buffer {
+  const v = prepareView(c, o);
+  return encodePNG(renderScene(v.root, v.lookup, v.camera, v.opts));
+}
+
+/**
+ * Render with the GPU path tracer when a GPU is available (and not turned off), else the CPU rasteriser.
+ * `renderer`: auto (default) | gpu (fail if there is none) | cpu.
+ */
+export async function renderView(c: Compiled, o: ViewOptions = {}): Promise<{ png: Buffer; renderer: string; note?: string }> {
+  const want = o.renderer ?? (process.env.ARCHITECTURER_RENDERER as ViewOptions["renderer"]) ?? "auto";
+  if (want !== "cpu") {
+    const { gpuRender } = await import("./gpu.js");
+    const r = await gpuRender(c, o).catch((e: Error) => ({ error: e.message }));
+    if ("png" in r) return r;
+    if (want === "gpu") throw new Error(`GPU render failed: ${r.error}`);
+    return { png: renderViewPNG(c, o), renderer: "cpu", note: `GPU unavailable (${r.error}); used the CPU renderer` };
+  }
+  return { png: renderViewPNG(c, o), renderer: "cpu" };
 }

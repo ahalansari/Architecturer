@@ -12,7 +12,7 @@ import { renderPlanSVG, svgToPng, type PlanSheet } from "../render/plan.js";
 import type { ContractOptions } from "../contracts/contract.js";
 import type { CostScope } from "../cost/estimate.js";
 import type { LightingMode } from "../render/raster.js";
-import { renderViewPNG, type ViewOptions } from "../render/view.js";
+import { renderView, type ViewOptions } from "../render/view.js";
 
 type Json = Record<string, any>;
 
@@ -121,7 +121,16 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
     case "render_plan":
       return { ok: true, summary: sum, images: [await svgToPng(renderPlanSVG(c, req.level, { sheet: req.sheet }))] };
     case "render_view":
-      return { ok: true, summary: sum, images: req.modes.map((m) => renderViewPNG(c, { ...req.view, lighting: m })) };
+    {
+      const images: Uint8Array[] = [];
+      const how = new Set<string>();
+      for (const m of req.modes) {
+        const r = await renderView(c, { ...req.view, lighting: m });
+        images.push(r.png);
+        how.add(r.note ?? r.renderer);
+      }
+      return { ok: true, summary: `${sum}\nRendered with ${[...how].join("; ")}.`, images };
+    }
     case "export":
       if (extname(req.out) === ".gltf") {
         await mkdir(dirname(req.out), { recursive: true });

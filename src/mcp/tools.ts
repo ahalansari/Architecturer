@@ -442,7 +442,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
     {
       title: "Render a 3D view",
       description:
-        "Render the 3D model to an image. view: " +
+        "Render the 3D model to an image: path-traced on the server's GPU when it has one (real sun and sky for Kuwait, daylight through windows, light bouncing between surfaces, the lighting design's lamps), else the fast rasteriser. view: " +
         VIEW_PRESETS.join(", ") +
         " (iso = from south-east above). Pass `level` to cut away everything above that level's walls and see the interior. Or pass a custom camera `eye`/`target` ([x,y,z] in plan coordinates, z up).",
       inputSchema: {
@@ -465,12 +465,17 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         target: z.tuple([z.number(), z.number(), z.number()]).optional(),
         width: z.number().int().min(200).max(2000).default(1024),
         height: z.number().int().min(200).max(2000).default(700),
+        renderer: z.enum(["auto", "gpu", "cpu"]).default("auto").describe("auto: GPU path tracer when available; cpu: fast rasteriser (quick checks)"),
+        samples: z.number().int().min(4).max(2048).optional().describe("Path tracer samples per pixel (default 128; 256+ for final images)"),
+        time: z.string().regex(/^\d{1,2}:\d{2}$/).optional().describe("Local time HH:MM for the sun (Kuwait; default 10:30, dusk 17:45, night 21:00)"),
+        date: z.string().regex(/^\d{1,2}-\d{1,2}$/).optional().describe("Date MM-DD for the sun (default 03-21); e.g. 06-21 for the high summer sun"),
+        exposure: z.number().min(-5).max(5).optional().describe("Exposure compensation in EV (default 0, automatic)"),
       },
       annotations: READ,
     },
-    guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, width, height }, extra) => {
+    guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, width, height, renderer, samples, time, date, exposure }, extra) => {
       const file = ws.plan(path);
-      const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, width, height, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
+      const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, width, height, renderer, samples, time, date, exposure, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
       const modes = lighting === "both" ? ["day", "night"] : [lighting];
       const r = await job(file, await load(file), { op: "render_view", view: opts, modes }, extra, "Rendering");
       if (!r.ok) return fail(r.summary);
