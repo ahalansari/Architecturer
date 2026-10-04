@@ -435,9 +435,21 @@ const COMMANDS: Record<string, Command> = {
       console.log(hvacReport(c.hvac, c.levels.map((l) => l.name), !f.brief));
     },
   },
+  landscape: {
+    usage: "arch landscape <plan.json>",
+    desc: "Gardens and irrigation: areas, plants, spray / drip / bubbler zones, controller and summer water use; the drawing is `arch plan --sheet landscape`",
+    file: true,
+    flags: [],
+    async run(file) {
+      const c = await compiled(file);
+      const { landscapeReport } = await import("../elements/landscape.js");
+      if (!c.landscape) throw new Error("no landscape design (see the warnings)");
+      console.log(landscapeReport(c.landscape, c.levels.map((l) => l.name)));
+    },
+  },
   contract: {
     usage: "arch contract <plan.json> --package <id> [--labour|--supply] [-o base] [--contractor name] [--start YYYY-MM-DD] [--days n]",
-    desc: "Bilingual works contract (English, then Arabic) for a trade package, as .docx and print-ready .html: main, structure, blockwork, plaster, waterproofing, tiling, painting, ceilings, doors_windows, electrical, plumbing, joinery, external",
+    desc: "Bilingual works contract (English, then Arabic) for a trade package, as .docx and print-ready .html: main, structure, blockwork, plaster, waterproofing, tiling, painting, ceilings, doors_windows, electrical, plumbing, hvac, lifts, landscape, joinery, external",
     file: true,
     flags: [
       { name: "package", arg: "id", desc: "trade package (see above)" },

@@ -16,6 +16,7 @@ import { ElectricalSchema, PlumbingSchema, ServicesSchema } from "../elements/se
 import { ProductSchema } from "../elements/products.js";
 import { HvacSchema } from "../elements/hvac.js";
 import { LIFT_DRIVES } from "../elements/lifts.js";
+import { GardenSchema, LandscapeSchema } from "../elements/landscape.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 import { applyConstructionDefaults, ConstructionSchema, WALL_ASSEMBLY_IDS } from "../elements/construction.js";
@@ -336,6 +337,7 @@ export const LevelSchema = z
     lights: z.array(LightSchema).default([]).describe("Light fixtures (pendants, downlight grids, sconces, LED strips...) with real light sources"),
     electrical: z.array(ElectricalSchema).default([]).describe("Extra electrical points (switches, sockets, data, appliance points, AC, detectors) on top of the automatic layout"),
     plumbing: z.array(PlumbingSchema).default([]).describe("Stacks, floor drains, water heaters, the main stop valve, taps (replace / add to the automatic plumbing layout)"),
+    gardens: z.array(GardenSchema).default([]).describe("Landscape areas (lawn, artificial turf, planting beds, gravel, mulch, paving, sand); trees, palms, shrubs and hedges are furniture (tree / bush / hedge). Irrigation is designed automatically"),
     services: ServicesSchema,
   })
   .describe("One storey of the building");
@@ -422,6 +424,7 @@ export const ProjectSchema = z
       .describe("Cost estimate settings (arch estimate / MCP cost_estimate)"),
     products: z.array(ProductSchema).default([]).describe("Vendor / library items (import_product) placed with furniture.product; shopping_list totals them"),
     hvac: HvacSchema,
+    landscape: LandscapeSchema,
     contract: z
       .object({
         owner: PartySchema.optional().describe("First party (the owner); generate_contract fills it in every contract"),
@@ -475,7 +478,7 @@ export type Band = z.output<typeof BandSchema>;
 export type Elevator = z.output<typeof ElevatorSchema>;
 
 /** Element collections on a level, in a fixed order (used by editing tools). */
-export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework", "electrical", "plumbing"] as const;
+export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework", "electrical", "plumbing", "gardens"] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 export function directionToDegrees(d: number | "north" | "south" | "east" | "west"): number {

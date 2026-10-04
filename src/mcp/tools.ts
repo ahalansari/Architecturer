@@ -420,11 +420,12 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         "sheet 'electrical': switches (switch legs to the lights), sockets, data / TV, appliance spurs, cooker unit, fans, detectors, DB and the circuit schedule. " +
         "sheet 'plumbing': sanitary fixtures with cold / hot supplies and waste / soil drains to stacks, floor drains, water heaters, main stop valve and the fixture schedule. " +
         "sheet 'hvac': air conditioning: supply / return ducts to scale, diffusers with airflows, return grilles, the riser, thermostats, roof units, unit schedule and room loads (see hvac_design). " +
+        "sheet 'landscape': gardens (lawn, turf, planting, gravel...), trees and palms, irrigation: spray heads with their throw, drip lines, bubblers, laterals, mainline, zone valves, controller, zone schedule and water use (see landscape_design). " +
         "Both layouts are generated from the design (level.services.auto); add points with level.electrical / level.plumbing, drop auto points with services.omit (ids like sk.master.3 = sk3 on the sheet).",
       inputSchema: {
         path: PathArg,
         level: LevelArg.optional().describe("Default: first level"),
-        sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling | electrical | plumbing | hvac"),
+        sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling | electrical | plumbing | hvac | landscape"),
       },
       annotations: READ,
     },
@@ -789,12 +790,31 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
   );
 
   tool(
+    "landscape_design",
+    {
+      title: "Garden and irrigation design",
+      description:
+        "Gardens and their automatic irrigation: areas by surface (level.gardens: lawn, turf, planting, gravel, mulch, paving, sand), trees / palms / shrubs / hedges (furniture tree with options.kind palm, bush, hedge, planter), " +
+        "pop-up spray heads on lawns (head-to-head), drip lines on planting beds and hedges, bubblers at trees (two per palm), zones capped by flow, valve box and controller on the outside wall nearest the gardens (or project.landscape.controller), pipes routed round the building, and summer water use per day and month. " +
+        "Settings in project.landscape; the drawing is render_plan sheet 'landscape'; the cost is section L of cost_estimate; the contract is generate_contract package 'landscape'.",
+      inputSchema: { path: PathArg },
+      annotations: READ,
+    },
+    guard(async ({ path }, extra) => {
+      const file = ws.plan(path);
+      const r = await job(file, await load(file), { op: "landscape" }, extra, "Designing irrigation");
+      if (!r.ok) return fail(r.summary);
+      return ok(text(r.text!));
+    }),
+  );
+
+  tool(
     "generate_contract",
     {
       title: "Generate a works contract",
       description:
         "Bilingual works contract (English, then Arabic; the Arabic text prevails) for one trade package of the plan, as Word (.docx) and print-ready HTML (save as PDF). " +
-        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, hvac (air conditioning), lifts, joinery (kitchens, wardrobes), external (terraces, balustrades). " +
+        "Packages: main (the whole building), structure (هيكل أسود: foundations and RC frame), blockwork, plaster (internal + external), waterproofing (roof), tiling, painting, ceilings (gypsum), doors_windows, electrical, plumbing, hvac (air conditioning), lifts, landscape (gardens and irrigation), joinery (kitchens, wardrobes), external (terraces, balustrades). " +
         "mode 'labour' = labour only (مصنعية فقط: the owner supplies materials, listed in the contract); 'supply' = supply and installation. The schedule of quantities is measured from the model (full-scope cost estimate); labour-only rates come from researched Kuwait labour rates, otherwise they are estimated as a share of the supply & install rate and marked * (pass rates {'labour:<key>': rate} with the contractor's prices). " +
         "Includes scope steps, specification, materials split, payment stages tied to the work (per slab for structural work), programme, delay penalty, retention, defects period (and decennial liability for structural work), variations, safety, termination and Kuwaiti law. Owner and site address default to project.contract. " +
         (remote ? "Returns download links." : "Writes the files next to the plan (contracts/) unless `output` is given."),

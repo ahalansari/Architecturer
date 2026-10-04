@@ -9,6 +9,7 @@ import { addLampLight, buildLights, checkUnlitRooms } from "./elements/lighting.
 import { buildRoomFinishes, prepareFinishes, type CeilingLayout } from "./elements/finishes.js";
 import { buildServices, type ServicesLayout } from "./elements/services.js";
 import { shaftFrame } from "./elements/lifts.js";
+import { buildGardens } from "./elements/landscape.js";
 import { getModel } from "./assets/registry.js";
 import { fitModel } from "./assets/place.js";
 import type { ResolvedRun } from "./elements/casework/layout.js";
@@ -339,6 +340,8 @@ export function buildProject(project: Project): BuildOutput {
     });
 
     // ---- terraces / balconies ----
+    // ---- gardens (lawn, turf, beds, gravel...) ----
+    const gardensNode = buildGardens(lv.gardens, z);
     const terracesNode = node("terraces", "group");
     lv.terraces.forEach((t, i) => {
       const mb = new MeshBuilder(), col = new MeshBuilder();
@@ -362,7 +365,7 @@ export function buildProject(project: Project): BuildOutput {
     for (const h of holes) if (!usedHoles.has(h)) warn("a stairwell arriving at this level is not inside any slab");
 
     levelNode.children.push(
-      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, shapesNode, stairsNode, furnNode, caseNode, lightsNode, ...(services.node ? [services.node] : []), structNode, roofsNode].filter(
+      ...[wallsNode, openingsNode, slabsNode, roomsNode, terracesNode, ...(gardensNode ? [gardensNode] : []), shapesNode, stairsNode, furnNode, caseNode, lightsNode, ...(services.node ? [services.node] : []), structNode, roofsNode].filter(
         (n) => n.meshes.length || n.children.length,
       ),
     );

@@ -41,7 +41,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch guide` | Authoring guide for AI agents: conventions, plus the material and furniture lists |
 | `arch init plan.json` | Starter plan |
 | `arch validate plan.json [--strict]` | Errors, layout warnings, stats (`--strict` fails on warnings) |
-| `arch plan plan.json --level ground [--sheet lighting\|finishes\|rcp\|false_ceiling\|electrical\|plumbing\|hvac] -o plan.png` | 2D floor plan (`.svg` or `.png`). `--sheet lighting`: fixture symbols, estimated lux per room and a fixture legend. `--sheet finishes`: floors drawn in their material pattern, wall finish and accent bands, and a per-room finish schedule. `--sheet rcp`: reflected ceiling plan. `--sheet false_ceiling`: false ceiling plan with every ceiling level tagged above FFL. `--sheet electrical` / `plumbing`: services layouts |
+| `arch plan plan.json --level ground [--sheet lighting\|finishes\|rcp\|false_ceiling\|electrical\|plumbing\|hvac\|landscape] -o plan.png` | 2D floor plan (`.svg` or `.png`). `--sheet lighting`: fixture symbols, estimated lux per room and a fixture legend. `--sheet finishes`: floors drawn in their material pattern, wall finish and accent bands, and a per-room finish schedule. `--sheet rcp`: reflected ceiling plan. `--sheet false_ceiling`: false ceiling plan with every ceiling level tagged above FFL. `--sheet electrical` / `plumbing`: services layouts |
 | `arch render plan.json --view iso [--level ground] [--focus x,y --radius 3] [--zoom 2] -o view.png` | Headless 3D render. `--level` cuts away everything above that level (`--cut` sets the height); `--focus` frames a close-up |
 | `arch build plan.json -o model.glb [--unity\|--godot] [--texture-format jpeg\|png\|ktx2]` | Export; `.gltf` writes separate image files |
 | `arch assets "oak herringbone" [--kind model]` | Search CC0 scanned materials / models (ambientCG, Poly Haven) |
@@ -49,6 +49,7 @@ npx tsx src/cli/main.ts build examples/house.json -o out/house.glb --texture-siz
 | `arch bom plan.json [--csv]` | Shopping list of placed products |
 | `arch estimate plan.json -o bill.html` | Cost estimate / bill of quantities measured from the model (also `.md`, `.csv`, `.json`) |
 | `arch hvac plan.json` | Air conditioning: cooling loads per room, rooftop packaged units (or ducted / wall splits), coordination issues; drawing: `arch plan --sheet hvac` |
+| `arch landscape plan.json` | Gardens and irrigation: areas, plants, spray / drip / bubbler zones, controller, summer water use; drawing: `arch plan --sheet landscape` |
 | `arch contract plan.json --package plaster --labour` | Bilingual works contract (English then Arabic) as `.docx` and print-ready `.html`, see [docs/CONTRACTS.md](docs/CONTRACTS.md) |
 | `arch fetch plan.json` | Download all online assets into the cache (then builds work offline) |
 | `arch mcp [--http]` | MCP server over stdio, or `--http` for the remote server ([docs/REMOTE_MCP.md](docs/REMOTE_MCP.md)) |
@@ -87,6 +88,7 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 | `render_plan`, `render_view` | Return PNG images so the model can see its work |
 | `search_assets`, `search_products`, `import_product`, `shopping_list`, `cost_estimate` | Scanned CC0 materials / models, IKEA catalogue search, vendor product import with 3D models, bill of materials, cost estimate |
 | `hvac_design` | Air conditioning: room cooling loads, units, airflow, electrical supplies, coordination checks (with `render_plan` sheet `hvac`) |
+| `landscape_design` | Gardens and irrigation: areas, plants, zones, run times, water use (with `render_plan` sheet `landscape`) |
 | `generate_contract` | Works contract per trade package, English and Arabic, Word + HTML |
 | `export_model` | `.glb` / `.gltf` for game engines (`export_status` on the remote server) |
 

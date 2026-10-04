@@ -161,6 +161,8 @@ def("emissive_light", "none", "Glowing lamp / bulb / light panel (emissive)", { 
 def("grass", "grass", "Lawn grass (top-down)", { roughness: 0.95, scale: 1.0 });
 def("plant_green", "grass", "Leafy plant foliage (bushes, hedges, house plants)", { roughness: 0.8, scale: 0.4, doubleSided: true, params: { base: "#4d8a3a", blades: 9000 } });
 def("gravel", "gravel", "Loose gravel / pebbles", { roughness: 0.9, scale: 1.0 });
+def("grass_artificial", "grass", "Artificial grass (even, bright)", { roughness: 0.75, scale: 0.6, params: { base: "#4f9a36", blades: 14000 } });
+def("mulch", "concrete", "Bark mulch on planting beds", { roughness: 1, scale: 1.2, color: "#6b4528", normalStrength: 2.5, params: { formLines: 0, pores: 9000 } });
 def("dirt", "concrete", "Bare soil / dirt", { roughness: 1, scale: 2.0, color: "#7a5c40", normalStrength: 2, params: { formLines: 0, pores: 4000 } });
 def("sand", "carpet", "Sand", { roughness: 1, scale: 1.0, color: "#dcc9a0", normalStrength: 0.6 });
 def("paving_stone", "paving", "Square stone paving slabs (50 cm)", { roughness: 0.85, scale: 1.0 });

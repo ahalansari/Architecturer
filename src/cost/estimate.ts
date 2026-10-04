@@ -96,6 +96,10 @@ export const DEFAULT_RATES: Record<string, number> = {
   "joinery:kitchen_base": 150, "joinery:kitchen_upper": 105, "joinery:kitchen_tall": 280, "joinery:worktop": 85, "joinery:wardrobe": 240,
   "joinery:vanity": 220, "joinery:media": 200, "joinery:shelving": 140, "joinery:desk": 120, "joinery:bench": 120,
   "install:cabinet": 12, "install:worktop": 20, "install:appliance": 15, "lift:base": 9500, "lift:per_stop": 1200, "lift:home_lift": 8000, "lift:pit": 650, "lift:overrun": 900, "lift:power_supply": 150,
+  "landscape:lawn": 3.5, "landscape:turf": 8, "landscape:planting": 6, "landscape:gravel": 2.5, "landscape:mulch": 2, "landscape:paving": 9, "landscape:sand": 1,
+  "landscape:tree": 35, "landscape:palm": 180, "landscape:shrub": 4, "landscape:hedge": 9,
+  "irrigation:spray_head": 6, "irrigation:drip_m": 0.6, "irrigation:bubbler": 3, "irrigation:emitter": 1, "irrigation:pipe_m": 1.2, "irrigation:valve": 35,
+  "irrigation:valve_box": 25, "irrigation:controller": 90,
   "hvac:packaged_tr": 320, "hvac:ducted_split_tr": 300, "hvac:split_tr": 220, "hvac:duct_m2": 9, "hvac:diffuser": 15, "hvac:return_grille": 12, "hvac:thermostat": 25, "hvac:power_supply": 120, "hvac:commissioning": 60,
   "appliance:dishwasher": 180, "appliance:extractor": 90, "appliance:oven": 160, "appliance:hob": 110, "appliance:fridge": 260, "appliance:microwave": 60,
   // electrical
@@ -632,6 +636,47 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
       if (l.overrun > 0) add(K, { description: `Lift '${l.id}': RC overrun ${l.overrun} m above the roof, with waterproofing`, qty: 1, unit: "no", rate: rate("lift:overrun"), basis: "count", key: "lift:overrun" });
       add(K, { description: `Lift '${l.id}': 3-phase power supply, isolator and shaft lighting`, qty: 1, unit: "no", rate: rate("lift:power_supply"), basis: "count", key: "lift:power_supply" });
     }
+  }
+
+  // ---- L. landscape and irrigation, from the garden design ----
+  const ls = c.landscape;
+  if (ls && (Object.values(ls.areas).some((a) => a > 0) || Object.values(ls.plants).some((n) => n > 0))) {
+    const Ls = sec("L", "Landscape & irrigation");
+    const SURF: Record<string, string> = {
+      lawn: "Natural lawn: 150 mm sweet soil with fertiliser, levelled, grass rolls laid and watered in",
+      turf: "Artificial turf 35–40 mm on compacted base with sand infill",
+      planting: "Planting bed: 300 mm sweet soil, ground cover and seasonal plants",
+      gravel: "Decorative gravel 50 mm on weed membrane, steel edging",
+      mulch: "Bark mulch 75 mm on weed membrane",
+      paving: "Garden paving (interlock / stone) on sand bed and compacted base",
+      sand: "Sand area, levelled and compacted",
+    };
+    for (const [k, a] of Object.entries(ls.areas)) if (a > 0) add(Ls, { description: SURF[k], qty: a, unit: "m²", rate: rate(`landscape:${k}`), basis: "measured", key: `landscape:${k}` });
+    const P = ls.plants;
+    if (P.palms) add(Ls, { description: "Palm trees (date palm, 3–4 m trunk), pit, sweet soil and staking", qty: P.palms, unit: "no", rate: rate("landscape:palm"), basis: "count", key: "landscape:palm" });
+    if (P.trees) add(Ls, { description: "Trees 2.5–3 m (conocarpus / ficus / albizia), pit, sweet soil and staking", qty: P.trees, unit: "no", rate: rate("landscape:tree"), basis: "count", key: "landscape:tree" });
+    if (P.shrubs) add(Ls, { description: "Shrubs 0.6–1 m, planted", qty: P.shrubs, unit: "no", rate: rate("landscape:shrub"), basis: "count", key: "landscape:shrub" });
+    if (P.hedgeM) add(Ls, { description: "Hedge planting, 3 plants per metre", qty: P.hedgeM, unit: "m", rate: rate("landscape:hedge"), basis: "measured", key: "landscape:hedge" });
+    const lv = ls.levels;
+    const n = (f: (l: (typeof lv)[number]) => number) => lv.reduce((a, l) => a + f(l), 0);
+    const heads = n((l) => l.heads.length);
+    const drip = n((l) => l.drip.reduce((a, d) => a + polyLen(d.pts), 0));
+    const bubblers = n((l) => l.bubblers.reduce((a, b) => a + b.n, 0));
+    const emitters = n((l) => l.emitters.reduce((a, e) => a + e.n, 0));
+    const pipe = n((l) => l.pipes.reduce((a, p) => a + polyLen(p.pts), 0));
+    const valves = n((l) => l.valves.length);
+    if (heads) add(Ls, { description: "Pop-up spray heads with adjustable nozzles, swing joints", qty: heads, unit: "no", rate: rate("irrigation:spray_head"), basis: "count", key: "irrigation:spray_head" });
+    if (drip) add(Ls, { description: "Drip line 16 mm with 2 L/h pressure-compensating emitters at 300 mm", qty: drip, unit: "m", rate: rate("irrigation:drip_m"), basis: "measured", key: "irrigation:drip_m" });
+    if (bubblers) add(Ls, { description: "Tree bubblers on 16 mm risers", qty: bubblers, unit: "no", rate: rate("irrigation:bubbler"), basis: "count", key: "irrigation:bubbler" });
+    if (emitters) add(Ls, { description: "Point emitters at shrubs and planters", qty: emitters, unit: "no", rate: rate("irrigation:emitter"), basis: "count", key: "irrigation:emitter" });
+    if (pipe) add(Ls, { description: "PE pipe 25–32 mm (mainline and laterals), trenching 300 mm, sleeves under paths", qty: pipe, unit: "m", rate: rate("irrigation:pipe_m"), basis: "measured", key: "irrigation:pipe_m" });
+    if (valves) {
+      add(Ls, { description: "Solenoid zone valves 1\" with fittings", qty: valves, unit: "no", rate: rate("irrigation:valve"), basis: "count", key: "irrigation:valve" });
+      add(Ls, { description: "Valve box (in-ground, lockable lid)", qty: lv.filter((l) => l.valves.length).length, unit: "no", rate: rate("irrigation:valve_box"), basis: "count", key: "irrigation:valve_box" });
+      add(Ls, { description: `Irrigation controller, ${valves}-station, with rain/heat sensor and wiring to the valves`, qty: 1, unit: "no", rate: rate("irrigation:controller"), basis: "count", key: "irrigation:controller" });
+    }
+    if (ls.demand.litresPerDay)
+      notes.push(`Landscape: about ${ls.demand.litresPerDay} L of water a day in summer (${ls.demand.m3PerMonth} m³/month) over ${ls.zones.length} irrigation zone(s); plants and lawn are priced as supplied and planted, with no maintenance period.`);
   }
 
   // ---- J. air conditioning, from the HVAC design ----

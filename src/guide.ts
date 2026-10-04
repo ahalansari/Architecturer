@@ -166,10 +166,22 @@ Call get_schema for every field; this guide covers conventions and good practice
   doors / windows blocked, walls or stairs through the shaft. Cost section K, contract package "lifts".
 - Without shaft, an elevator only links levels for the circulation check (stops need at).
 
+## Gardens and irrigation (level.gardens, project.landscape)
+- level.gardens: [{polygon, surface: "lawn"|"turf"|"planting"|"gravel"|"mulch"|"paving"|"sand", irrigation: true}]
+  outside the rooms (roof gardens on an upper level work too). Plants are furniture: tree (options.kind "palm" |
+  "deciduous" | "conifer", height), bush, hedge (width = length), planter.
+- Irrigation is designed automatically: pop-up spray heads on natural lawns (3.5 m head-to-head), drip lines on
+  planting beds, drip along hedges and at shrubs and planters, bubblers at trees (two per palm), zones capped by
+  flow, a controller on the outside wall nearest the gardens (or by the water inlet) and the valve box a metre out,
+  pipes routed round the building, summer water use. Artificial turf, gravel and paving get no water.
+- landscape_design: zones, run times, water per day / month; render_plan sheet "landscape"; cost section L;
+  contract package "landscape". Settings: project.landscape {irrigation, controller:{level, at}, sprinklerSpacing,
+  dripSpacing, lawnLitresPerDay, bedLitresPerDay}.
+
 ## Works contracts
 - generate_contract (arch contract): bilingual contract (English, then Arabic, Arabic prevails) per trade package as
   .docx + print-ready .html: main, structure (هيكل أسود), blockwork, plaster, waterproofing, tiling, painting, ceilings,
-  doors_windows, electrical, plumbing, joinery, external. mode labour (مصنعية فقط, owner supplies materials) or supply.
+  doors_windows, electrical, plumbing, hvac, lifts, landscape, joinery, external. mode labour (مصنعية فقط, owner supplies materials) or supply.
   Quantities come from the full-scope bill; pass the contractor's labour prices as rates {"labour:<key>": rate}.
   Owner and site address: project.contract {owner, location, retention, defectsMonths, delayPenaltyPerDay}.
   Ask the user for the parties' details (names, civil IDs, phones) or leave them as blanks to fill in by hand.

@@ -23,6 +23,7 @@ The contracts are drafts based on common Kuwaiti residential practice. Have a la
 | `plumbing` | Drainage, water pipework, sanitary ware, heaters, tests | labour, supply |
 | `hvac` | Air conditioning: units, ductwork, diffusers, grilles, controls, balancing | supply |
 | `lifts` | Lifts: supply, installation, safety devices, testing and certification | supply |
+| `landscape` | Soil, lawn, planting, trees and palms, automatic irrigation, 30-day establishment | labour, supply |
 | `joinery` | Kitchens, wardrobes, built-in units | supply |
 | `external` | Terraces, paving, balustrades | labour, supply |
 

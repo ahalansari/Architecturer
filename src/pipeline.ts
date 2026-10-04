@@ -8,6 +8,7 @@ import { checkLayout } from "./validate/layout.js";
 import { designHvac, hvacNode, type HvacDesign } from "./elements/hvac.js";
 import { applyLifts, designLifts, liftSpec, liftsNode, type LiftDesign } from "./elements/lifts.js";
 import type { Circuit } from "./elements/services.js";
+import { designLandscape, type LandscapeDesign } from "./elements/landscape.js";
 import { constructionSystem } from "./elements/construction.js";
 import { applyStyles } from "./elements/styles.js";
 import { applyProducts } from "./elements/products.js";
@@ -34,6 +35,8 @@ export interface Compiled {
   lifts?: LiftDesign[];
   /** Power supplies for the lifts (electrical schedule). */
   liftCircuits?: Circuit[];
+  /** Gardens: areas, plants, irrigation zones and water demand. */
+  landscape?: LandscapeDesign;
 }
 
 const MISSING: MaterialDef = {
@@ -86,6 +89,15 @@ export function compile(input: unknown): Compiled {
     warnings.push(`lift design failed: ${(e as Error).message}`);
   }
 
+  // gardens: areas, plants and the irrigation design
+  let landscape: LandscapeDesign | undefined;
+  try {
+    landscape = designLandscape(project as never, levels);
+    for (const i of landscape.issues.filter((i) => /inside a room/.test(i))) warnings.push(i);
+  } catch (e) {
+    warnings.push(`landscape design failed: ${(e as Error).message}`);
+  }
+
   // air conditioning: loads, units, ducted layout, and the equipment in 3D
   let hvac: HvacDesign | undefined;
   try {
@@ -130,6 +142,7 @@ export function compile(input: unknown): Compiled {
     hvac,
     lifts,
     liftCircuits,
+    landscape,
     notes: lifts.length ? lifts.map((l) => liftSpec(l)) : undefined,
     materials,
     errors,

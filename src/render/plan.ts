@@ -37,7 +37,7 @@ export interface PlanOptions {
   sheet?: PlanSheet;
 }
 
-export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing", "hvac"] as const;
+export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing", "hvac", "landscape"] as const;
 export type PlanSheet = (typeof PLAN_SHEETS)[number];
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -272,6 +272,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   for (const r of lv.roofs) pts.push(...(r.polygon as Vec2[]));
   for (const r of lv.railings) pts.push(...(r.points as Vec2[]));
   for (const t of lv.terraces) pts.push(...(t.polygon as Vec2[]));
+  for (const g of lv.gardens) pts.push(...(g.polygon as Vec2[]));
   for (const f of lv.furniture) pts.push(f.position as Vec2);
   for (const cw of lv.casework) pts.push(...((cw.path ?? (cw.position ? [cw.position] : [])) as Vec2[]));
   for (const h of info.stairOutlines) pts.push(...h);
@@ -329,7 +330,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       `</defs>`,
   );
   out.push(`<rect width="100%" height="100%" fill="#ffffff"/>`);
-  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan", electrical: " — electrical layout", plumbing: " — plumbing layout", hvac: " — air conditioning layout" }[sheet];
+  const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan", electrical: " — electrical layout", plumbing: " — plumbing layout", hvac: " — air conditioning layout", landscape: " — landscape and irrigation" }[sheet];
   out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)}${sheetTitle} (z=${info.elevation.toFixed(2)} m)</text>`);
 
   // grid with coordinates every meter (labels every `step` meters)
@@ -342,6 +343,9 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     out.push(`<line x1="${X(minX)}" y1="${Y(y)}" x2="${X(maxX)}" y2="${Y(y)}" stroke="${y % step === 0 ? "#dcdcdc" : "#f0f0f0"}" stroke-width="1"/>`);
     if (y % step === 0) out.push(`<text x="${X(minX) - 6}" y="${Y(y) + 3}" font-size="10" fill="#888" text-anchor="end">${y}</text>`);
   }
+
+  // gardens (under everything else): surfaces as soft fills
+  for (const g of ceilingSheet ? [] : lv.gardens) out.push(`<polygon points="${poly(g.polygon as Vec2[])}" ${gardenFill(g.surface, sheet === "landscape")}/>`);
 
   // floor-level slabs (terraces, paths, driveways)
   const overhead = lv.slabs.filter((s) => s.offset > OVERHEAD);
@@ -892,6 +896,11 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
     }
     return [];
   };
+  if (sheet === "landscape" || sheet === "plan")
+    for (const g of lv.gardens) {
+      const cc = polygonCentroid(g.polygon as Vec2[]);
+      L.push({ lines: [{ text: g.surface === "turf" ? "artificial turf" : g.surface === "planting" ? "planting bed" : g.surface, size: fs - 2, color: "#3d5a2a", bold: true }, { text: `${Math.abs(polygonArea(g.polygon as Vec2[])).toFixed(1)} m²`, size: fs - 4, color: "#557" }], prio: 2, optional: true, cands: [{ x: X(cc[0]), y: Y(cc[1]), cost: 0 }] });
+    }
   [...lv.rooms, ...lv.terraces].forEach((r) => {
     const pg = r.polygon as Vec2[];
     const pgPx = pg.map(px);
@@ -947,6 +956,39 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         soft: openingSoft,
         softWeight: 0.5,
       });
+    }
+  }
+
+  // landscape sheet: irrigation (sprinkler coverage, drip lines, bubblers, laterals, mainline, valves, controller)
+  const ls = c.landscape;
+  const lsL = ls?.levels[li];
+  if (sheet === "landscape" && lsL) {
+    // throw circles, clipped to the lawns they water
+    const lawns = lv.gardens.filter((g) => g.surface === "lawn");
+    if (lsL.heads.length && lawns.length) {
+      out.push(`<clipPath id="lawnclip${li}">${lawns.map((g) => `<polygon points="${poly(g.polygon as Vec2[])}"/>`).join("")}</clipPath><g clip-path="url(#lawnclip${li})">`);
+      for (const h of lsL.heads) out.push(`<circle cx="${X(h.at[0])}" cy="${Y(h.at[1])}" r="${(h.radius * S).toFixed(1)}" fill="#3b82c4" fill-opacity="0.06" stroke="#3b82c4" stroke-opacity="0.35" stroke-width="0.6"/>`);
+      out.push(`</g>`);
+    }
+    for (const p of lsL.pipes.filter((p) => p.kind === "lateral")) out.push(`<polyline points="${poly(p.pts)}" fill="none" stroke="#5b8fc7" stroke-width="1"/>`);
+    for (const p of lsL.pipes.filter((p) => p.kind === "main")) out.push(`<polyline points="${poly(p.pts)}" fill="none" stroke="#1d5fa8" stroke-width="2.2"/>`);
+    for (const d of lsL.drip) out.push(`<polyline points="${poly(d.pts)}" fill="none" stroke="#8a5a2b" stroke-width="1.1" stroke-dasharray="1.5 2.5"/>`);
+    for (const h of lsL.heads) {
+      const [x, y] = px(h.at);
+      out.push(`<circle cx="${x}" cy="${y}" r="3.2" fill="#ffffff" stroke="#1d5fa8" stroke-width="1.4"/>`);
+    }
+    for (const b of [...lsL.bubblers, ...lsL.emitters]) {
+      const [x, y] = px(b.at);
+      out.push(`<circle cx="${x}" cy="${y}" r="${lsL.bubblers.includes(b as never) ? 4 : 2.6}" fill="${lsL.bubblers.includes(b as never) ? "#1d5fa8" : "#8a5a2b"}"/>`);
+    }
+    for (const v of lsL.valves) {
+      const [x, y] = px(v.at);
+      out.push(`<rect x="${x - 4}" y="${y - 4}" width="8" height="8" fill="#ffffff" stroke="#1d5fa8" stroke-width="1.3"/>`);
+      if (labels) L.push({ lines: [{ text: v.zone, size: Math.max(7, fs - 5), color: "#1d5fa8", bold: true }], prio: 3, optional: true, cands: [{ x, y: y - 10, cost: 0 }, { x: x + 12, y, cost: 2 }] });
+    }
+    if (lsL.controller) {
+      const [x, y] = px(lsL.controller);
+      out.push(`<rect x="${x - 6}" y="${y - 6}" width="12" height="12" rx="2" fill="#1d5fa8"/><text x="${x}" y="${y + 3.5}" font-size="9" font-weight="bold" fill="#fff" text-anchor="middle">C</text>`);
     }
   }
 
@@ -1114,6 +1156,34 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         y += 15;
       }
       y += 8;
+    } else if (sheet === "landscape") {
+      head("Garden");
+      const ar = ls ? Object.entries(ls.areas).filter(([, v]) => v > 0) : [];
+      for (const [k, v] of ar) row(`<rect x="${x0 + 2}" y="${y - 7}" width="24" height="14" ${gardenFill(k as never, true)}/>`, `${k === "turf" ? "artificial turf" : k === "planting" ? "planting bed" : k} ${v} m²`);
+      if (ls) {
+        const p = ls.plants;
+        lg.push(`<text x="${x0}" y="${y}" font-size="10.5" fill="#222">${p.trees} trees · ${p.palms} palms · ${p.shrubs} shrubs · ${p.hedgeM} m hedge</text>`);
+        y += 20;
+      }
+      head("Irrigation");
+      row(`<circle cx="${x0 + 14}" cy="${y}" r="3.2" fill="#fff" stroke="#1d5fa8" stroke-width="1.4"/><circle cx="${x0 + 14}" cy="${y}" r="10" fill="#3b82c4" fill-opacity="0.08" stroke="#3b82c4" stroke-opacity="0.35" stroke-width="0.6"/>`, "pop-up spray head (coverage)");
+      row(`<line x1="${x0 + 2}" y1="${y}" x2="${x0 + 26}" y2="${y}" stroke="#8a5a2b" stroke-width="1.1" stroke-dasharray="1.5 2.5"/>`, "drip line / emitters");
+      row(`<circle cx="${x0 + 14}" cy="${y}" r="4" fill="#1d5fa8"/>`, "tree / palm bubbler");
+      row(`<line x1="${x0 + 2}" y1="${y}" x2="${x0 + 26}" y2="${y}" stroke="#1d5fa8" stroke-width="2.2"/>`, "mainline from the valve box");
+      row(`<rect x="${x0 + 10}" y="${y - 4}" width="8" height="8" fill="#fff" stroke="#1d5fa8" stroke-width="1.3"/>`, "zone valve");
+      row(`<rect x="${x0 + 8}" y="${y - 6}" width="12" height="12" rx="2" fill="#1d5fa8"/>`, "controller");
+      if (ls?.zones.length) {
+        y += 4;
+        head("Zones");
+        for (const z of ls.zones.filter((z) => z.level === li)) {
+          lg.push(`<text x="${x0}" y="${y}" font-size="10.5" font-weight="bold" fill="#1d5fa8">${esc(z.id)}</text><text x="${x0 + 28}" y="${y}" font-size="10" fill="#222">${esc(z.what.slice(0, 30))}</text>`);
+          lg.push(`<text x="${x0 + 28}" y="${y + 11}" font-size="9" fill="#777">${z.flow} L/min · ${z.runMin} min/day · ${z.litresPerDay} L/day</text>`);
+          y += 26;
+          if (y > H - 60) break;
+        }
+        lg.push(`<text x="${x0}" y="${y + 4}" font-size="10.5" font-weight="bold" fill="#222">Summer water ≈ ${ls.demand.litresPerDay} L/day (${ls.demand.m3PerMonth} m³/month)</text>`);
+        y += 22;
+      }
     } else if (sheet === "hvac") {
       const sys = { packaged: "Rooftop packaged units, ducted", ducted_split: "Ducted splits + roof condensers", split: "Wall splits + roof condensers", none: "No air conditioning" }[hv?.system ?? "none"];
       head("Air conditioning");
@@ -1215,4 +1285,14 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
 export async function svgToPng(svg: string): Promise<Buffer> {
   const { Resvg } = await import("@resvg/resvg-js");
   return Buffer.from(new Resvg(svg, { font: { loadSystemFonts: true, defaultFontFamily: "Helvetica" } }).render().asPng());
+}
+
+/** Plan fill of a garden surface (stronger on the landscape sheet). */
+function gardenFill(surface: string, strong: boolean): string {
+  const f: Record<string, [string, string]> = {
+    lawn: ["#cfe8b5", "#b7dc95"], turf: ["#bfe3a0", "#9fd47a"], planting: ["#e3d2b8", "#d4b996"], gravel: ["#e2e0db", "#d0cdc6"],
+    mulch: ["#d9c1a3", "#c8a47e"], paving: ["#e9e6e0", "#dcd7cf"], sand: ["#f1e6c8", "#e8d8ad"],
+  };
+  const [soft, hard] = f[surface] ?? ["#e8efe0", "#d8e6c8"];
+  return `fill="${strong ? hard : soft}" stroke="${strong ? "#8aa36f" : "#b9cba5"}" stroke-width="0.8"${surface === "turf" ? ' stroke-dasharray="3 2"' : ""}`;
 }
