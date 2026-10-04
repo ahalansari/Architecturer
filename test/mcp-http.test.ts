@@ -102,6 +102,8 @@ async function oauthLogin(opts: { restart?: boolean } = {}): Promise<{ access: s
   const cookie = await logIn(`/authorize?${q}`);
 
   r = await fetch(`${base}/authorize?${q}`, { headers: { cookie } });
+  // browsers check form-action against the redirect after the POST too: the client's callback must be allowed
+  assert.match(r.headers.get("content-security-policy")!, /form-action 'self' http:\/\/127\.0\.0\.1:\*/);
   const html = await r.text();
   assert.match(html, /Allow Test client\?/);
   const request = /name="request" value="([^"]+)"/.exec(html)![1];

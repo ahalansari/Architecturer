@@ -46,6 +46,21 @@ const hostOf = (uri: string) => {
   }
 };
 
+/**
+ * CSP source for the client's redirect: browsers apply form-action to where the Allow form's POST redirects too
+ * (claude.ai's callback, a loopback port, an app scheme), so it must be allowed explicitly.
+ */
+export function redirectSource(uri: string): string {
+  try {
+    const u = new URL(uri);
+    if (u.protocol === "https:") return `https://${u.host}`;
+    if (u.protocol === "http:") return `http://${u.hostname}:*`;
+    return u.protocol; // native app scheme, e.g. cursor:
+  } catch {
+    return "";
+  }
+}
+
 /** An authorization request carried by the Allow form itself (signed): survives server restarts. */
 interface SignedRequest {
   client: string;
@@ -135,7 +150,7 @@ export class ArchOAuthProvider implements OAuthServerProvider {
       .type("html")
       .set("cache-control", "no-store")
       .set("x-frame-options", "DENY")
-      .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'")
+      .set("content-security-policy", `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${redirectSource(r.redirect)}; frame-ancestors 'none'`)
       .send(consentPage({ request: token, clientName: client.client_name || hostOf(r.redirect), redirectHost: hostOf(r.redirect), username: who.username, csrf: this.login.csrf(who, "consent"), note }));
   }
 
