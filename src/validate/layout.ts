@@ -70,9 +70,9 @@ interface Item {
 const FLAT = new Set(["rug", "door_mat", "bath_mat"]);
 const OVERHEAD = new Set(["ceiling_light", "hanging_plant"]);
 const SEATS = new Set(["chair", "office_chair", "bar_stool", "counter_stool", "armchair", "bench", "garden_chair", "dining_bench", "ottoman"]);
-const TABLES = new Set(["table", "desk", "kitchen_island", "coffee_table", "side_table", "dresser", "piano", "kitchen_counter", "outdoor_table", "console_table", "round_dining_table", "dressing_table"]);
+const TABLES = new Set(["table", "desk", "kitchen_island", "coffee_table", "side_table", "dresser", "piano", "kitchen_counter", "outdoor_table", "console_table", "round_dining_table", "dressing_table", "stone_table"]);
 /** Symmetric objects without a meaningful front. */
-const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat", "table", "coffee_table", "side_table", "floor_lamp", "table_lamp", "ceiling_light", "kitchen_island", "bunk_bed", "outdoor_table", "parasol", "planter", "bush", "tree", "hedge", "fence", "hot_tub", "lamp_post", "car", "bicycle", "vase", "books_stack", "decor_bowl", "candle_set", "sculpture", "lantern", "plant_large", "round_dining_table", "ottoman", "umbrella_stand", "coat_rack", "fruit_bowl", "utensil_jar", "laundry_basket", "tray_with_decor", "throw_blanket"]);
+const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat", "table", "coffee_table", "side_table", "floor_lamp", "table_lamp", "ceiling_light", "kitchen_island", "bunk_bed", "outdoor_table", "parasol", "planter", "bush", "tree", "hedge", "agave", "grass_clump", "water_wall", "stone_table", "fence", "hot_tub", "lamp_post", "car", "bicycle", "vase", "books_stack", "decor_bowl", "candle_set", "sculpture", "lantern", "plant_large", "round_dining_table", "ottoman", "umbrella_stand", "coat_rack", "fruit_bowl", "utensil_jar", "laundry_basket", "tray_with_decor", "throw_blanket"]);
 /** Mounted flat on a wall (back at +Y): never "faces into a wall", fine beside/over windows. */
 const WALL_MOUNTED = new Set(["wall_art", "gallery_wall", "floating_shelf", "wall_clock", "mirror", "mirror_round", "mirror_arched", "mirror_full_length", "towel_rail", "towel_hook_set", "toilet_roll_holder", "shower_curtain"]);
 /** Small decor that rests on other furniture (sofas, counters, tables): no overlap warning when raised above the other item's base. */
@@ -80,7 +80,7 @@ const ON_TOP = new Set(["bedding", "vase", "books_stack", "decor_bowl", "candle_
 /** Canopies that other furniture is meant to stand under. */
 const CANOPY = new Set(["parasol", "tree"]);
 /** Things that are fine in front of a window. */
-const WINDOW_OK = new Set(["curtain", "plant", "shower", "floor_lamp", "table_lamp", "bathtub", "radiator", "bush", "planter", "hedge", "fence", "trash_bin", "bicycle", "garden_chair", "sun_lounger", "plant_large", "lantern"]);
+const WINDOW_OK = new Set(["curtain", "plant", "shower", "floor_lamp", "table_lamp", "bathtub", "radiator", "bush", "planter", "hedge", "fence", "trash_bin", "bicycle", "garden_chair", "sun_lounger", "plant_large", "lantern", "tree", "agave", "grass_clump", "bush"]);
 const FACING_NAMES: Record<number, string> = { 0: "south", 90: "east", 180: "north", 270: "west" };
 
 function items(lv: Project["levels"][number]): Item[] {
@@ -161,15 +161,17 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
     // --- furniture vs walls ---
     for (const it of its) {
       if (OVERHEAD.has(it.type)) continue;
+      // a tree's footprint is its canopy, which may overhang walls: only the trunk has to clear them
+      const rect = it.type === "tree" ? ([[-0.25, -0.25], [0.25, -0.25], [0.25, 0.25], [-0.25, 0.25]] as Vec2[]).map((q) => v2.add(it.center, q)) : it.rect;
       let worst: { need: number; seg: WallSegment; dir: Vec2 } | null = null;
       for (const s of segs) {
         if (it.z0 >= s.z1 - info.elevation - 0.01) continue; // above the wall
         const d = segDir(s), N = v2.perp(d), len = segLength(s);
         // overlap along the wall?
-        const us = it.rect.map((p) => v2.dot(v2.sub(p, s.a), d));
+        const us = rect.map((p) => v2.dot(v2.sub(p, s.a), d));
         if (Math.max(...us) <= 0.02 || Math.min(...us) >= len - 0.02) continue;
         const side = Math.sign(v2.dot(v2.sub(it.center, s.a), N)) || 1;
-        const ws = it.rect.map((p) => v2.dot(v2.sub(p, s.a), N) * side);
+        const ws = rect.map((p) => v2.dot(v2.sub(p, s.a), N) * side);
         const need = s.thickness / 2 - Math.min(...ws);
         // the item must actually reach into the wall band (not sit entirely beyond it)
         if (need > 0.02 && Math.min(...ws) < s.thickness / 2 && Math.max(...ws) > -s.thickness / 2) {
@@ -192,6 +194,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
         if (Math.min(A.z1, B.z1) - Math.max(A.z0, B.z0) <= 0.02) continue; // stacked (tv on a stand, lamp on a table)
         if ((SEATS.has(A.type) && TABLES.has(B.type)) || (SEATS.has(B.type) && TABLES.has(A.type))) continue; // tucked-in chairs
         if (CANOPY.has(A.type) || CANOPY.has(B.type)) continue; // things meant to stand under a parasol / tree
+        if ((A.type === "outdoor_lounge" && TABLES.has(B.type)) || (B.type === "outdoor_lounge" && TABLES.has(A.type))) continue; // the table inside the L
         if ((ON_TOP.has(A.type) && A.z0 >= B.z0 + 0.05) || (ON_TOP.has(B.type) && B.z0 >= A.z0 + 0.05)) continue; // decor resting on it
         const depth = overlapDepth(A.rect, B.rect);
         if (depth > 0.05) warn(`furniture ${label(A)} and ${label(B)} overlap by ${fmt(depth)} m`);

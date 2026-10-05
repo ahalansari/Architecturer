@@ -64,3 +64,22 @@ test("screens and pergolas: slats, rails, posts; priced under terraces & outdoor
   assert.equal(I.lines.find((l) => l.key === "screen:slats")!.qty, 12.5);
   assert.equal(I.lines.find((l) => l.key === "pergola:timber")!.qty, 20);
 });
+
+test("round 3: agave, grasses, built-in lounge with LED, stone table; plants watered as shrubs, not furniture", () => {
+  const c = court({
+    furniture: [
+      { type: "agave", position: [1, 1] },
+      { type: "grass_clump", position: [2.5, 1] },
+      { type: "outdoor_lounge", position: [6, 2], rotation: 180 },
+      { type: "stone_table", position: [6, 3] },
+    ],
+  });
+  assert.ok(c.ok, c.errors.join("; "));
+  assert.ok(trisOf(c, "agave_leaf") > 21 * 6 * 2);
+  assert.ok(trisOf(c, "grass_ornamental") > 30 * 5 * 2);
+  assert.ok(trisOf(c, "emissive_light") > 0, "LED line under the lounge seat");
+  assert.ok(!c.warnings.some((w) => /overlap/.test(w) && /lounge/.test(w)), c.warnings.join("\n"));
+  assert.equal(c.landscape!.plants.shrubs, 2);
+  const H = estimate(c).sections.find((s) => s.code === "H")!;
+  assert.ok(H.lines.some((l) => /outdoor lounge/.test(l.description)) && !H.lines.some((l) => /agave|grass/.test(l.description)));
+});

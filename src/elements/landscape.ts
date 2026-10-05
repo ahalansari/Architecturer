@@ -373,10 +373,10 @@ export function designLandscape(
       if (indoor(polygonCentroid(g.polygon as Vec2[]))) issues.push(`garden${g.id ? ` '${g.id}'` : ""} (${g.surface}) on ${lv.name ?? lv.id} lies inside a room`);
     }
     // plants outside (or in a garden): trees, palms, shrubs, hedges, planters
-    const outside = lv.furniture.filter((f) => ["tree", "bush", "hedge", "planter"].includes(f.type) && !indoor(f.position as Vec2));
+    const outside = lv.furniture.filter((f) => ["tree", "bush", "hedge", "planter", "agave", "grass_clump"].includes(f.type) && !indoor(f.position as Vec2));
     for (const f of outside) {
       if (f.type === "tree") String(f.options?.kind ?? "deciduous") === "palm" ? plants.palms++ : plants.trees++;
-      else if (f.type === "bush") plants.shrubs++;
+      else if (f.type === "bush" || f.type === "agave" || f.type === "grass_clump") plants.shrubs++;
       else if (f.type === "hedge") plants.hedgeM += f.width ?? 2;
       else plants.planters++;
     }
@@ -421,7 +421,7 @@ export function designLandscape(
         const d: Vec2 = [Math.cos(rot), Math.sin(rot)];
         const line = [v2.add(at, v2.scale(d, -w / 2)), v2.add(at, v2.scale(d, w / 2))];
         drips.push({ lines: [line], points: [], lph: (w / EMITTER_SPACING) * EMITTER_LPH, litres: w * 8, what: `hedge ${w} m` });
-      } else if (f.type === "bush") drips.push({ lines: [], points: [{ at, n: 2 }], lph: 2 * EMITTER_LPH * 2, litres: 10, what: "shrub" });
+      } else if (f.type === "bush" || f.type === "grass_clump" || f.type === "agave") drips.push({ lines: [], points: [{ at, n: 2 }], lph: 2 * EMITTER_LPH * 2, litres: 10, what: "shrub" });
       else if (f.type === "planter") drips.push({ lines: [], points: [{ at, n: 2 }], lph: 2 * EMITTER_LPH, litres: 5, what: "planter" });
     }
     let dcur: DripItem[] = [];

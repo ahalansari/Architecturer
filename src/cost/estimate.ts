@@ -126,12 +126,12 @@ const FURNITURE_ALLOWANCE: Record<string, number> = {
   umbrella_stand: 8, laundry_basket: 6, ironing_board: 12, kettle: 12, coffee_machine: 60, fruit_bowl: 6, cutting_boards: 6, utensil_jar: 4,
   towel_rail: 25, towel_hook_set: 6, toilet_roll_holder: 4, bath_mat: 6, soap_dispenser: 4, shower_curtain: 6, washing_machine: 160, fridge: 220,
   stove: 150, dishwasher: 180, radiator: 60, fireplace: 600, outdoor_sofa: 280, outdoor_table: 90, garden_chair: 30, sun_lounger: 70, parasol: 45,
-  planter: 25, bbq: 120, hot_tub: 1800, trash_bin: 10, bedding: 45, box: 30,
+  planter: 25, bbq: 120, hot_tub: 1800, outdoor_lounge: 950, stone_table: 220, water_wall: 1400, trash_bin: 10, bedding: 45, box: 30,
 };
 /** Sanitary ware modelled as furniture: priced under plumbing, not furniture. */
 const SANITARY: Record<string, string> = { toilet: "wc", bathroom_sink: "basin", bathtub: "bath", freestanding_bathtub: "bath", shower: "shower", sink_counter: "sink" };
 /** Landscape items left out of a fit-out bill. */
-const SKIP = new Set(["tree", "bush", "hedge", "car", "bicycle", "mailbox", "lamp_post", "fence", "door_mat", "crate", "cylinder"]);
+const SKIP = new Set(["tree", "bush", "hedge", "agave", "grass_clump", "car", "bicycle", "mailbox", "lamp_post", "fence", "door_mat", "crate", "cylinder"]);
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 

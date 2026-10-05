@@ -2164,6 +2164,117 @@ function buildWaterWall(mb: MeshBuilder, s: FurnitureSpec) {
   mb.box(M.led, [-bx + 0.02, by0 - 0.012, basinH - 0.03], [bx - 0.02, by0, basinH - 0.015]);
 }
 
+
+/** Agave: a rosette of thick pointed leaves, inner ones upright. */
+function buildAgave(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, height: h } = s;
+  const rnd = rng(Math.round(w * 97 + h * 31 + Number(s.options.seed ?? 0) * 7919));
+  const R = w / 2;
+  const rings: [number, number, number][] = [
+    // count, elevation (rad), length factor
+    [9, 0.35, 1],
+    [7, 0.8, 0.85],
+    [5, 1.2, 0.7],
+  ];
+  let k = 0;
+  for (const [count, el, lf] of rings)
+    for (let i = 0; i < count; i++, k++) {
+      const az = k * 2.39996 + rnd() * 0.3;
+      const len = Math.min(R / Math.max(0.2, Math.cos(el)), h / Math.max(0.2, Math.sin(el))) * lf * (0.85 + rnd() * 0.2);
+      const dir: Vec3 = [Math.cos(az), Math.sin(az), 0], side: Vec3 = [-Math.sin(az), Math.cos(az), 0];
+      const n = 6, wid = clamp(len * 0.16, 0.04, 0.16);
+      const pts: Vec3[] = [];
+      for (let j = 0; j <= n; j++) {
+        const t = j / n, e = el - 0.35 * t * t;
+        pts.push([dir[0] * len * t * Math.cos(e), dir[1] * len * t * Math.cos(e), 0.03 + len * t * Math.sin(e)]);
+      }
+      for (let j = 0; j < n; j++) {
+        const w0 = wid * (1 - j / n) * (j === 0 ? 0.7 : 1), w1 = wid * (1 - (j + 1) / n);
+        const a = pts[j], b = pts[j + 1];
+        // a shallow V (channelled leaf)
+        const ua: Vec3 = [0, 0, w0 * 0.25], ub: Vec3 = [0, 0, w1 * 0.25];
+        mb.quad(s.materials.leaf, a, b, v3.add(v3.add(b, v3.scale(side, w1)), ub), v3.add(v3.add(a, v3.scale(side, w0)), ua));
+        mb.quad(s.materials.leaf, v3.add(v3.sub(a, v3.scale(side, w0)), ua), v3.add(v3.sub(b, v3.scale(side, w1)), ub), b, a);
+      }
+    }
+}
+
+/** Ornamental grass: a fountain of thin blades. */
+function buildGrassClump(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, height: h } = s;
+  const rnd = rng(Math.round(w * 89 + h * 53 + Number(s.options.seed ?? 0) * 7919));
+  const blades = Math.round(clamp(w * 90, 30, 140));
+  for (let i = 0; i < blades; i++) {
+    const az = rnd() * TAU, r0 = Math.sqrt(rnd()) * w * 0.12;
+    const out = w * (0.25 + rnd() * 0.3), up = h * (0.65 + rnd() * 0.4);
+    const dir: Vec3 = [Math.cos(az), Math.sin(az), 0], side: Vec3 = [-Math.sin(az) * 0.006, Math.cos(az) * 0.006, 0];
+    const base: Vec3 = [dir[0] * r0, dir[1] * r0, 0];
+    const n = 5;
+    let prev = base;
+    for (let j = 1; j <= n; j++) {
+      const t = j / n;
+      // rises, then arches outwards and droops at the tip
+      const p: Vec3 = [base[0] + dir[0] * out * t * t, base[1] + dir[1] * out * t * t, up * (1.6 * t - 0.75 * t * t)];
+      const wa = 1.5 * (1 - (j - 1) / n), wb = 1.5 * (1 - t);
+      mb.quad(s.materials.blades, v3.sub(prev, v3.scale(side, wa)), v3.sub(p, v3.scale(side, wb)), v3.add(p, v3.scale(side, wb)), v3.add(prev, v3.scale(side, wa)));
+      prev = p;
+    }
+  }
+}
+
+/**
+ * Built-in courtyard lounge: masonry plinth with a shadow gap and an LED line under the seat, seat and back
+ * cushions, a few throw pillows. shape "l": the long run at the back (+y) and a return down the left (−x).
+ */
+function buildOutdoorLounge(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d } = s;
+  const M = s.materials;
+  const L = optStr(s, "shape", ["l", "straight"] as const, "l") === "l";
+  const led = s.options.led !== false;
+  const sd = Math.min(0.75, d * 0.9), plinthH = 0.32, seatH = 0.44, gap = 0.06;
+  const runs: { x0: number; x1: number; y0: number; y1: number; alongX: boolean }[] = [{ x0: -w / 2, x1: w / 2, y0: d / 2 - sd, y1: d / 2, alongX: true }];
+  if (L) runs.push({ x0: -w / 2, x1: -w / 2 + sd, y0: -d / 2, y1: d / 2 - sd, alongX: false });
+  for (const r of runs) {
+    // plinth on a recessed base (the shadow gap), LED line under the front edge
+    mb.box(M.plinth, [r.x0, r.y0, gap], [r.x1, r.y1, plinthH]);
+    if (r.alongX) mb.box(M.base, [r.x0 + (L ? sd : gap), r.y0 + gap, 0], [r.x1 - gap, r.y1, gap]);
+    else mb.box(M.base, [r.x0, r.y0 + gap, 0], [r.x1 - gap, r.y1, gap]);
+    if (led) {
+      if (r.alongX) mb.box(M.led, [r.x0 + (L ? sd : 0.05), r.y0 + gap + 0.005, gap - 0.016], [r.x1 - 0.05, r.y0 + gap + 0.015, gap - 0.004]);
+      else mb.box(M.led, [r.x1 - gap - 0.015, r.y0 + 0.05, gap - 0.016], [r.x1 - gap - 0.005, r.y1, gap - 0.004]);
+    }
+    // seat cushions ~0.75 m, then back cushions against the back edge
+    const len = r.alongX ? r.x1 - r.x0 : r.y1 - r.y0;
+    const n = Math.max(1, Math.round(len / 0.75)), cl = len / n;
+    for (let i = 0; i < n; i++) {
+      if (r.alongX) {
+        const a = r.x0 + i * cl;
+        mb.box(M.cushions, [a + 0.006, r.y0 + 0.02, plinthH], [a + cl - 0.006, r.y1 - 0.02, seatH]);
+        mb.box(M.cushions, [a + 0.01, r.y1 - 0.17, seatH], [a + cl - 0.01, r.y1 - 0.03, seatH + 0.42]);
+      } else {
+        const a = r.y0 + i * cl;
+        mb.box(M.cushions, [r.x0 + 0.02, a + 0.006, plinthH], [r.x1 - 0.02, a + cl - 0.006, seatH]);
+        mb.box(M.cushions, [r.x0 + 0.03, a + 0.01, seatH], [r.x0 + 0.17, a + cl - 0.01, seatH + 0.42]);
+      }
+    }
+  }
+  // throw pillows
+  const pillows: [number, number, boolean][] = L ? [[-w / 2 + sd + 0.35, d / 2 - 0.26, true], [-w / 2 + 0.26, -d / 2 + 0.45, false], [w / 2 - 0.45, d / 2 - 0.26, true]] : [[-w / 2 + 0.4, d / 2 - 0.26, true], [w / 2 - 0.4, d / 2 - 0.26, true]];
+  for (const [x, y, alongX] of pillows) mb.box(M.pillows, alongX ? [x - 0.21, y - 0.06, seatH] : [x - 0.06, y - 0.21, seatH], alongX ? [x + 0.21, y + 0.06, seatH + 0.4] : [x + 0.06, y + 0.21, seatH + 0.4]);
+}
+
+/** Monolithic stone coffee table on a recessed base, with a dark tray. */
+function buildStoneTable(mb: MeshBuilder, s: FurnitureSpec) {
+  const { width: w, depth: d, height: h } = s;
+  const M = s.materials;
+  mb.box(M.base, [-w / 2 + 0.06, -d / 2 + 0.06, 0], [w / 2 - 0.06, d / 2 - 0.06, 0.05]);
+  mb.box(M.top, [-w / 2, -d / 2, 0.05], [w / 2, d / 2, h]);
+  if (s.options.tray !== false) {
+    mb.cylinder(M.tray, [w * 0.1, 0, h], Math.min(w, d) * 0.24, Math.min(w, d) * 0.24, 0.02, 24);
+    mb.sphere(M.tray, [w * 0.1, 0, h + 0.07], 0.07, 12, 8, [1, 1, 0.75]);
+  }
+}
+
 function buildTree(mb: MeshBuilder, s: FurnitureSpec) {
   const { width: w, depth: d, height: h } = s;
   const M = s.materials;
@@ -4715,6 +4826,32 @@ export const FURNITURE: Record<string, FurnitureType> = {
     defaults: { width: 1.4, depth: 0.45, height: 2.6 },
     slots: { panel: "stone_wet_dark", basin: "stone_dark", water: "water", led: "emissive_light" },
     build: buildWaterWall,
+  }),
+  agave: def({
+    description: "Agave: rosette of thick blue-green pointed leaves (succulent, gravel gardens, planters).",
+    defaults: { width: 1.0, depth: 1.0, height: 0.7 },
+    slots: { leaf: "agave_leaf" },
+    build: buildAgave,
+  }),
+  grass_clump: def({
+    description: "Ornamental grass clump: a fountain of thin arching blades (pennisetum / feather grass) for beds and planters.",
+    defaults: { width: 0.8, depth: 0.8, height: 0.8 },
+    slots: { blades: "grass_ornamental" },
+    build: buildGrassClump,
+  }),
+  outdoor_lounge: def({
+    description: "Built-in courtyard lounge: masonry plinth with an LED line in the shadow gap, seat and back cushions, throw pillows. shape l (long run at the back, return on the left) | straight. width = long run, depth = return length.",
+    defaults: { width: 3.2, depth: 2.4, height: 0.86 },
+    slots: { plinth: "travertine", base: "stone_dark", cushions: "fabric_beige", pillows: "fabric_green", led: "emissive_light" },
+    options: { shape: { description: "l | straight", default: "l" }, led: { description: "LED line under the seat", default: true } },
+    build: buildOutdoorLounge,
+  }),
+  stone_table: def({
+    description: "Monolithic stone coffee table on a recessed base, with a dark tray (courtyards, lounges).",
+    defaults: { width: 1.2, depth: 0.8, height: 0.38 },
+    slots: { top: "travertine", base: "stone_dark", tray: "metal_black" },
+    options: { tray: { description: "Tray and bowl on top", default: true } },
+    build: buildStoneTable,
   }),
   outdoor_sofa: def({
     description: "Low lounge sofa: slatted teak frame with thick seat and back cushions.",

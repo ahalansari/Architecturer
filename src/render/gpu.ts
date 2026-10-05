@@ -70,7 +70,7 @@ export async function gpuInfo(): Promise<string | null> {
 const srgb2lin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 
 /** Flatten a scene: world-space triangles, per-corner normals / UVs, tangents, materials and texture layers. */
-export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: number, lightsOn: boolean, portalFilter?: (p: Vec3, n: Vec3) => boolean): PTScene {
+export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: number, lightsOn: boolean, portalFilter?: (p: Vec3, n: Vec3) => boolean, lampBoost = 1): PTScene {
   let n = 0;
   walkMeshes(root, (m) => (n += m.indices.length / 3));
   const tris = new Float32Array(n * 9), attrs = new Float32Array(n * 20), triMat = new Uint32Array(n);
@@ -166,7 +166,7 @@ export function buildScene(root: SceneNode, lookup: MaterialLookup, texSize: num
   const lights: number[] = [];
   if (lightsOn)
     for (const L of collectLights(root)) {
-      const s = L.intensity;
+      const s = L.intensity * lampBoost;
       lights.push(
         L.position[0], L.position[1], L.position[2], L.type === "spot" ? 1 : 0,
         L.color[0] * s, L.color[1] * s, L.color[2] * s, 0.04,
@@ -246,7 +246,8 @@ export function skyFor(sunDir: Vec3) {
       preetham: preethamSky(sunDir),
       zenith: night ? [0.0015, 0.002, 0.004] : zenith,
       horizon: night ? [0.004, 0.004, 0.006] : horizon,
-      ground: (night ? [0.001, 0.001, 0.001] : [0.36, 0.31, 0.24].map((c) => (c * (E[1] * Math.max(s, 0) + Math.PI * k)) / Math.PI)),
+      // sand
+      ground: (night ? [0.001, 0.001, 0.001] : [0.48, 0.4, 0.29].map((c) => (c * (E[1] * Math.max(s, 0) + Math.PI * k)) / Math.PI)),
     },
   };
 }
@@ -305,9 +306,11 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
         return Math.abs(n[0] * d[0] + n[1] * d[1]) > 0.5;
       }
     : undefined;
-  const key = `${ids.get(c)}|${v.root.children.length}|${v.texSize}|${lightsOn}|${room ? `${room.li}:${room.room.name}` : ""}`;
+  // architectural photography at golden hour / dusk: every lamp on and bright enough to balance the sky
+  const lampBoost = mode === "golden" ? 3 : mode === "dusk" ? 1.6 : 1;
+  const key = `${ids.get(c)}|${v.root.children.length}|${v.texSize}|${lightsOn}|${lampBoost}|${room ? `${room.li}:${room.room.name}` : ""}`;
   if (uploaded.key !== key || !pt.scene) {
-    pt.setScene(buildScene(v.root, v.lookup, v.texSize, lightsOn, portalFilter));
+    pt.setScene(buildScene(v.root, v.lookup, v.texSize, lightsOn, portalFilter, lampBoost));
     uploaded.key = key;
   }
   const W = v.opts.width, H = v.opts.height;
@@ -322,7 +325,7 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
     clipZ: v.opts.clipZ,
     sun: env.sun,
     sky: env.sky,
-    emitScale: 1500,
+    emitScale: 1500 * lampBoost,
     denoise: o.denoise,
     // aiming at the windows only pays off inside
     portals: !!room && !process.env.PT_NO_PORTALS,

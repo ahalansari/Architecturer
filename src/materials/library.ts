@@ -163,6 +163,8 @@ def("grass", "grass", "Lawn grass (top-down)", { roughness: 0.95, scale: 1.0 });
 def("palm_frond", "palm_frond", "Date-palm frond card (leaflets cut out of the card)", { roughness: 0.65, scale: 1, doubleSided: true, alphaCutoff: 0.5, normalStrength: 0.3 });
 def("olive_leaves", "leaf_cluster", "Olive foliage card: narrow silver-green leaves", { roughness: 0.7, scale: 1, doubleSided: true, alphaCutoff: 0.5, normalStrength: 0.3 });
 def("leaves_green", "leaf_cluster", "Broadleaf foliage card (shade trees, shrubs)", { roughness: 0.7, scale: 1, doubleSided: true, alphaCutoff: 0.5, normalStrength: 0.3, params: { style: "broad" } });
+def("agave_leaf", "none", "Agave / succulent leaf: waxy blue-green", { roughness: 0.45, color: "#7f9c8f", doubleSided: true, normalStrength: 0 });
+def("grass_ornamental", "none", "Ornamental grass blades: golden green", { roughness: 0.8, color: "#a7a565", doubleSided: true, normalStrength: 0 });
 def("palm_bark", "palm_bark", "Date-palm trunk: diamond leaf-base scars", { roughness: 0.9, scale: 1.0 });
 def("plant_green", "grass", "Leafy plant foliage (bushes, hedges, house plants)", { roughness: 0.8, scale: 0.4, doubleSided: true, params: { base: "#4d8a3a", blades: 9000 } });
 def("gravel", "gravel", "Loose gravel / pebbles", { roughness: 0.9, scale: 1.0 });

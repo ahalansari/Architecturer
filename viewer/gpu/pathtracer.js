@@ -274,6 +274,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     if (bounce > P.maxBounce || passes > 24u) { break; }
     passes++;
     let h = intersect(ro, rd, 1e5);
+    if (h.tri == NOHIT && rd.z < 0.0 && ro.z > -0.5) {
+      // beyond the site: open desert ground fading into the hazy horizon
+      let t = (ro.z + 0.02) / max(-rd.z, 1e-4);
+      let haze = 1.0 - exp(-t / 450.0);
+      let hz = sky(normalize(vec3f(rd.x, rd.y, 0.03)), false);
+      let g = mix(P.ground, hz, haze);
+      if (bounce == 0u) { firstAlbedo = vec3f(0.5); firstN = vec3f(0.0, 0.0, 1.0); }
+      var cg = thr * g;
+      if (bounce >= 2u) { cg = min(cg, vec3f(P.clampIndirect)); }
+      rad += cg;
+      break;
+    }
     if (h.tri == NOHIT) {
       let s0 = sky(rd, false);
       var sunPart = vec3f(0.0);

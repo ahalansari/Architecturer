@@ -197,7 +197,9 @@ Call get_schema for every field; this guide covers conventions and good practice
   material}: striped shade over seating, terraces, car ports.
 - Plants are cut-out leaf cards with real silhouettes and shadows: tree kind "palm" (date palm, height 5–8, width
   4–5), "olive" (2.5–3.5 m), "deciduous" (shade tree), bush; options.seed varies the shape.
-- furniture water_wall: wet dark-stone panel, water sheet, basin with a warm LED line.
+- furniture water_wall: wet dark-stone panel, water sheet, basin with a warm LED line; outdoor_lounge (built-in L
+  bench: stone plinth, LED in the shadow gap, cushions; options.shape l | straight) with a stone_table inside the L;
+  agave and grass_clump for gravel beds and planters (watered by drip like shrubs).
 - Cladding / paving: travertine_slabs, limestone_slabs (120 × 60 staggered, fine joints); garden paving can take them
   as material. Light it: uplights at palm bases, strips under benches and steps (level.lights), lighting "golden".
 
