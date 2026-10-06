@@ -282,6 +282,20 @@ test("personal token on the core tool set; viewer needs a login", async () => {
   r = await fetch(`${base}/view/house/`, { headers: { cookie } });
   assert.match(await r.text(), /src="viewer\/viewer\.js"/);
 
+  // the project list: /view redirects once to /view/ (which must not redirect to itself), filters and sorts
+  r = await fetch(`${base}/view?sort=name`, { redirect: "manual", headers: { cookie } });
+  assert.equal(r.status, 301);
+  assert.equal(r.headers.get("location"), "/view/?sort=name");
+  r = await fetch(`${base}/view/`, { redirect: "manual", headers: { cookie } });
+  assert.equal(r.status, 200);
+  const nonce = /script-src 'nonce-([^']+)'/.exec(r.headers.get("content-security-policy") ?? "")?.[1];
+  let list = await r.text();
+  assert.ok(nonce && list.includes(`<script nonce="${nonce}">`));
+  assert.match(list, /<li data-k="[^"]*"><a class="proj" href="\/view\/house\/"><span class="t">Family House<\/span>/);
+  list = await (await fetch(`${base}/view/?q=nothing+like+this`, { headers: { cookie } })).text();
+  assert.match(list, /<li data-k="[^"]*" hidden><a class="proj" href="\/view\/house\/">/);
+  assert.match(list, /<p class="muted" id="none">No project matches/);
+
   // contracts from the viewer panel: list, generate (JSON, same site only), download
   r = await fetch(`${base}/view/house/contracts`, { headers: { cookie } });
   const listing = (await r.json()) as { packages: { id: string }[]; files: unknown[] };

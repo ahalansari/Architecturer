@@ -18,6 +18,7 @@ import cors from "cors";
 import QRCode from "qrcode";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
+import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import type { Server } from "node:http";
 import { isIP } from "node:net";
@@ -32,7 +33,7 @@ import { loadConfig, type RemoteConfig } from "./remote/config.js";
 import { Files } from "./remote/files.js";
 import { Login, type Identity } from "./remote/login.js";
 import { ArchOAuthProvider, SCOPES } from "./remote/oauth.js";
-import { adminPage, esc, loginPage, messagePage, page, setupPage } from "./remote/pages.js";
+import { adminPage, esc, loginPage, messagePage, page, projectsPage, setupPage } from "./remote/pages.js";
 import { hashPassword, newTotpSecret, otpauthUri, passwordProblem, totpMatch, verifyPassword } from "./remote/crypto.js";
 import { AuthStore } from "./remote/store.js";
 
@@ -110,12 +111,12 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
 
   // ---- human login ----
 
-  const html = (res: Response, body: string, status = 200) =>
+  const html = (res: Response, body: string, status = 200, extraCsp = "") =>
     void res
       .status(status)
       .set("cache-control", "no-store")
       .set("x-frame-options", "DENY")
-      .set("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; frame-ancestors 'none'")
+      .set("content-security-policy", `default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; frame-ancestors 'none'${extraCsp ? `; ${extraCsp}` : ""}`)
       .type("html")
       .send(body);
   /** The logged-in user, or a redirect to log in (or to set up the first account). */
@@ -272,16 +273,17 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
       }
   }, 60_000).unref();
 
-  app.get("/view", (_req, res) => void res.redirect(301, "/view/"));
-  app.get("/view/", async (req, res) => {
-    if (!(await human(req, res))) return;
-    const list = await ws.list();
-    res.type("html").send(
-      page(
-        "Architecturer projects",
-        `<h1>Projects</h1><div class="card">${list.length ? `<table><tbody>${list.map((p) => `<tr><td><a href="/view/${esc(viewKey(p.name))}/">${esc(p.name)}</a></td><td>${esc(p.title ?? "")}</td><td class="muted">${p.modified.toISOString().slice(0, 16).replace("T", " ")}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">No projects yet.</p>`}</div>`,
-      ),
-    );
+  // Express matches "/view" and "/view/" alike: redirect only the bare form (the page's links are relative)
+  app.get("/view", async (req, res) => {
+    const url = new URL(req.originalUrl, "http://x");
+    if (!url.pathname.endsWith("/")) return void res.redirect(301, `/view/${url.search}`);
+    const who = await human(req, res);
+    if (!who) return;
+    const q = (url.searchParams.get("q") ?? "").slice(0, 200);
+    const sort = url.searchParams.get("sort") === "name" ? "name" : "recent";
+    const projects = (await ws.list(1000)).map((p) => ({ ...p, href: `/view/${viewKey(p.name)}/` }));
+    const nonce = randomBytes(16).toString("base64");
+    html(res, projectsPage({ projects, q, sort, username: who.username, nonce }), 200, `script-src 'nonce-${nonce}'`);
   });
   const viewRoute = async (req: Request, res: Response, next: NextFunction, sub?: string) => {
     const key = String(req.params.key);

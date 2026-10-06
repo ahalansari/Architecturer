@@ -66,6 +66,8 @@ function setStatus(t) {
 }
 
 async function loadInfo() {
+  // on the remote server each project lives at /view/<key>/, next to the project list
+  $("projects-link").hidden = !/^\/view\/[^/]+\/$/.test(location.pathname);
   const info = await (await fetch("info")).json();
   $("title").textContent = info.name ?? "Architecturer";
   document.title = `${info.name ?? "Plan"} · Architecturer`;

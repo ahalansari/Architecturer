@@ -63,6 +63,73 @@ ${o.note ? `<p><strong>${esc(o.note)}</strong></p>` : ""}<form method="post" act
   );
 }
 
+const ago = (t: Date, now: number) => {
+  const s = Math.max(0, (now - t.getTime()) / 1000);
+  if (s < 90) return "just now";
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 129600) return `${Math.round(s / 3600)} h ago`;
+  if (s < 45 * 86400) return `${Math.round(s / 86400)} days ago`;
+  return t.toISOString().slice(0, 10);
+};
+
+export interface ProjectRow {
+  name: string;
+  /** Viewer link, relative to /view/. */
+  href: string;
+  title?: string;
+  levels: number;
+  modified: Date;
+}
+
+/**
+ * The project browser (/view/): every plan in the workspace, newest first or by name, filtered by `q` on the
+ * server (works without scripts) and live as you type (`nonce` lets the one inline script run under the CSP).
+ */
+export function projectsPage(o: { projects: ProjectRow[]; q: string; sort: "recent" | "name"; username: string; nonce: string; now?: number }): string {
+  const now = o.now ?? Date.now();
+  const words = o.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = (p: ProjectRow) => `${p.title ?? ""} ${p.name}`.toLowerCase();
+  const match = (p: ProjectRow) => words.every((w) => hay(p).includes(w));
+  const shown = o.projects.filter(match);
+  const sorted = [...o.projects].sort((a, b) => (o.sort === "name" ? (a.title ?? a.name).localeCompare(b.title ?? b.name) : b.modified.getTime() - a.modified.getTime()));
+  const sortLink = (s: "recent" | "name", label: string) =>
+    s === o.sort ? `<strong>${label}</strong>` : `<a href="?${new URLSearchParams({ ...(o.q ? { q: o.q } : {}), sort: s })}">${label}</a>`;
+  const rows = sorted
+    .map((p) => {
+      const folder = p.name.includes("/") ? p.name.slice(0, p.name.lastIndexOf("/") + 1) : "";
+      return `<li data-k="${esc(hay(p))}"${match(p) ? "" : " hidden"}><a class="proj" href="${esc(p.href)}"><span class="t">${esc(p.title ?? p.name)}</span><span class="n"><span class="muted">${esc(folder)}</span>${esc(p.name.slice(folder.length))}</span><span class="m muted">${p.levels} level${p.levels === 1 ? "" : "s"} · <time datetime="${p.modified.toISOString()}" title="${esc(p.modified.toISOString().slice(0, 16).replace("T", " "))} UTC">${ago(p.modified, now)}</time></span></a></li>`;
+    })
+    .join("");
+  const empty = !o.projects.length
+    ? `<p class="muted">No projects yet. Create one from your AI client with <code>create_project</code>; it shows up here.</p>`
+    : `<p class="muted" id="none"${shown.length ? " hidden" : ""}>No project matches “<span id="nq">${esc(o.q)}</span>”.</p>`;
+  return page(
+    "Projects · Architecturer",
+    `<style>
+main{max-width:860px}a{color:var(--accent)}.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.bar input{max-width:none;flex:1 1 240px}
+ul.projects{list-style:none;margin:0;padding:0}ul.projects li{border-bottom:1px solid var(--line)}ul.projects li:last-child{border-bottom:0}
+a.proj{display:grid;grid-template-columns:1fr auto;gap:2px 16px;padding:12px 4px;color:inherit;text-decoration:none;border-radius:6px}
+a.proj:hover,a.proj:focus-visible{background:var(--bg)}a.proj .t{font-weight:600;color:var(--accent)}a.proj .n{grid-column:1;font:13px ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}
+a.proj .m{grid-column:2;grid-row:1/3;align-self:center;font-size:13px;text-align:right;white-space:nowrap}
+@media (max-width:520px){a.proj{grid-template-columns:1fr}a.proj .m{grid-column:1;grid-row:auto;text-align:left}}
+.card.list{padding:6px 14px}
+</style>
+<div class="top"><h1>Projects</h1><p class="muted">${esc(o.username)} · <a href="/admin">Admin</a></p></div>
+<form class="bar" method="get" action="/view/" role="search"><input type="search" name="q" id="q" value="${esc(o.q)}" placeholder="Search ${o.projects.length} project${o.projects.length === 1 ? "" : "s"}…" aria-label="Search projects" autocomplete="off"><input type="hidden" name="sort" value="${o.sort}"><span class="muted">Sort: ${sortLink("recent", "Recent")} · ${sortLink("name", "Name")}</span></form>
+<div class="card list">${rows ? `<ul class="projects" id="list">${rows}</ul>` : ""}${empty}</div>
+<script nonce="${esc(o.nonce)}">
+const q = document.getElementById("q"), items = [...document.querySelectorAll("#list li")], none = document.getElementById("none");
+q.addEventListener("input", () => {
+  const w = q.value.toLowerCase().split(/\\s+/).filter(Boolean);
+  let n = 0;
+  for (const li of items) n += !(li.hidden = !w.every((x) => li.dataset.k.includes(x)));
+  if (none) (none.hidden = n > 0), (document.getElementById("nq").textContent = q.value);
+});
+</script>`,
+  );
+}
+
 export function messagePage(title: string, message: string): string {
   return page(title, `<div class="card"><h1>${esc(title)}</h1><p>${esc(message)}</p></div>`);
 }

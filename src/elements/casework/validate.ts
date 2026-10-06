@@ -101,7 +101,9 @@ export function checkCasework(project: Project, levels: LevelInfo[]): string[] {
     const furn = lv.furniture.flatMap((f, i) => {
       const t = FURNITURE[f.type];
       if (!t || FLAT.has(f.type)) return [];
-      const w = f.width ?? t.defaults.width, d = f.depth ?? t.defaults.depth, h = f.height ?? t.defaults.height;
+      // a tree's footprint is its canopy: only the trunk stands on the floor
+      const tree = f.type === "tree";
+      const w = tree ? 0.5 : f.width ?? t.defaults.width, d = tree ? 0.5 : f.depth ?? t.defaults.depth, h = f.height ?? t.defaults.height;
       const rot = deg2rad(f.rotation ?? (f.facing ? { south: 0, east: 90, north: 180, west: 270 }[f.facing] : 0));
       const c = f.position as Vec2;
       const at = (x: number, y: number) => v2.add(c, v2.rotate([x, y], rot));
