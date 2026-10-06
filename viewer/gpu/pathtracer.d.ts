@@ -20,7 +20,7 @@ export interface PTRender {
   maxBounce?: number;
   clipZ?: number;
   sun: { dir: number[]; E: number[]; cos?: number };
-  sky: { zenith: number[]; horizon: number[]; ground: number[]; preetham?: number[] };
+  sky: { zenith: number[]; horizon: number[]; ground: number[]; preetham?: number[]; glow?: number[] /* rgb + twilight band exponent */ };
   cap?: number[];
   emitScale?: number;
   clampIndirect?: number;
@@ -44,4 +44,4 @@ export class PathTracer {
   destroyScene(): void;
   render(o: PTRender): Promise<Float32Array>;
 }
-export function tonemap(hdr: Float32Array, W: number, H: number, ev?: number, fx?: { bloom?: number; vignette?: number; warmth?: number }): { rgba: Uint8Array; exposure: number; avg: number };
+export function tonemap(hdr: Float32Array, W: number, H: number, ev?: number, fx?: { bloom?: number; vignette?: number; warmth?: number; highlights?: number }): { rgba: Uint8Array; exposure: number; avg: number };

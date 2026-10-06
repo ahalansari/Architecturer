@@ -63,8 +63,10 @@ export function initPhoto({ camera, controls, lighting, cut }) {
       date: $("phDate").value,
     });
     if (cut()) q.set("level", cut());
-    // golden hour picks its own time (45 min before sunset)
-    if (q.get("lighting") === "golden") q.delete("time");
+    // golden hour and dusk follow the date's sunset (45 min before, 30 min after); night left at the day's
+    // default time is 21:00
+    const light = q.get("lighting");
+    if (light === "golden" || light === "dusk" || (light === "night" && q.get("time") === "10:30")) q.delete("time");
     $("phStatus").textContent = "Rendering… (path tracing on the server)";
     $("phStatus").className = "muted";
     $("phRender").disabled = true;

@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { compile } from "../src/pipeline.js";
-import { buildScene, gpuInfo, sunPosition, skyFor } from "../src/render/gpu.js";
+import { buildScene, gpuInfo, sunPosition, skyFor, sunset } from "../src/render/gpu.js";
 import { prepareView, renderView } from "../src/render/view.js";
 import { buildBVH } from "../viewer/gpu/bvh.js";
+import { tonemap } from "../viewer/gpu/pathtracer.js";
 
 test("sun over Kuwait: solar noon in June is high in the south, sunrise in the east", () => {
   const noon = sunPosition("06-21", "11:50");
@@ -21,6 +22,34 @@ test("sun over Kuwait: solar noon in June is high in the south, sunrise in the e
   assert.ok(E[1] > 70000 && E[1] < 120000);
   const dusk = skyFor(sunPosition("03-21", "17:40").dir).sun.E;
   assert.ok(dusk[0] > dusk[2] * 1.5, "dusk sun is warm");
+});
+
+test("twilight: the sky after sunset is a dimming blue with an orange glow where the sun went down, then night", () => {
+  const lum = (c: number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const [h, m] = sunset("10-06").split(":").map(Number);
+  const at = (min: number) => skyFor(sunPosition("10-06", `${Math.floor((h * 60 + m + min) / 60)}:${String((h * 60 + m + min) % 60).padStart(2, "0")}`).dir).sky;
+  const blue = at(30);
+  assert.equal(blue.preetham, undefined);
+  // blue hour: zenith a few cd/m², blue; an orange glow on the sun's side
+  assert.ok(lum(blue.zenith) > 0.5 && lum(blue.zenith) < 30, String(lum(blue.zenith)));
+  assert.ok(blue.zenith[2] > blue.zenith[0] * 3, "blue overhead");
+  assert.ok(blue.glow[0] > blue.glow[2] * 3 && blue.glow[3] > 0, "orange glow");
+  // dimmer as the sun sinks, and no seam with the daylight sky: the last minutes of daylight are brighter still
+  assert.ok(lum(at(15).zenith) > lum(blue.zenith) * 2 && lum(at(45).zenith) < lum(blue.zenith) / 2);
+  const night = at(120);
+  assert.deepEqual(night.glow, [0, 0, 0, 0]);
+  assert.ok(lum(night.zenith) < 0.01);
+});
+
+test("exposure: dusk / night frames hold their brightest few percent under white", () => {
+  // a dark frame (sky ~0.01) with a lamp-lit wall at 50: the average would push the wall far past white
+  const W = 100, H = 100, hdr = new Float32Array(W * H * 4);
+  for (let i = 0; i < W * H; i++) hdr.fill(i % W < 20 ? 50 : 0.01, i * 4, i * 4 + 3);
+  const plain = tonemap(hdr, W, H, 0, { bloom: 0, vignette: 0 });
+  const guarded = tonemap(hdr, W, H, 0, { bloom: 0, vignette: 0, highlights: 1.4 });
+  assert.ok(plain.exposure * 50 > 20, "unguarded: the wall clips");
+  assert.ok(Math.abs(guarded.exposure * 50 - 1.4) < 0.01, String(guarded.exposure * 50));
+  assert.ok(guarded.rgba[0] < 250 && guarded.rgba[0] > 180, String(guarded.rgba[0]));
 });
 
 test("BVH: every ray hits the same triangle as brute force", () => {

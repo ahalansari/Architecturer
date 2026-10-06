@@ -34,6 +34,8 @@ struct Params {
   perezY: vec4f, perezX: vec4f, perezYy: vec4f, perezE: vec4f, zenith: vec4f, perezN: vec4f,
   // camera: vertical lens shift (two-point perspective)
   cam: vec4f,
+  // twilight: the glow low on the horizon where the sun has set
+  glow: vec4f,
 };
 struct Material { color: vec4f, pbr: vec4f, emit: vec4f, extra: vec4f };
 struct Light { pos: vec4f, col: vec4f, dir: vec4f, cone: vec4f };
@@ -158,10 +160,17 @@ fn sky(d: vec3f, withSun: bool) -> vec3f {
     let X = x * Y / max(y, 1e-4); let Z = (1.0 - x - y) * Y / max(y, 1e-4);
     c = max(vec3f(3.2406 * X - 1.5372 * Y - 0.4986 * Z, -0.9689 * X + 1.8758 * Y + 0.0415 * Z, 0.0557 * X - 0.2040 * Y + 1.0570 * Z), vec3f(0.0)) * P.perezN.w;
   } else {
-    let k = pow(clamp(d.z, 0.0, 1.0), 0.45);
+    // twilight (glow.w): a thinner horizon band, the blue taking over sooner
+    let k = pow(clamp(d.z, 0.0, 1.0), select(0.45, P.glow.w, P.glow.w > 0.0));
     c = mix(P.skyHorizon, P.skyZenith, k);
     // forward-scattering glow around the sun (dusty Gulf air)
     c += (P.skyHorizon * 0.6) * pow(max(cs, 0.0), 8.0) * select(0.0, 1.0, P.sunDir.z > -0.05);
+    // twilight arch: brightest on the horizon under the set sun, fading up the sky and round to the other side
+    let sh = length(P.sunDir.xy);
+    if (sh > 1e-4) {
+      let az = dot(normalize(vec2f(d.x, d.y) + vec2f(1e-6, 0.0)), P.sunDir.xy / sh);
+      c += P.glow.xyz * pow(0.5 + 0.5 * az, 3.0) * exp(-max(d.z, 0.0) / 0.14);
+    }
   }
   if (withSun && cs > P.sunCos) {
     let solid = 2.0 * PI * (1.0 - P.sunCos);
@@ -647,7 +656,7 @@ export class PathTracer {
 
   /**
    * Render: returns linear HDR RGBA (Float32Array, cd/m²) after denoising.
-   * o: {width, height, camera:{eye, right, up, fwd, tanHalf, ortho}, spp, maxBounce, clipZ, sun:{dir, E[3], cos}, sky:{zenith, horizon, ground},
+   * o: {width, height, camera:{eye, right, up, fwd, tanHalf, ortho}, spp, maxBounce, clipZ, sun:{dir, E[3], cos}, sky:{zenith, horizon, ground, glow?},
    *     cap, emitScale, denoise, onProgress}
    */
   async render(o) {
@@ -683,6 +692,7 @@ export class PathTracer {
     pf[45] = s.portalArea;
     if (o.sky.preetham) pf.set(o.sky.preetham, 48); // 24 floats: perezY, perezX, perezYy, perezE, zenith (w = on), perezN
     pf[72] = c.shift ?? 0;
+    if (o.sky.glow) v3(76, o.sky.glow, o.sky.glow[3] ?? 0);
     const bg = d.createBindGroup({
       layout: this.trace.getBindGroupLayout(0),
       entries: [
@@ -815,15 +825,25 @@ function downsample(src, s, srgb) {
 export function tonemap(hdr, W, H, ev = 0, fx = {}) {
   const N = W * H;
   let sum = 0, n = 0;
+  const lums = [];
   for (let i = 0; i < N; i += 7) {
     const l = 0.2126 * hdr[i * 4] + 0.7152 * hdr[i * 4 + 1] + 0.0722 * hdr[i * 4 + 2];
     if (l > 1e-3) {
       sum += Math.log(l);
       n++;
     }
+    lums.push(l);
   }
   const avg = n ? Math.exp(sum / n) : 1;
-  const exposure = (0.18 / avg) * Math.pow(2, ev);
+  let auto = 0.18 / avg;
+  // low-key scenes (dusk, night): a dark sky drags the average down and the lamp-lit walls blow out, so the
+  // brightest few percent of the frame (lamps and their hot spots aside) is held just under white
+  if (fx.highlights && lums.length) {
+    lums.sort((a, b) => a - b);
+    const p = lums[Math.floor(lums.length * 0.97)];
+    if (p > 0) auto = Math.min(auto, fx.highlights / p);
+  }
+  const exposure = auto * Math.pow(2, ev);
   const warm = fx.warmth ?? 0;
   const wb = [1 + 0.08 * warm, 1, 1 - 0.1 * warm];
   const col = new Float32Array(N * 3);

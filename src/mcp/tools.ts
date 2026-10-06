@@ -469,7 +469,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         height: z.number().int().min(200).max(2000).default(700),
         renderer: z.enum(["auto", "gpu", "cpu"]).default("auto").describe("auto: GPU path tracer when available; cpu: fast rasteriser (quick checks)"),
         samples: z.number().int().min(4).max(2048).optional().describe("Path tracer samples per pixel (default 128; 256+ for final images)"),
-        time: z.string().regex(/^\d{1,2}:\d{2}$/).optional().describe("Local time HH:MM for the sun (Kuwait; default 10:30, dusk 17:45, night 21:00)"),
+        time: z.string().regex(/^\d{1,2}:\d{2}$/).optional().describe("Local time HH:MM for the sun (Kuwait; default 10:30, golden 45 min before sunset, dusk 30 min after, night 21:00)"),
         date: z.string().regex(/^\d{1,2}-\d{1,2}$/).optional().describe("Date MM-DD for the sun (default 03-21); e.g. 06-21 for the high summer sun"),
         exposure: z.number().min(-5).max(5).optional().describe("Exposure compensation in EV (default 0, automatic)"),
       },

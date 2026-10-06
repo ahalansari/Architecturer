@@ -237,20 +237,40 @@ export function skyFor(sunDir: Vec3) {
   const E = s > -0.02 ? T.map((x) => 118000 * x * Math.min(1, up * 8)) : [0, 0, 0];
   const k = 8500 * Math.pow(Math.min(1, up), 0.75) + 0.02;
   const warm = T.map((x) => 0.55 + 0.45 * x / Math.max(T[0], 1e-6));
-  const zenith = [0.26, 0.42, 0.82].map((c) => c * k);
-  const horizon = [0.88, 0.86, 0.82].map((c, i) => c * k * 1.05 * warm[i]);
-  const night = s < -0.1;
+  const preetham = preethamSky(sunDir);
+  const sand = [0.48, 0.4, 0.29];
+  if (!preetham) {
+    // twilight: the sun below the horizon still lights the sky, the zenith dimming ~10x for every 2.8° the sun
+    // sinks (civil twilight ends at -6°, nautical at -12°), taken from where the daylight sky leaves off
+    const Lz = TWILIGHT_ZENITH * Math.pow(10, 0.36 * (altDeg - 1.15));
+    const night = Lz < 0.003;
+    const lum = (c: number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const tint = (c: number[], L: number) => c.map((x) => (x / lum(c)) * L);
+    return {
+      sun: { dir: sunDir, E, cos: Math.cos(0.0047 * 1.5) },
+      sky: {
+        preetham: undefined,
+        // deep blue overhead, the pink-lavender band of the Belt of Venus all round, orange where the sun went down
+        zenith: night ? [0.0015, 0.002, 0.004] : tint([0.1, 0.22, 0.8], Lz),
+        horizon: night ? [0.004, 0.004, 0.006] : tint([0.6, 0.48, 0.72], Lz),
+        glow: night ? [0, 0, 0, 0] : [...tint([1, 0.52, 0.22], Lz * 5 * Math.max(0, Math.min(1, 1 + altDeg / 12))), 0.25],
+        ground: night ? [0.001, 0.001, 0.001] : sand.map((c) => c * Lz * 1.4 + (c * E[1] * Math.max(s, 0)) / Math.PI),
+      },
+    };
+  }
   return {
     sun: { dir: sunDir, E, cos: Math.cos(0.0047 * 1.5) },
     sky: {
-      preetham: preethamSky(sunDir),
-      zenith: night ? [0.0015, 0.002, 0.004] : zenith,
-      horizon: night ? [0.004, 0.004, 0.006] : horizon,
-      // sand
-      ground: (night ? [0.001, 0.001, 0.001] : [0.48, 0.4, 0.29].map((c) => (c * (E[1] * Math.max(s, 0) + Math.PI * k)) / Math.PI)),
+      preetham,
+      zenith: [0.26, 0.42, 0.82].map((c) => c * k),
+      horizon: [0.88, 0.86, 0.82].map((c, i) => c * k * 1.05 * warm[i]),
+      glow: [0, 0, 0, 0],
+      ground: sand.map((c) => (c * (E[1] * Math.max(s, 0) + Math.PI * k)) / Math.PI),
     },
   };
 }
+/** Zenith luminance of the daylight sky as the sun reaches the horizon, where the twilight sky takes over. */
+const TWILIGHT_ZENITH = preethamSky([Math.sqrt(1 - 0.02 ** 2), 0, 0.02])![16];
 
 function cameraBasis(c: Camera) {
   const f = norm([c.target[0] - c.eye[0], c.target[1] - c.eye[1], c.target[2] - c.eye[2]]);
@@ -274,6 +294,9 @@ const uploaded = { key: "" };
 const ids = new WeakMap<object, number>();
 let nextId = 1;
 
+/** Where the brightest 3 % of a dusk / night frame lands before the tone curve (ACES maps 1.4 to ~0.85). */
+const DUSK_HIGHLIGHTS = 1.4;
+
 /** Path-traced PNG of a view. */
 export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png: Buffer; renderer: string; note?: string }> {
   const pt = await gpuTracer();
@@ -281,13 +304,13 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
   const mode = o.lighting ?? "day";
   const lightsOn = mode !== "day";
   const date = o.date ?? "03-21";
-  // golden hour: 45 minutes before sunset, lamps on
-  const golden = (() => {
+  // golden hour: 45 minutes before sunset; dusk: the blue hour, 30 minutes after (sun ~6° down); lamps on for both
+  const fromSunset = (dm: number) => {
     const [h, m] = sunset(date).split(":").map(Number);
-    const t = h * 60 + m - 45;
+    const t = h * 60 + m + dm;
     return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
-  })();
-  const time = o.time ?? (mode === "night" ? "21:00" : mode === "dusk" ? "17:45" : mode === "golden" ? golden : "10:30");
+  };
+  const time = o.time ?? (mode === "night" ? "21:00" : mode === "dusk" ? fromSunset(30) : mode === "golden" ? fromSunset(-45) : "10:30");
   const sp = sunPosition(date, time);
   const env = skyFor(sp.dir);
   // one scene on the GPU at a time: re-upload only when the plan, the cut or the lamps change
@@ -343,9 +366,10 @@ export async function gpuRender(c: Compiled, o: ViewOptions = {}): Promise<{ png
       denoiser = `OIDN${r.device ? ` (${r.device})` : ""}`;
     } else hdr = await pt.render(opts);
   }
-  // night and dusk keep their mood: expose a little under the average
-  const ev = (o.exposure ?? 0) + (mode === "night" ? -1.3 : mode === "dusk" ? -0.6 : mode === "golden" ? -0.2 : 0);
-  const img = tonemap(hdr, W, H, ev, { bloom: mode === "day" ? 0.04 : 0.08, vignette: 0.18, warmth: mode === "golden" ? 0.25 : 0 });
+  // night and dusk keep their mood: expose a little under the average, and never past the lamp-lit walls
+  const lowKey = mode === "night" || mode === "dusk";
+  const ev = (o.exposure ?? 0) + (mode === "night" ? -0.6 : mode === "dusk" ? -0.5 : mode === "golden" ? -0.2 : 0);
+  const img = tonemap(hdr, W, H, ev, { bloom: mode === "day" ? 0.04 : 0.08, vignette: 0.18, warmth: mode === "golden" ? 0.25 : 0, highlights: lowKey ? DUSK_HIGHLIGHTS : undefined });
   const i = pt.adapterInfo;
   const gpuName = [i.vendor, i.architecture, i.description].filter(Boolean).join(" ") || "GPU";
   return {
