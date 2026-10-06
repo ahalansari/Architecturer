@@ -41,7 +41,9 @@ export type JobRequest =
   | (Base & { op: "airflow"; level?: string; seconds?: number; height?: number })
   | (Base & { op: "airflow_field"; level?: string })
   // the water network for the viewer's flow animation
-  | (Base & { op: "water_net" });
+  | (Base & { op: "water_net" })
+  // basement pump pits: design + level simulation (report and one chart per pit)
+  | (Base & { op: "pumppit"; level?: string; id?: string });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -182,6 +184,23 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
           heaters: w.heaters.map((h) => ({ id: h.id, level: h.level, at: h.at, litres: h.litres, z: z(h.level) + 1.6 })),
         },
       };
+    }
+    case "pumppit": {
+      const { designPumpPits, studyPit, pumpPitReport, pumpPitSVG } = await import("../elements/pumppit.js");
+      if (!c.project) return { ok: false, summary: sum };
+      const d = designPumpPits(c.project as never, c.levels as never, { suggest: true });
+      const li = req.level ? c.levels.findIndex((l) => l.id === req.level || l.name === req.level) : -1;
+      if (req.level && li < 0) return { ok: false, summary: `${sum}\nNo level '${req.level}'.` };
+      const pits = d.pits.filter((p) => (li < 0 || p.level === li) && (!req.id || p.id === req.id));
+      if (!pits.length)
+        return {
+          ok: true,
+          summary: sum,
+          text: req.id ? `No pump pit '${req.id}'.` : "No pump pits: no floor is more than 1 m below ground with fixtures or open areas to drain, and the plan has none (level.pumpPits).",
+        };
+      const studies = pits.map(studyPit);
+      const names = c.levels.map((l) => l.name);
+      return { ok: true, summary: sum, text: pumpPitReport(studies, names, d.issues), images: await Promise.all(studies.map((st) => svgToPng(pumpPitSVG(st, names[st.pit.level])))) };
     }
     case "water": {
       const { waterReport } = await import("../elements/water.js");

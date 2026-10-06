@@ -841,6 +841,30 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
   );
 
   tool(
+    "pump_pit",
+    {
+      title: "Basement pump pits (design and simulation)",
+      description:
+        "Pump pits for floors below the street sewer (basements): a sewage ejector pit for the floor's WCs, showers, basins and laundry (EN 12056-4 lifting plant, vortex or grinder pumps), and a drainage sump for rain on sunken courts, light wells and ramps. " +
+        "Designs each pit in level.pumpPits — or, when a basement needs one and has none, suggests where (with the add_elements call): inflows (EN 12056-2 discharge units, the design storm on the open areas, groundwater), the pump on its curve against the system curve, the rising main (size, velocity 0.7–2.3 m/s, backflow loop above ground), switch levels (stop / start / second pump / alarm) and the storage above the alarm. " +
+        "Then simulates the pit level second by second through a normal day, the design storm, a power cut and a failed duty pump: starts per hour, alarm and flood times, litres that back up, how long sewage stands. Returns the report and a chart per pit. " +
+        "Pits show in 3D, on render_plan sheet 'plumbing', and in section G of cost_estimate.",
+      inputSchema: {
+        path: PathArg,
+        level: LevelArg.optional().describe("Only this floor (default: every floor with pits or needing one)"),
+        id: z.string().optional().describe("Only this pit"),
+      },
+      annotations: READ,
+    },
+    guard(async ({ path, level, id }, extra) => {
+      const file = ws.plan(path);
+      const r = await job(file, await load(file), { op: "pumppit", level, id }, extra, "Simulating pump pits");
+      if (!r.ok) return fail(r.summary);
+      return ok(...(await images(r)), text(r.text!));
+    }),
+  );
+
+  tool(
     "landscape_design",
     {
       title: "Garden and irrigation design",

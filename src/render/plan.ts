@@ -278,6 +278,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   for (const cw of lv.casework) pts.push(...((cw.path ?? (cw.position ? [cw.position] : [])) as Vec2[]));
   for (const h of info.stairOutlines) pts.push(...h);
   for (const a of arriving) pts.push(...a.plan.hole);
+  // the pump pits' sewer connections (the plumbing sheet draws them)
+  if (opts.sheet === "plumbing") for (const p of c.pumpPits ?? []) if (p.level === li && p.explicit) pts.push(p.main.discharge);
   if (!pts.length) pts.push([0, 0], [10, 10]);
   let minX = Math.min(...pts.map((p) => p[0])), maxX = Math.max(...pts.map((p) => p[0]));
   let minY = Math.min(...pts.map((p) => p[1])), maxY = Math.max(...pts.map((p) => p[1]));
@@ -794,6 +796,39 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       const text = p.type === "stack" ? `${p.label ?? "stack"} Ø${p.size ?? 100}` : p.type === "inlet" ? (p.label ?? "MSV") : p.type === "water_heater" ? "" : (p.label ?? p.type);
       if (text) L.push({ lines: [{ text, size, color: p.type === "inlet" ? PL.cold : PL.soil, bold: true }], prio: 2, optional: true, cands: [{ x, y: y - er * 2, cost: 0 }, { x, y: y + er * 2, cost: 2 }, { x: x + er * 3.5, y, cost: 4 }, { x: x - er * 3.5, y, cost: 4 }] });
     }
+    // pump pits: the RC chamber, the pumps, the rising main to the sewer connection
+    const m1 = Math.abs(px([1, 0])[0] - px([0, 0])[0]);
+    for (const pit of (c.pumpPits ?? []).filter((p) => p.level === li && p.explicit)) {
+      const col = pit.kind === "sewage" ? PL.soil : "#2874a6";
+      const [w, l] = pit.size;
+      const rect = (hw: number, hl: number, attrs: string) => {
+        const [x, y] = px([pit.at[0] - hw, pit.at[1] + hl]);
+        return `<rect x="${x}" y="${y}" width="${2 * hw * m1}" height="${2 * hl * m1}" ${attrs}/>`;
+      };
+      out.push(`<polyline points="${pit.main.route.map((q) => px(q).join(",")).join(" ")}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="7 3"/>`);
+      out.push(rect(w / 2 + 0.2, l / 2 + 0.2, `fill="#d5d8dc" stroke="${col}" stroke-width="0.8"`));
+      out.push(rect(w / 2, l / 2, `fill="${pit.kind === "sewage" ? "#f4ece4" : "#e8f1f8"}" stroke="${col}" stroke-width="1.4"`));
+      const along: Vec2 = w >= l ? [1, 0] : [0, 1];
+      const gap = Math.min(0.45, (Math.max(w, l) - 0.3) / Math.max(1, pit.pumps.count));
+      for (let k = 0; k < pit.pumps.count; k++) {
+        const [x, y] = px(v2.add(pit.at, v2.scale(along, (k - (pit.pumps.count - 1) / 2) * gap)));
+        out.push(`<circle cx="${x}" cy="${y}" r="${Math.max(3, 0.15 * m1)}" fill="#fff" stroke="${col}" stroke-width="1.2"/><text x="${x}" y="${y + 3}" font-size="${Math.max(6, 0.17 * m1)}" font-weight="bold" fill="${col}" text-anchor="middle">P</text>`);
+      }
+      const [dx, dy] = px(pit.main.discharge);
+      out.push(`<circle cx="${dx}" cy="${dy}" r="${er * 1.5}" fill="#fff" stroke="${col}" stroke-width="1.4"/><text x="${dx}" y="${dy + 3}" font-size="${Math.max(6, er * 1.1)}" font-weight="bold" fill="${col}" text-anchor="middle">MH</text>`);
+      if (!labels) continue;
+      const [x, y] = px(pit.at);
+      const off = (l / 2 + 0.35) * m1;
+      L.push({
+        lines: [
+          { text: `${pit.kind === "sewage" ? "sewage pump pit" : "drainage sump"} ${pit.id} · ${w}×${l} m, ${pit.depth} m deep`, size, color: col, bold: true },
+          { text: `${pit.pumps.count}× ${pit.pumps.model.model} ${pit.pumps.model.kW} kW · rising main Ø${pit.main.od}`, size: size - 1, color: "#555" },
+        ],
+        prio: 1.5,
+        optional: true,
+        cands: [{ x, y: y + off + size, cost: 0 }, { x, y: y - off - size * 1.4, cost: 1 }, { x: x + (w / 2 + 0.4) * m1 + size * 9, y, cost: 2 }, { x: x - (w / 2 + 0.4) * m1 - size * 9, y, cost: 2 }],
+      });
+    }
   }
 
   if (sheet === "hvac" && hv && hvL) {
@@ -1206,6 +1241,14 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
         if (mine) {
           lg.push(`<text x="${x0}" y="${y}" font-size="10" fill="#c0392b">${mine} hydraulic issue(s): see water_design</text>`);
           y += 18;
+        }
+      }
+      const pits = (c.pumpPits ?? []).filter((p) => p.level === li && p.explicit);
+      if (pits.length) {
+        head("Pump pits");
+        for (const p of pits) {
+          lg.push(`<text x="${x0}" y="${y}" font-size="10.5" fill="#222">${esc(`${p.id} ${p.kind === "sewage" ? "sewage" : "drainage"}: ${p.pumps.count}× ${p.pumps.model.model} ${p.pumps.model.kW} kW`)}</text><text x="${x0}" y="${y + 11}" font-size="9" fill="#777">${esc(`${p.pumps.atStop.flowLs} L/s at ${p.pumps.atStop.headM} m · alarm ${p.levels.alarm} m · MH = sewer connection`)}</text>`);
+          y += 26;
         }
       }
     } else if (sheet === "landscape") {

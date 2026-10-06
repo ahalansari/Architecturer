@@ -484,6 +484,36 @@ const COMMANDS: Record<string, Command> = {
       console.log(waterReport(c.water, c.levels.map((l) => l.name), !f.brief));
     },
   },
+  pumppit: {
+    usage: "arch pumppit <plan.json> [--level id] [--id SP1] [-o pit.png]",
+    desc: "Basement pump pits: sewage ejector and drainage sumps sized, pumps on their curves, rising main; the pit level simulated through a day, a storm, a power cut and a pump failure; one chart per pit",
+    file: true,
+    flags: [
+      { name: "level", arg: "id", desc: "only this floor" },
+      { name: "id", arg: "id", desc: "only this pit" },
+      OUT,
+    ],
+    async run(file, f) {
+      const c = await compiled(file);
+      const { designPumpPits, studyPit, pumpPitReport, pumpPitSVG } = await import("../elements/pumppit.js");
+      const d = designPumpPits(c.project as never, c.levels as never, { suggest: true });
+      const li = f.level ? c.levels.findIndex((l) => l.id === f.level || l.name === f.level) : -1;
+      if (f.level && li < 0) throw new Error(`no level '${f.level}'`);
+      const pits = d.pits.filter((p) => (li < 0 || p.level === li) && (!f.id || p.id === f.id));
+      if (!pits.length) {
+        console.log("No pump pits: no floor is more than 1 m below ground with fixtures or open areas to drain, and the plan has none.");
+        return;
+      }
+      const studies = pits.map(studyPit);
+      const names = c.levels.map((l) => l.name);
+      console.log(pumpPitReport(studies, names, d.issues));
+      for (const st of studies) {
+        const out = studies.length === 1 && f.o ? (f.o as string) : `${base(file)}.pumppit.${st.pit.id}.png`;
+        const svg = pumpPitSVG(st, names[st.pit.level]);
+        await write(out, out.endsWith(".svg") ? svg : await svgToPng(svg));
+      }
+    },
+  },
   landscape: {
     usage: "arch landscape <plan.json>",
     desc: "Gardens and irrigation: areas, plants, spray / drip / bubbler zones, controller and summer water use; the drawing is `arch plan --sheet landscape`",

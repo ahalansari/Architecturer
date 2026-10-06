@@ -190,6 +190,19 @@ Call get_schema for every field; this guide covers conventions and good practice
   fixture its pressure and hot wait (red when low / slow). Fix slow hot water by moving the heater (level.plumbing
   water_heater) nearer the outlets; fix stacks that do not line up by stacking the bathrooms.
 
+## Basement pump pits (level.pumpPits)
+- A floor more than 1 m below ground cannot drain to the street sewer: its WCs, showers, laundry need a sewage pit,
+  its sunken courts / light wells a drainage sump. Validation warns when a basement needs one and has none.
+- level.pumpPits: {id, kind: "sewage" | "drainage", position, size [x, y] (default 1.0 × 1.0 for two pumps), depth
+  (default from the switch levels and the incoming drain), pumps 2 (duty / standby), pump ("S-11" … "S-30" vortex,
+  "G-15" / "G-22" grinder, "D-04" … "D-22" drainage; default the smallest that works), discharge [x, y] (the sewer
+  manhole — set it), catchment [terrace / garden ids], extraArea m², groundwaterLh, rainfallMmH 60, usage 1,
+  powerCutHours 4, pumpOutHours (6 for sewage)}. Put a sewage pit in a plant / service room, a sump in the court.
+- pump_pit (arch pumppit) designs and simulates them — with no pits yet it suggests where, with the add_elements
+  call: pump on its curve, rising main (0.7–2.3 m/s, loop above ground), switch levels, then the pit level through a
+  normal day, the design storm, a power cut and a failed pump (alarm, flooding, starts per hour), one chart per pit.
+  Pits show in 3D, on the plumbing sheet (P = pumps, MH = sewer connection) and in section G of the cost.
+
 ## Courtyards and facades (photographic exteriors)
 - level.screens: slatted timber along a line — {points, base, height, direction: "vertical" (fins) | "horizontal"
   (louvres), slat {width, depth, gap}, offset, material "wood_teak"}: facade screens, privacy, sun shading.

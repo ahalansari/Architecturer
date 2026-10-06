@@ -19,6 +19,7 @@ import { LIFT_DRIVES } from "../elements/lifts.js";
 import { GardenSchema, LandscapeSchema } from "../elements/landscape.js";
 import { WaterSchema } from "../elements/water.js";
 import { PergolaSchema, ScreenSchema } from "../elements/screens.js";
+import { PumpPitSchema } from "../elements/pumppit.js";
 import { TreatmentSchema } from "../elements/treatments.js";
 import { CaseworkSchema } from "../elements/casework/schema.js";
 import { applyConstructionDefaults, ConstructionSchema, WALL_ASSEMBLY_IDS } from "../elements/construction.js";
@@ -342,6 +343,7 @@ export const LevelSchema = z
     screens: z.array(ScreenSchema).default([]).describe("Slatted timber screens: vertical fins or horizontal louvres along a line (facade screens, privacy, sun shading)"),
     pergolas: z.array(PergolaSchema).default([]).describe("Pergolas: slats overhead on beams and posts over a terrace, courtyard seating or a car port"),
     gardens: z.array(GardenSchema).default([]).describe("Landscape areas (lawn, artificial turf, planting beds, gravel, mulch, paving, sand); trees, palms, shrubs and hedges are furniture (tree / bush / hedge). Irrigation is designed automatically"),
+    pumpPits: z.array(PumpPitSchema).default([]).describe("Pump pits sunk into this floor (basements below the sewer): sewage ejector pits for the WCs, showers, laundry; drainage sumps for sunken courts and light wells. Designed and simulated by pump_pit"),
     services: ServicesSchema,
   })
   .describe("One storey of the building");
@@ -483,7 +485,7 @@ export type Band = z.output<typeof BandSchema>;
 export type Elevator = z.output<typeof ElevatorSchema>;
 
 /** Element collections on a level, in a fixed order (used by editing tools). */
-export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework", "electrical", "plumbing", "gardens", "screens", "pergolas"] as const;
+export const ELEMENT_KINDS = ["walls", "openings", "rooms", "slabs", "stairs", "furniture", "columns", "railings", "terraces", "shapes", "roofs", "lights", "casework", "electrical", "plumbing", "gardens", "screens", "pergolas", "pumpPits"] as const;
 export type ElementKind = (typeof ELEMENT_KINDS)[number];
 
 export function directionToDegrees(d: number | "north" | "south" | "east" | "west"): number {

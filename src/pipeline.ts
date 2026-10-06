@@ -11,6 +11,7 @@ import { applyLifts, designLifts, liftSpec, liftsNode, type LiftDesign } from ".
 import type { Circuit } from "./elements/services.js";
 import { designLandscape, type LandscapeDesign } from "./elements/landscape.js";
 import { designWater, type WaterDesign } from "./elements/water.js";
+import { designPumpPits, pumpPitsNode, type PitDesign } from "./elements/pumppit.js";
 import { constructionSystem } from "./elements/construction.js";
 import { applyStyles } from "./elements/styles.js";
 import { applyProducts } from "./elements/products.js";
@@ -41,6 +42,8 @@ export interface Compiled {
   landscape?: LandscapeDesign;
   /** Water supply hydraulics: pipe sizes, pressures, hot-water waits, storage, drainage stacks. */
   water?: WaterDesign;
+  /** Pump pits of floors below the sewer: sizing, pumps, rising mains (simulated by the pump_pit tool). */
+  pumpPits?: PitDesign[];
 }
 
 const MISSING: MaterialDef = {
@@ -110,6 +113,19 @@ export function compile(input: unknown): Compiled {
     warnings.push(`water design failed: ${(e as Error).message}`);
   }
 
+  // pump pits: basements below the sewer, sized; missing ones are flagged
+  let pumpPits: PitDesign[] | undefined;
+  try {
+    const d = designPumpPits(project as never, levels);
+    pumpPits = d.pits;
+    warnings.push(...d.issues);
+    for (const p of d.pits) for (const i of p.issues) warnings.push(`pump pit '${p.id}': ${i}`);
+    const node = pumpPitsNode(d.pits, levels);
+    if (node) root.children.push(node);
+  } catch (e) {
+    warnings.push(`pump pit design failed: ${(e as Error).message}`);
+  }
+
   // air conditioning: loads, units, ducted layout, and the equipment in 3D
   let hvac: HvacDesign | undefined;
   try {
@@ -157,6 +173,7 @@ export function compile(input: unknown): Compiled {
     liftCircuits,
     landscape,
     water,
+    pumpPits,
     notes: lifts.length ? lifts.map((l) => liftSpec(l)) : undefined,
     materials,
     errors,

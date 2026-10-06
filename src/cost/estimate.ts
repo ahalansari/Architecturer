@@ -112,6 +112,8 @@ export const DEFAULT_RATES: Record<string, number> = {
   "sanitary:wc": 140, "sanitary:basin": 90, "sanitary:shower": 320, "sanitary:bath": 750, "sanitary:sink": 110, "sanitary:floor_drain": 18, "sanitary:tap": 25,
   "plumbing:first_fix": 35, "pipe:cold": 3.5, "pipe:hot": 4.5, "pipe:waste": 6, "pipe:soil": 9, "plumbing:stack": 65, "plumbing:water_heater": 95, "plumbing:inlet": 40,
   "plumbing:booster_set": 220, "plumbing:transfer_pump": 110, "plumbing:roof_tank_gal": 0.13, "plumbing:ground_tank_m3": 55, "plumbing:riser_m": 6,
+  // basement pump pits
+  "pit:chamber_m3": 95, "pit:pump_sewage": 280, "pit:pump_grinder": 450, "pit:pump_drainage": 80, "pit:valves": 35, "pit:panel": 140, "pit:cover": 45, "pit:rising_main_m": 8,
 };
 
 /** Furniture allowances (no product) by type. */
@@ -611,6 +613,19 @@ export function estimate(c: Compiled, opts: { scope?: CostScope } = {}): Bill {
       if (wd.transfer) add(G, { description: `Transfer pump, ground tank to roof, ${wd.transfer.flowM3h} m³/h at ${wd.transfer.headM} m, with float switches`, qty: 1, unit: "no", rate: rate("plumbing:transfer_pump"), basis: "count", key: "plumbing:transfer_pump" });
       if (full) add(G, { description: `Ground water tank ${wd.storage.ground.m3} m³: excavation, waterproofed RC, access cover`, qty: wd.storage.ground.m3, unit: "m³", rate: rate("plumbing:ground_tank_m3"), basis: "measured", key: "plumbing:ground_tank_m3" });
     }
+  }
+
+  // basement pump pits: chamber, pumps on guide rails, valves, panel with alarm, rising main
+  for (const p of (c.pumpPits ?? []).filter((p) => p.explicit)) {
+    const name = `${p.kind === "sewage" ? "sewage pump pit" : "drainage sump"} ${p.id}`;
+    const gross = Math.round((p.size[0] + 0.4) * (p.size[1] + 0.4) * (p.depth + 0.2) * 100) / 100;
+    add(G, { description: `${name[0].toUpperCase()}${name.slice(1)}: excavation below the basement slab, waterproofed RC chamber ${p.size[0]} × ${p.size[1]} × ${p.depth} m deep, benching`, qty: gross, unit: "m³", rate: rate("pit:chamber_m3"), basis: "measured", key: "pit:chamber_m3" });
+    const pk = p.pumps.model.type === "vortex" ? "pit:pump_sewage" : p.pumps.model.type === "grinder" ? "pit:pump_grinder" : "pit:pump_drainage";
+    add(G, { description: `Submersible pump ${p.pumps.model.model} ${p.pumps.model.kW} kW (${p.pumps.model.type}) on guide rails with auto-coupling, ${name}`, qty: p.pumps.count, unit: "no", rate: rate(pk), basis: "count", key: pk });
+    add(G, { description: `Non-return and gate valves, ${name}`, qty: p.pumps.count, unit: "set", rate: rate("pit:valves"), basis: "count", key: "pit:valves" });
+    add(G, { description: `${p.pumps.count > 1 ? "Duty / standby" : "Pump"} control panel with float switches, high-level alarm and beacon, ${name}`, qty: 1, unit: "no", rate: rate("pit:panel"), basis: "count", key: "pit:panel" });
+    add(G, { description: `${p.kind === "sewage" ? "Gas-tight bolted cover and frame, vent to the roof" : "Galvanised grating cover and frame"}, ${name}`, qty: 1, unit: "no", rate: rate("pit:cover"), basis: "count", key: "pit:cover" });
+    add(G, { description: `Rising main ${p.main.label} with backflow loop above ground, to the sewer connection, ${name}`, qty: p.main.length, unit: "m", rate: rate("pit:rising_main_m"), basis: "measured", key: "pit:rising_main_m" });
   }
 
   const H = sec("H", "Furniture, furnishings & decor", true);
