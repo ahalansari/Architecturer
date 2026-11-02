@@ -1,5 +1,6 @@
 import { lineIntersect, pointSegment, signedArea, v2, type Vec2, type Vec3 } from "../geometry/math.js";
 import type { MeshBuilder } from "../geometry/mesh.js";
+import { boxOf, GridIndex } from "../geometry/spatial.js";
 import type { Project, Wall } from "../schema/schema.js";
 import { assemblyThickness, wallAssembly, type WallAssemblyId } from "./construction.js";
 
@@ -184,8 +185,14 @@ export function splitJunctions(segs: WallSegment[], warnings: string[]): WallSeg
     splits.set(s, arr);
   };
 
+  // only walls near each other can meet: a grid keeps big floors (thousands of walls) linear. Ends move onto
+  // a neighbour's centreline below, by at most its half thickness, hence the generous padding
+  const reach = 2 * segs.reduce((m, s) => Math.max(m, s.thickness / 2 + 0.02), 0.05) + 0.05;
+  const grid = new GridIndex(segs.map((s) => boxOf([s.a, s.b], reach)));
   for (const s of segs) {
-    for (const o of segs) {
+    const near = new Set([...grid.queryPoint(s.a, reach), ...grid.queryPoint(s.b, reach)]);
+    for (const oi of [...near].sort((x, y) => x - y)) {
+      const o = segs[oi];
       if (o === s) continue;
       const od = segDir(o), sd = segDir(s);
       const angle = Math.abs(v2.cross(od, sd));
@@ -211,7 +218,8 @@ export function splitJunctions(segs: WallSegment[], warnings: string[]): WallSeg
 
   // proper crossings (X junctions)
   for (let i = 0; i < segs.length; i++)
-    for (let j = i + 1; j < segs.length; j++) {
+    for (const j of grid.query(boxOf([segs[i].a, segs[i].b], reach))) {
+      if (j <= i) continue;
       const s = segs[i], o = segs[j];
       const d1 = v2.sub(s.b, s.a), d2 = v2.sub(o.b, o.a);
       const den = v2.cross(d1, d2);

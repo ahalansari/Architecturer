@@ -16,6 +16,7 @@
 import { z } from "zod";
 import { ensureCCW, m4, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
 import { MeshBuilder } from "../geometry/mesh.js";
+import { boxOf, GridIndex, PolygonIndex } from "../geometry/spatial.js";
 import type { SceneNode } from "../geometry/scene.js";
 import { Id, Point } from "../schema/common.js";
 import { WALL_ASSEMBLIES } from "./construction.js";
@@ -288,7 +289,23 @@ function exposuresOf(poly: Vec2[], info: HvacLevelInput, treatments: Map<string,
   return out;
 }
 
+/**
+ * Healthcare rooms by name: equipment sensible heat (W/m²) and occupant density (m² per person). Theatres and
+ * imaging carry far more equipment heat than a home; real designs take the equipment schedule and the air-change
+ * rates of the applicable healthcare ventilation standard.
+ */
+const MEDICAL_LOADS: [RegExp, number, number][] = [
+  [/operat|theat(re|er)|surg|cath lab|angio/i, 60, 4],
+  [/\bOR\b/, 60, 4],
+  [/\bct\b|\bmri\b|x-?ray|radiolog|imaging|scanner|mammo/i, 80, 8],
+  [/\bicu\b|intensive|critical care|\bccu\b|\bhdu\b|nicu/i, 35, 6],
+  [/\blab\b|laborator|patholog|pharmacy|sterile|cssd|steril/i, 30, 8],
+  [/ward|patient|treatment|exam|consult|clinic|dialysis|recovery|emergency|triage|dental/i, 15, 6],
+];
+
 function internalLoads(kind: RoomKind, name: string, area: number) {
+  const med = MEDICAL_LOADS.find(([re]) => re.test(name));
+  if (med) return { people: Math.max(1, Math.round(area / med[2])), equip: { s: med[1] * area, l: 0 } };
   const majlis = /majlis|diwaniya|reception|guest hall/i.test(name);
   const people =
     kind === "bedroom" ? 2 : kind === "living" ? Math.max(3, Math.round(area / (majlis ? 2.5 : 6))) : kind === "kitchen" ? 2 : kind === "study" ? 1 : kind === "laundry" ? 1 : kind === "hall" || kind === "closet" ? 0 : Math.max(1, Math.round(area / 10));
@@ -457,7 +474,28 @@ export function designHvac(
   const units: HvacUnit[] = [];
   const circuits: Circuit[] = [];
   const roomPoly = (l: number, i: number) => project.levels[l].rooms[i].polygon as Vec2[];
-  const roomAt = (l: number, p: Vec2) => project.levels[l]?.rooms.findIndex((r) => pointInPolygon(p, r.polygon as Vec2[])) ?? -1;
+  // big floors have thousands of rooms: point lookups, lights and doors go through per-level indexes
+  const roomIdx: PolygonIndex[] = [];
+  const roomAt = (l: number, p: Vec2) => {
+    if (!project.levels[l]) return -1;
+    roomIdx[l] ??= new PolygonIndex(project.levels[l].rooms.map((r) => r.polygon as Vec2[]));
+    return roomIdx[l].at(p);
+  };
+  const lightsIn: Map<number, Vec2[]>[] = [];
+  const lightsOf = (l: number, room: number) => {
+    if (!lightsIn[l]) {
+      const m = new Map<number, Vec2[]>();
+      for (const g of infos[l].services.groups) m.set(g.room, [...(m.get(g.room) ?? []), ...g.pts]);
+      lightsIn[l] = m;
+    }
+    return lightsIn[l].get(room) ?? [];
+  };
+  const doorIdx: GridIndex[] = [];
+  const doorsNear = (l: number, poly: Vec2[]) => {
+    const ops = infos[l].openings;
+    doorIdx[l] ??= new GridIndex(ops.map((o) => boxOf([v2.add(o.seg.a, v2.scale(segDir(o.seg), o.u))], o.seg.thickness / 2 + 0.25)));
+    return doorIdx[l].query(boxOf(poly)).map((i) => ops[i]);
+  };
   /** Stairs on a level and the stairwells of stairs arriving from the level below: nothing hangs there. */
   const noGo = (l: number): Vec2[][] => [...(infos[l]?.stairOutlines ?? []), ...(l > 0 ? infos[l - 1]?.stairOutlines ?? [] : [])];
   const blocked = (l: number, p: Vec2, margin = 0.3) => noGo(l).some((g) => pointInPolygon(p, g) || nearEdge(p, g) < margin);
@@ -570,6 +608,8 @@ export function designHvac(
         // ---- terminals ----
         const supplies: Terminal[] = [];
         const returns: Terminal[] = [];
+        const unitBefore = L.terminals.filter((t) => t.unit === id).length;
+        const returnsBefore = L.terminals.filter((t) => t.unit === id && t.kind === "return").length;
         for (const r of here) {
           const poly = roomPoly(li, r.room);
           const xs = poly.map((p) => p[0]), ys = poly.map((p) => p[1]);
@@ -577,18 +617,18 @@ export function designHvac(
           const alongX = Math.max(...xs) - Math.min(...xs) >= Math.max(...ys) - Math.min(...ys);
           const lo = alongX ? Math.min(...xs) : Math.min(...ys), hi = alongX ? Math.max(...xs) : Math.max(...ys);
           const n = Math.max(1, Math.ceil(r.supply / DIFFUSER_MAX));
-          const lights = info.services.groups.filter((g) => g.room === r.room).flatMap((g) => g.pts);
+          const lights = lightsOf(li, r.room);
           for (let k = 0; k < n; k++) {
             const t = lo + ((k + 0.5) * (hi - lo)) / n;
             let p: Vec2 = alongX ? [t, c[1]] : [c[0], t];
             if (!pointInPolygon(p, poly)) p = v2.lerp(p, c, 0.6);
             if (lights.some((q) => v2.dist(q, p) < 0.35)) p = v2.add(p, alongX ? [0, 0.45] : [0.45, 0]);
             p = clearPoint(li, poly, p);
-            supplies.push({ id: `${id}.S${L.terminals.filter((t) => t.unit === id).length + supplies.length + 1}`, kind: "supply", room: r.room, at: p, airflow: Math.round(r.supply / n), unit: id });
+            supplies.push({ id: `${id}.S${unitBefore + supplies.length + 1}`, kind: "supply", room: r.room, at: p, airflow: Math.round(r.supply / n), unit: id });
           }
           // return grille near the room's door, else off-centre; the thermostat beside the main room's door
           // interior doors only: a return grille or thermostat by the front door would sit in the hot draught
-          const door = info.openings.find((o) => o.op.type === "door" && !o.seg.exterior && nearEdge(v2.add(o.seg.a, v2.scale(segDir(o.seg), o.u)), poly) < o.seg.thickness / 2 + 0.25);
+          const door = doorsNear(li, poly).find((o) => o.op.type === "door" && !o.seg.exterior && nearEdge(v2.add(o.seg.a, v2.scale(segDir(o.seg), o.u)), poly) < o.seg.thickness / 2 + 0.25);
           let rp: Vec2;
           if (door) {
             const dc = v2.add(door.seg.a, v2.scale(segDir(door.seg), door.u));
@@ -614,7 +654,7 @@ export function designHvac(
             const best = cands.filter((p) => pointInPolygon(p, poly)).map((p) => clearPoint(li, poly, p)).reduce((x, y) => (gap(y) > gap(x) + 0.05 ? y : x), rp);
             rp = best;
           }
-          returns.push({ id: `${id}.R${L.terminals.filter((t) => t.unit === id && t.kind === "return").length + returns.length + 1}`, kind: "return", room: r.room, at: rp, airflow: Math.round(r.supply * 0.85), unit: id });
+          returns.push({ id: `${id}.R${returnsBefore + returns.length + 1}`, kind: "return", room: r.room, at: rp, airflow: Math.round(r.supply * 0.85), unit: id });
         }
         L.terminals.push(...supplies, ...returns);
         if (li === zLevels[zLevels.length - 1] && !levels.some((LL) => LL.thermostats.some((t) => t.unit === id)) && returns.length) L.thermostats.push({ at: returns[0].at, unit: id, room: returns[0].room });

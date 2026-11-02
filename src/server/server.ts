@@ -5,8 +5,19 @@ import { basename, dirname, extname, join, normalize, resolve, sep } from "node:
 import { fileURLToPath } from "node:url";
 import { readJson } from "../io.js";
 import { inlineEngine, type Engine } from "../mcp/engine.js";
-import type { JobRequest, JobResult } from "../mcp/jobs.js";
+import type { JobRequest, JobResult, JobScope } from "../mcp/jobs.js";
 import { PLAN_SHEETS, type PlanSheet } from "../render/plan.js";
+import { outline } from "../scale.js";
+
+/**
+ * The viewer on a big plan (a hospital campus): the 3D model is its massing (the full fit-out would be gigabytes
+ * in the browser) and a plan sheet compiles only its level and the ones next to it.
+ */
+function viewerScope(project: Record<string, any>, req: { op: string; level?: unknown }): JobScope | undefined {
+  if (!outline(project).big) return undefined;
+  if (req.op === "plan_svg") return { levels: [typeof req.level === "string" ? req.level : project.levels?.[0]?.id].filter(Boolean) };
+  return req.op === "glb" || req.op === "info" ? { detail: "massing" } : undefined;
+}
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const VIEWER = join(ROOT, "viewer");
@@ -72,7 +83,7 @@ export function createPlanViewer(planPath: string, opts: { textureSize?: number;
     const c = cache;
     let r = c.results.get(key);
     if (!r) {
-      r = c.project.then((project) => engine.run({ ...req, project, baseDir: dirname(file) } as JobRequest));
+      r = c.project.then((project) => engine.run({ ...req, project, baseDir: dirname(file), scope: viewerScope(project as Record<string, any>, req) } as JobRequest));
       c.results.set(key, r);
       r.catch(() => c.results.delete(key));
     }

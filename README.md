@@ -17,11 +17,12 @@ AI-first 3D architecture modeler. An AI model (or you) writes a **JSON building 
   - Roofs: gable, hip, shed and flat with parapet.
   - Rooms get floor finishes and ceilings.
   - Terraces, balconies and patios are a single element: a slab, with railings or a parapet added automatically on the edges that aren't against the building.
-  - 63 parametric furniture types, including cars and outdoor/garden items.
+  - 156 parametric furniture types, including cars, outdoor/garden items and 33 kinds of medical equipment (hospital and ICU beds, monitors, operating tables, surgical lights, CT / MRI / X-ray, dental, dialysis, laboratory benches and hoods) for hospitals and clinics.
   - Free-form shapes for landmarks: revolved profiles (towers, domes, spheres with rings), with material bands, openings, hollow walk-in shells and geodesic glazing frames. Elevators link floors.
 - **Procedural PBR textures**, 100 tileable materials: base color, normal and occlusion/roughness/metal maps, with MikkTSpace tangents. Exported files pass the Khronos glTF validator with no errors or warnings.
 - **AI feedback loop**: headless PNG renders (3D views, cutaways, 2D plans with a coordinate grid and element ids). An agent can look at its own result and fix it.
 - **Interfaces**: an MCP server (for Claude and other MCP clients), a CLI, and a live-reloading three.js viewer.
+- **Large projects**: hospitals, airports and campuses of millions of m². Spatial indexes keep validation and plan rendering roughly linear in the number of rooms; edits on a big plan re-check only the levels they touch; plans can be read in pieces, built by repeating floors and room arrays, viewed as massing and exported one model per floor.
 
 ## Quick start
 
@@ -84,7 +85,9 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 | Tool | Purpose |
 |---|---|
 | `get_guide`, `get_schema`, `list_materials`, `list_furniture` | Learn the format (`get_guide` takes a `section` for a shorter read) |
-| `list_projects`, `create_project`, `read_project`, `write_project`, `add_level` | Whole-plan operations |
+| `list_projects`, `create_project`, `read_project`, `write_project`, `add_level` | Whole-plan operations (`read_project` filters by level / kind / ids / region and pages big plans) |
+| `project_summary` | Outline of a plan without reading it: levels, element counts, room areas, extents |
+| `duplicate_level`, `copy_elements` | Build big projects by repetition: typical floors, rows and grids of rooms |
 | `add_elements`, `update_element`, `remove_elements` | Incremental edits by id. Every edit returns validation results. |
 | `validate` | Errors and warnings |
 | `render_plan`, `render_view` | Return PNG images so the model can see its work |
@@ -94,7 +97,7 @@ Relative plan paths resolve against `ARCHITECTURER_WORKDIR`. Without it they res
 | `water_design` | Water hydraulics: pressure and hot-water wait at every outlet, pipe sizes, booster, tanks, stacks (with `render_plan` sheet `plumbing`) |
 | `landscape_design` | Gardens and irrigation: areas, plants, zones, run times, water use (with `render_plan` sheet `landscape`) |
 | `generate_contract` | Works contract per trade package, English and Arabic, Word + HTML |
-| `export_model` | `.glb` / `.gltf` for game engines (`export_status` on the remote server) |
+| `export_model` | `.glb` / `.gltf` for game engines (`export_status` on the remote server); `split: "level"` writes one model per floor, `detail: "massing"` leaves out the fit-out |
 
 ### Remote MCP server
 
@@ -238,3 +241,25 @@ viewer/         three.js viewer
 ```
 
 `npm test` runs the build and MCP end-to-end tests.
+
+## Large projects
+
+A 3 million m² plan (for example ten 300,000 m² hospital floors) works like a small one, with a few habits:
+
+- `project_summary` first, then `read_project` with `level`, `kinds`, `region` and `limit`. A big plan is never returned whole.
+- Build by repetition: `duplicate_level` for typical floors, `copy_elements` for rows and grids of patient rooms.
+- Edits re-check only the levels they touch. Run `validate` on the whole plan at milestones.
+- `render_plan` with `region` gives close-ups of a big floor. `render_view` of a whole big plan shows its massing.
+- `export_model` with `split: "level"` writes one GLB per floor at its real height.
+
+The CLI and MCP servers raise Node's heap to 75% of RAM (`ARCHITECTURER_HEAP_MB`, `ARCHITECTURER_WORKER_HEAP_MB`). The remote server accepts requests up to `ARCHITECTURER_MAX_REQUEST` (default `256mb`).
+
+## Medical buildings
+
+Medical equipment is placed like furniture (`list_furniture`). Room names drive the engineering: wards and ICUs get patient-room sockets, and theatres, imaging, ICU, labs and clinics get healthcare heat gains in `hvac_design`. Scrub sinks are plumbed. See `examples/medical_wing.json` (wards, ICU, operating theatre, CT, laboratory, clinic and dialysis) and the guide section `get_guide medical`. Medical gases, shielding, MRI zoning and pressure regimes are not designed: see the [disclaimer](DISCLAIMER.md).
+
+## License and disclaimer
+
+Architecturer is released under the [MIT License](LICENSE).
+
+Everything it produces is indicative. That includes plans, engineering layouts, cost estimates, contracts and medical equipment models. None of it is professional advice. Licensed professionals must check it against the codes that apply before anything is built. Read the full [disclaimer](DISCLAIMER.md).

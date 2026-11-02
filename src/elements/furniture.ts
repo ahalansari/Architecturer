@@ -18,6 +18,7 @@
  */
 import { MeshBuilder } from "../geometry/mesh.js";
 import { m4, offsetPolygon, v3, type Vec2, type Vec3 } from "../geometry/math.js";
+import { MEDICAL_FURNITURE } from "./medical.js";
 
 export interface FurnitureSpec {
   width: number;
@@ -5314,6 +5315,8 @@ export const FURNITURE: Record<string, FurnitureType> = {
     options: { iron: { description: "Iron on the board (board top at h - 0.055)", default: true } },
     build: buildIroningBoard,
   }),
+  // hospitals, clinics, laboratories (elements/medical.ts)
+  ...Object.fromEntries(Object.entries(MEDICAL_FURNITURE).map(([k, t]) => [k, def(t)])),
 };
 
 export function listFurniture(): {

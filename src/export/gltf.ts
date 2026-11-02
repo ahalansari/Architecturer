@@ -2,6 +2,7 @@ import { Document, NodeIO, type Material, type Node as GNode, type Texture } fro
 import { dedup, tangents, unweld, weld } from "@gltf-transform/functions";
 import { createHash } from "node:crypto";
 import { KHRLightsPunctual, KHRTextureBasisu } from "@gltf-transform/extensions";
+import { navMetadata } from "./navmeta.js";
 import { attachGltfLight } from "../elements/lighting.js";
 import { encode as encodeJPEG } from "jpeg-js";
 import { generateTangents } from "mikktspace";
@@ -29,6 +30,8 @@ export interface ExportOptions extends GameOptions {
   textureFormat?: "png" | "jpeg" | "ktx2";
   /** KTX2 only: "high" encodes normal maps as UASTC (sharper, larger, much slower). Default "fast". */
   ktx2Quality?: Ktx2Quality;
+  /** Add navigation markers (room / stair NavMesh areas, lift landings) for the engine packages. */
+  navigation?: boolean;
 }
 
 /** Textures waiting for KTX2 encoding (done asynchronously in finalDocument). */
@@ -158,6 +161,7 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
           .setAttribute("TEXCOORD_0", doc.createAccessor().setType("VEC2").setArray(new Float32Array(md.uvs)).setBuffer(buffer))
           .setIndices(index())
           .setMaterial(materialFor(md.material));
+        if (md.uv2) prim.setAttribute("TEXCOORD_1", doc.createAccessor().setType("VEC2").setArray(new Float32Array(md.uv2)).setBuffer(buffer));
         mesh.addPrimitive(prim);
       }
       g.setMesh(mesh);
@@ -165,7 +169,7 @@ export function toGltfDocument(c: Compiled, opts: ExportOptions = {}): Document 
     for (const ch of n.children) g.addChild(convert(ch));
     return g;
   };
-  scene.addChild(convert(prepareForGame(c.root, opts)));
+  scene.addChild(convert(prepareForGame(c.root, { ...opts, nav: opts.navigation ? navMetadata(c) : undefined })));
   return doc;
 }
 

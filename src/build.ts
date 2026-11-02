@@ -43,6 +43,12 @@ export interface BuildOutput {
   warnings: string[];
 }
 
+/** The site's ground level: street level — a basement listed first sits below it, not on it. */
+export function siteGroundZ(elevations: number[]): number {
+  const first = elevations[0] ?? 0;
+  return first < -1 ? Math.min(...elevations.filter((e) => e >= -1).concat([0])) : first;
+}
+
 /** Room floor finishes sit this far above the slab top. */
 export const FLOOR_FINISH = 0.01;
 
@@ -83,6 +89,7 @@ export function buildProject(project: Project): BuildOutput {
   const warnings: string[] = [];
   const D = project.defaults;
   const elev = levelElevations(project);
+  const groundZ = siteGroundZ(elev);
   const slabT = (lv: Level) => lv.slabThickness ?? D.slabThickness;
   const root: SceneNode = { name: project.name, kind: "building", meshes: [], children: [], extras: { generator: "architecturer" } };
   const infos: LevelInfo[] = [];
@@ -348,7 +355,7 @@ export function buildProject(project: Project): BuildOutput {
     const terracesNode = node("terraces", "group");
     lv.terraces.forEach((t, i) => {
       const mb = new MeshBuilder(), col = new MeshBuilder();
-      const r = buildTerrace(mb, col, t, { z, groundZ: elev[0], segments: segs, wallMaterial: extMat });
+      const r = buildTerrace(mb, col, t, { z, groundZ: z < groundZ - 0.5 ? z : groundZ, segments: segs, wallMaterial: extMat });
       const tn = node(t.id ?? `terrace${i}`, "terrace", mb, {
         id: t.id,
         room: t.name,
@@ -397,7 +404,9 @@ export function buildProject(project: Project): BuildOutput {
     if (isFinite(minX)) {
       const m = project.site.margin;
       const mb = new MeshBuilder();
-      mb.flat(project.site.groundMaterial, [[minX - m, minY - m], [maxX + m, minY - m], [maxX + m, maxY + m], [minX - m, maxY + m]], elev[0] - 0.05);
+      // open areas of floors below ground (sunken courts, light wells) are holes in it
+      const holes = project.levels.flatMap((lv, i) => (elev[i] < groundZ - 0.5 ? [...lv.terraces.map((t) => t.polygon), ...lv.gardens.map((g) => g.polygon)] : [])) as [number, number][][];
+      mb.flat(project.site.groundMaterial, [[minX - m, minY - m], [maxX + m, minY - m], [maxX + m, maxY + m], [minX - m, maxY + m]], groundZ - 0.05, false, holes);
       root.children.push(node("ground", "site", mb));
     }
   }

@@ -1,5 +1,6 @@
 import { deg2rad, m4, pointSegment, v2, type Vec2, type Vec3 } from "../geometry/math.js";
 import { MeshBuilder } from "../geometry/mesh.js";
+import { segmentsNear } from "../geometry/spatial.js";
 import type { SceneNode } from "../geometry/scene.js";
 import type { Opening, Project } from "../schema/schema.js";
 import { buildTreatment } from "./treatments.js";
@@ -52,13 +53,18 @@ export function placeOpening(
   let u = 0;
   if (op.at) {
     let best = Infinity;
-    for (const s of candidates) {
-      const r = pointSegment(op.at as Vec2, s.a, s.b);
-      if (r.dist < best) {
-        best = r.dist;
-        seg = s;
-        u = r.t * segLength(s);
+    // big floors: look among the walls near the point first (the whole level only to report a miss)
+    const reach = candidates.reduce((m, s) => Math.max(m, s.thickness / 2 + 0.15), 0.35);
+    for (const pool of op.wall ? [candidates] : [segmentsNear(candidates, op.at as Vec2, reach), candidates]) {
+      for (const s of pool) {
+        const r = pointSegment(op.at as Vec2, s.a, s.b);
+        if (r.dist < best) {
+          best = r.dist;
+          seg = s;
+          u = r.t * segLength(s);
+        }
       }
+      if (seg && best <= Math.max(seg.thickness / 2 + 0.15, 0.35)) break;
     }
     if (!seg || best > Math.max(seg.thickness / 2 + 0.15, 0.35)) {
       errors.push(
@@ -199,7 +205,7 @@ export function buildOpening(p: PlacedOpening, project: Project, ctx: { ceilingZ
         children: [],
         translation: [hingeWorld[0], hingeWorld[1], p.z0 + 0.01] as Vec3,
         rotationZ: rot,
-        extras: { opening: p.id, motion: kind, hingeAxis: "z", maxAngle: 100 },
+        extras: { opening: p.id, motion: kind, hingeAxis: "z", maxAngle: 100, closedRotationZ: wallAngle },
       } satisfies SceneNode;
     };
     if (style === "double") {

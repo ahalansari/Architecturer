@@ -2,7 +2,7 @@
  * Where the heavy MCP work runs: in-process (local stdio server) or on a pool of worker threads (remote
  * HTTP server), so renders and exports never block the event loop that answers other requests.
  */
-import { availableParallelism } from "node:os";
+import { availableParallelism, totalmem } from "node:os";
 import { Worker } from "node:worker_threads";
 import { runJob, type JobRequest, type JobResult } from "./jobs.js";
 
@@ -26,11 +26,22 @@ interface Slot {
 // under tsx (development) the worker is the .ts source: a tiny bootstrap registers tsx's loader first
 const DEV = import.meta.url.endsWith(".ts");
 const WORKER_URL = new URL(DEV ? "./worker.ts" : "./worker.js", import.meta.url);
-const newWorker = (workerData: unknown): Worker => {
-  if (!DEV) return new Worker(WORKER_URL, { workerData });
+/**
+ * Heap per worker, MB: ARCHITECTURER_WORKER_HEAP_MB, else an even share of 75% of RAM (2–32 GB). Big projects
+ * (a 3 million m² campus) need far more than V8's default.
+ */
+export function workerHeapMb(workers: number): number {
+  const env = Number(process.env.ARCHITECTURER_WORKER_HEAP_MB);
+  if (env > 0) return Math.floor(env);
+  return Math.max(2048, Math.min(32768, Math.floor((totalmem() / 1048576) * 0.75 / Math.max(1, workers))));
+}
+
+const newWorker = (workerData: unknown, heapMb: number): Worker => {
+  const resourceLimits = { maxOldGenerationSizeMb: heapMb };
+  if (!DEV) return new Worker(WORKER_URL, { workerData, resourceLimits });
   const tsx = import.meta.resolve("tsx/esm/api");
   const boot = `import(${JSON.stringify(tsx)}).then((m) => { m.register(); return import(${JSON.stringify(WORKER_URL.href)}); });`;
-  return new Worker(boot, { eval: true, workerData });
+  return new Worker(boot, { eval: true, workerData, resourceLimits });
 };
 
 export class WorkerPool implements Engine {
@@ -62,7 +73,7 @@ export class WorkerPool implements Engine {
   }
 
   private spawn(): Slot {
-    const slot: Slot = { worker: newWorker(this.workerData) };
+    const slot: Slot = { worker: newWorker(this.workerData, workerHeapMb(this.size)) };
     slot.worker.on("message", (m: { result?: JobResult; error?: string }) => {
       const t = slot.task;
       slot.task = undefined;

@@ -173,8 +173,15 @@ export function buildStair(mb: MeshBuilder, s: Stair, levelZ: number, levelHeigh
       const xa = Math.min(-w / 2, off - w / 2), xb = Math.max(w / 2, off + w / 2);
       parts.push({ kind: "landing", x0: xa, y0: run1, x1: xb, y1: run1 + w, z: n1 * r });
       parts.push({ kind: "flight", m: m4.fromBasis([-1, 0, 0], [0, -1, 0], [0, 0, 1], [off, run1, n1 * r]), n: n2 });
-      const y0 = Math.min(0, run1 - run2);
-      footprints.push(([[xa, y0], [xb, y0], [xb, run1 + w], [xa, run1 + w]] as Vec2[]).map(toWorld));
+      // each flight's band ends where that flight does: a shorter return flight must not leave an open strip
+      // between its top step and the floor it arrives at
+      const y2 = run1 - run2, top = run1 + w;
+      const near = -w / 2, mid1 = w / 2, mid2 = off - turn * (w / 2), far = off + turn * (w / 2);
+      const hole: Vec2[] =
+        y2 >= 0
+          ? [[near * turn, 0], [mid1 * turn, 0], [mid1 * turn, y2], [far, y2], [far, top], [near * turn, top]]
+          : [[near * turn, 0], [mid2, 0], [mid2, y2], [far, y2], [far, top], [near * turn, top]];
+      footprints.push(hole.map(toWorld));
     }
   }
 

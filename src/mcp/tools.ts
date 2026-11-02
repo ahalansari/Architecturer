@@ -18,8 +18,9 @@ import { VIEW_PRESETS, type ViewPreset } from "../render/raster.js";
 import { PACKAGE_IDS } from "../contracts/packages.js";
 import { ELEMENT_KINDS, projectJsonSchema } from "../schema/schema.js";
 import { STARTER_PROJECT } from "../templates.js";
+import { copyElements, duplicateLevel, outline, outlineText, selectElements, skeleton } from "../scale.js";
 import type { Engine } from "./engine.js";
-import type { JobRequest, JobResult } from "./jobs.js";
+import type { JobRequest, JobResult, JobScope } from "./jobs.js";
 import { KeyedLock, Workspace } from "./workspace.js";
 
 type Json = Record<string, any>;
@@ -76,6 +77,11 @@ const fail = (msg: string): Reply => ({ content: [text(`Error: ${msg}`)], isErro
 
 /** Biggest image sent inline (base64 grows it by a third); larger renders are links only. */
 const INLINE_IMAGE_MAX = 3 * 1024 * 1024;
+/** Plans bigger than this (characters of compact JSON) are stored without indentation. */
+const COMPACT_OVER = 8_000_000;
+/** read_project returns a plan this big (characters) only in pieces. */
+const READ_WHOLE_MAX = 400_000;
+const Region = z.tuple([z.number(), z.number(), z.number(), z.number()]).describe("[minX, minY, maxX, maxY] in plan meters");
 
 const READ: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const ADD: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
@@ -159,11 +165,23 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
   };
   const store = async (file: string, project: Json) => {
     await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(project, null, 2) + "\n");
+    // huge plans are stored compact: indenting would double a 100 MB file
+    const compact = JSON.stringify(project);
+    await writeFile(file, (compact.length > COMPACT_OVER ? compact : JSON.stringify(project, null, 2)) + "\n");
   };
   const job = (file: string, project: Json, req: Omit<JobRequest, "project" | "baseDir"> & Record<string, unknown>, extra?: Extra, what = "Building") =>
     keepAlive(extra, what, engine.run({ ...req, project, baseDir: dirname(file) } as JobRequest));
-  const validate = async (file: string, project: Json, extra?: Extra) => (await job(file, project, { op: "validate" }, extra, "Validating")).summary;
+  /** Validation after an edit: a big plan re-checks only the levels the edit touched (and the ones next to them). */
+  const validate = async (file: string, project: Json, extra?: Extra, touched?: string[]) => {
+    const scope: JobScope | undefined = touched?.length && outline(project).big ? { levels: [...new Set(touched)] } : undefined;
+    const r = await job(file, project, { op: "validate", scope }, extra, "Validating");
+    return scope ? `${r.summary}\n(Big plan: run validate for the whole project before exporting.)` : r.summary;
+  };
+  /** Level scope for whole-plan work on a big plan (render_plan: the level and its neighbours). */
+  const autoScope = (project: Json, level?: string): JobScope | undefined => {
+    if (!outline(project).big) return undefined;
+    return { levels: [level ?? project.levels?.[0]?.id].filter(Boolean) };
+  };
   /** Load, change and save a plan under the per-file lock; returns the saved project. */
   const edit = (file: string, fn: (p: Json) => string | Promise<string>) =>
     lock.run(file, async () => {
@@ -277,9 +295,59 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
   );
 
   tool(
+    "project_summary",
+    {
+      title: "Project summary",
+      description:
+        "Outline of a plan without reading it all: levels (elevation, height, element counts, room area, extent), totals and size. " +
+        "Start here on big projects (hospitals, airports, campuses), then read_project with level / kinds / region.",
+      inputSchema: { path: PathArg },
+      annotations: READ,
+    },
+    guard(async ({ path }) => {
+      const file = ws.plan(path);
+      const raw = await load(file);
+      return ok(text(outlineText(outline(raw), Buffer.byteLength(JSON.stringify(raw)))));
+    }),
+  );
+
+  tool(
     "read_project",
-    { title: "Read a project", description: "Return the plan JSON as stored on disk.", inputSchema: { path: PathArg }, annotations: READ },
-    guard(async ({ path }) => ok(text(JSON.stringify(await load(ws.plan(path)), null, 1)))),
+    {
+      title: "Read a project",
+      description:
+        "Return the plan JSON as stored on disk. On big plans pass a filter to read a piece: `level`, `kinds` (walls, rooms, furniture...), `ids`, `region` [minX, minY, maxX, maxY], paged with offset / limit. " +
+        "`skeleton: true` returns the settings and level headers without elements. A plan too big to return whole comes back as its skeleton plus the summary.",
+      inputSchema: {
+        path: PathArg,
+        level: z.string().optional().describe("Only this level's elements"),
+        kinds: z.array(z.enum(ELEMENT_KINDS)).optional().describe("Only these collections"),
+        ids: z.array(z.string()).optional().describe("Only these element ids"),
+        region: Region.optional().describe("Only elements whose position / outline centre is inside [minX, minY, maxX, maxY]"),
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(5000).default(500).describe("Elements per page"),
+        skeleton: z.boolean().default(false).describe("Settings and level headers only (element lists replaced by their counts)"),
+      },
+      annotations: READ,
+    },
+    guard(async ({ path, level, kinds, ids, region, offset, limit, skeleton: skel }) => {
+      const p = await load(ws.plan(path));
+      if (skel) return ok(text(JSON.stringify(skeleton(p), null, 1)));
+      if (level || kinds?.length || ids?.length || region) {
+        const r = selectElements(p, { level, kinds, ids, region: region as [number, number, number, number] | undefined, offset, limit });
+        const more = r.total > offset + r.items.length ? ` Next page: offset ${offset + r.items.length}.` : "";
+        return ok(text(`${r.total} element(s) match; ${r.items.length} from offset ${offset}.${more}\n${JSON.stringify(r.items)}`));
+      }
+      const whole = JSON.stringify(p, null, 1);
+      if (whole.length <= READ_WHOLE_MAX) return ok(text(whole));
+      return ok(
+        text(
+          `This plan is ${(whole.length / 1e6).toFixed(1)} MB: too big to return whole. Read it in pieces (level / kinds / ids / region / offset).\n\n` +
+            outlineText(outline(p)) +
+            `\n\nSkeleton:\n${JSON.stringify(skeleton(p), null, 1)}`,
+        ),
+      );
+    }),
   );
 
   tool(
@@ -311,7 +379,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         p.levels = [...(p.levels ?? []), level];
         return "";
       });
-      return ok(text(await validate(file, p, extra)));
+      return ok(text(await validate(file, p, extra, [String(level.id)])));
     }),
   );
 
@@ -343,7 +411,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         }
         return `Added ${added.join("; ")}`;
       });
-      return ok(text(`${msg}\n${await validate(file, p, extra)}`));
+      return ok(text(`${msg}\n${await validate(file, p, extra, [level])}`));
     }),
   );
 
@@ -357,11 +425,13 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
     },
     guard(async ({ path, id, changes }, extra) => {
       const file = ws.plan(path);
+      const touched: string[] = [];
       const { p, msg } = await edit(file, (p) => {
         for (const lv of p.levels ?? [])
           for (const k of ELEMENT_KINDS)
             for (const el of lv[k] ?? [])
               if (el.id === id) {
+                touched.push(lv.id);
                 for (const [key, v] of Object.entries(changes)) {
                   if (v === null) delete el[key];
                   else el[key] = v;
@@ -370,7 +440,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
               }
         throw new Error(`no element with id '${id}'`);
       });
-      return ok(text(`${msg}\n${await validate(file, p, extra)}`));
+      return ok(text(`${msg}\n${await validate(file, p, extra, touched)}`));
     }),
   );
 
@@ -379,6 +449,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
     { title: "Remove elements", description: "Remove elements (any collection, any level) by id.", inputSchema: { path: PathArg, ids: z.array(z.string()) }, annotations: CHANGE },
     guard(async ({ path, ids }, extra) => {
       const file = ws.plan(path);
+      const touched: string[] = [];
       const { p, msg } = await edit(file, (p) => {
         const want = new Set(ids);
         const removed: string[] = [];
@@ -388,6 +459,7 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
               lv[k] = lv[k].filter((el: Json) => {
                 if (el.id && want.has(el.id)) {
                   removed.push(el.id);
+                  touched.push(lv.id);
                   return false;
                 }
                 return true;
@@ -395,16 +467,73 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         const missing = ids.filter((i) => !removed.includes(i));
         return `Removed: ${removed.join(", ") || "nothing"}${missing.length ? `. Not found: ${missing.join(", ")}` : ""}`;
       });
-      return ok(text(`${msg}\n${await validate(file, p, extra)}`));
+      return ok(text(`${msg}\n${await validate(file, p, extra, touched.length ? touched : [p.levels?.[0]?.id])}`));
+    }),
+  );
+
+  tool(
+    "duplicate_level",
+    {
+      title: "Duplicate a level",
+      description:
+        "Repeat a typical floor: copies level `from` as new levels `ids` stacked on top (hospital wards, hotel / office floors, towers). Element ids get the new level id as a suffix ('w1' → 'w1_L5'); openings keep their walls, switches their lights.",
+      inputSchema: {
+        path: PathArg,
+        from: LevelArg.describe("Level to copy"),
+        ids: z.array(z.string()).min(1).max(200).describe("New level ids, bottom to top, e.g. ['L3','L4','L5']"),
+        names: z.array(z.string()).optional().describe("Display names for the new levels"),
+      },
+      annotations: ADD,
+    },
+    guard(async ({ path, from, ids, names }, extra) => {
+      const file = ws.plan(path);
+      const { p, msg } = await edit(file, (p) => duplicateLevel(p, from, ids, names));
+      return ok(text(`${msg}\n${await validate(file, p, extra, [ids[0]])}`));
+    }),
+  );
+
+  tool(
+    "copy_elements",
+    {
+      title: "Copy elements in an array",
+      description:
+        "Copy elements of a level `count` times, each copy shifted by `offset` from the previous: a row of patient rooms, a wing, a grid of bays (call twice for a 2D grid). " +
+        "Select by `ids`, `kinds` and/or `region` [minX, minY, maxX, maxY] (elements whose position / outline centre is inside). `toLevel` puts the copies on another level. Copies get ids ending _c1, _c2...",
+      inputSchema: {
+        path: PathArg,
+        level: LevelArg,
+        ids: z.array(z.string()).optional(),
+        kinds: z.array(z.enum(ELEMENT_KINDS)).optional(),
+        region: Region.optional(),
+        offset: z.tuple([z.number(), z.number()]).describe("[dx, dy] in meters between copies"),
+        count: z.number().int().min(1).max(500).default(1),
+        toLevel: z.string().optional(),
+      },
+      annotations: ADD,
+    },
+    guard(async ({ path, level, ids, kinds, region, offset, count, toLevel }, extra) => {
+      const file = ws.plan(path);
+      const { p, msg } = await edit(file, (p) => copyElements(p, level, { ids, kinds, region: region as [number, number, number, number] | undefined }, offset as [number, number], count, toLevel));
+      return ok(text(`${msg}\n${await validate(file, p, extra, [toLevel ?? level])}`));
     }),
   );
 
   tool(
     "validate",
-    { title: "Validate a project", description: "Validate and build the plan; returns errors, warnings and stats.", inputSchema: { path: PathArg }, annotations: READ },
-    guard(async ({ path }, extra) => {
+    {
+      title: "Validate a project",
+      description: "Validate and build the plan; returns errors, warnings and stats. On big plans pass `levels` to check some floors (faster), or detail 'massing' to check the building shell without fit-out.",
+      inputSchema: {
+        path: PathArg,
+        levels: z.array(z.string()).optional().describe("Check only these levels (with the levels next to them for stairs and risers)"),
+        detail: z.enum(["full", "massing"]).default("full").describe("massing: walls, openings, slabs, roofs, stairs and rooms only"),
+      },
+      annotations: READ,
+    },
+    guard(async ({ path, levels, detail }, extra) => {
       const file = ws.plan(path);
-      return ok(text(await validate(file, await load(file), extra)));
+      const scope: JobScope | undefined = levels?.length || detail === "massing" ? { levels, detail } : undefined;
+      return ok(text((await job(file, await load(file), { op: "validate", scope }, extra, "Validating")).summary));
     }),
   );
 
@@ -426,12 +555,14 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         path: PathArg,
         level: LevelArg.optional().describe("Default: first level"),
         sheet: z.enum(PLAN_SHEETS).optional().describe("plan (default) | lighting | finishes | rcp | false_ceiling | electrical | plumbing | hvac | landscape"),
+        region: Region.optional().describe("Close-up of part of the level, [minX, minY, maxX, maxY] in meters. A big floor without it is drawn as a smaller-scale overview"),
       },
       annotations: READ,
     },
-    guard(async ({ path, level, sheet }, extra) => {
+    guard(async ({ path, level, sheet, region }, extra) => {
       const file = ws.plan(path);
-      const r = await job(file, await load(file), { op: "render_plan", level, sheet }, extra, "Rendering");
+      const project = await load(file);
+      const r = await job(file, project, { op: "render_plan", level, sheet, region, scope: autoScope(project, level) }, extra, "Rendering");
       if (!r.ok) return fail(r.summary);
       return ok(...(await images(r)), text(r.summary));
     }),
@@ -472,14 +603,27 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         time: z.string().regex(/^\d{1,2}:\d{2}$/).optional().describe("Local time HH:MM for the sun (Kuwait; default 10:30, golden 45 min before sunset, dusk 30 min after, night 21:00)"),
         date: z.string().regex(/^\d{1,2}-\d{1,2}$/).optional().describe("Date MM-DD for the sun (default 03-21); e.g. 06-21 for the high summer sun"),
         exposure: z.number().min(-5).max(5).optional().describe("Exposure compensation in EV (default 0, automatic)"),
+        detail: z
+          .enum(["auto", "full", "massing"])
+          .default("auto")
+          .describe("massing: building shell only (no furniture, services, lighting) for site-wide views of big projects. auto: full, except a big project seen whole gets its massing and a big project seen on one level / room renders that level"),
+        levels: z.array(z.string()).optional().describe("Render only these levels (big projects)"),
       },
       annotations: READ,
     },
-    guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, lens, straight, width, height, renderer, samples, time, date, exposure }, extra) => {
+    guard(async ({ path, view, level, focus, radius, zoom, cutHeight, room, corner, elevation, elevationRoom, lighting, eye, target, lens, straight, width, height, renderer, samples, time, date, exposure, detail, levels }, extra) => {
       const file = ws.plan(path);
+      const project = await load(file);
       const opts = { view, level, focus: focus as [number, number] | undefined, radius, zoom, cutHeight, eye, target, lens, straight, width, height, renderer, samples, time, date, exposure, interior: room || elevation ? { room, corner, elevation, elevationRoom } : undefined };
       const modes = lighting === "both" ? ["day", "night"] : [lighting];
-      const r = await job(file, await load(file), { op: "render_view", view: opts, modes }, extra, "Rendering");
+      let scope: JobScope | undefined = levels?.length || detail === "massing" ? { levels, detail: detail === "massing" ? "massing" : "full" } : undefined;
+      if (!scope && detail === "auto" && outline(project).big) {
+        // the level being looked at (cutaway, or the level holding the room / wall), else the whole site's massing
+        const ref = room ?? elevation;
+        const lv = level ?? (ref ? (project.levels ?? []).find((l: Json) => ["rooms", "walls"].some((k) => (l[k] ?? []).some((e: Json) => e.id === ref || e.name === ref)))?.id : undefined);
+        scope = lv ? { levels: [lv], neighbours: !!level } : { detail: "massing" };
+      }
+      const r = await job(file, project, { op: "render_view", view: opts, modes, scope }, extra, "Rendering");
       if (!r.ok) return fail(r.summary);
       return ok(...(await images(r)), text(r.summary));
     }),
@@ -509,16 +653,29 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         engine: z
           .enum(["generic", "unity", "godot"])
           .default("generic")
-          .describe("unity/godot imply merge + collision. unity also orients the model so plan (x, y) == Unity world (x, z); add the Architecturer Unity package to the Unity project."),
+          .describe(
+            "unity/godot imply merge + collision + navigation markers. unity also adds lightmap UVs and orients the model so plan (x, y) == Unity world (x, z); with the Architecturer Unity package the model gets its colliders, static / lightmap flags and a baked NavMesh (room areas, lift links, door obstacles) when placed.",
+          ),
         merge: z.boolean().default(false).describe("Merge static geometry into one mesh per level (fewer draw calls). Furniture and door leaves stay separate movable nodes."),
         collision: z
           .boolean()
           .default(false)
           .describe("Add collision nodes: '<level>-colonly' (static mesh; stairs become ramps) and '<item>-convcolonly' boxes on furniture/doors. Godot imports these natively; Unity needs the Architecturer Unity package."),
+        lightmapUV: z.boolean().optional().describe("A second, non-overlapping UV set (TEXCOORD_1 → Unity uv2) on the merged static meshes for baked lighting (default: on for unity)"),
+        navigation: z
+          .boolean()
+          .optional()
+          .describe("Navigation markers: 'nav-area|kind|…' room / stair volumes (indoor, outdoor, wet, stairs, service), 'nav-lift|id|stop' lift landings, 'nav-doorway' closed-door markers (default: on for unity / godot). Check walkability on the server with nav_check."),
+        split: z
+          .enum(["none", "level"])
+          .default("none")
+          .describe("level: one model per level ('<output>.<level>.glb', each at its real height) — the way to export big projects (stream floors in the engine)"),
+        levels: z.array(z.string()).optional().describe("Export only these levels"),
+        detail: z.enum(["full", "massing"]).default("full").describe("massing: building shell without furniture / services / lighting (light site-wide models)"),
       },
       annotations: OUTPUT,
     },
-    guard(async ({ path, output, textureSize, textureFormat, engine: target, merge, collision }, extra) => {
+    guard(async ({ path, output, textureSize, textureFormat, engine: target, merge, collision, lightmapUV, navigation, split, levels, detail }, extra) => {
       const file = ws.plan(path);
       const project = await load(file);
       const out = output
@@ -526,14 +683,33 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
         : remote
           ? ws.output(`exports/${basename(file, extname(file))}.glb`, exportFormats)
           : file.replace(/\.json$/i, "") + ".glb";
-      const opts = { textureSize, textureFormat, merge: merge || target !== "generic", collision: collision || target !== "generic", unityAxes: target === "unity" };
-      const run = () => engine.run({ op: "export", project, baseDir: dirname(file), out, opts });
+      const opts = {
+        textureSize,
+        textureFormat,
+        merge: merge || target !== "generic",
+        collision: collision || target !== "generic",
+        unityAxes: target === "unity",
+        lightmapUV: lightmapUV ?? target === "unity",
+        navigation: navigation ?? target !== "generic",
+      };
+      const pick: string[] = levels?.length ? levels : (project.levels ?? []).map((l: Json) => l.id);
+      const parts = split === "level" ? pick.map((id) => ({ out: out.replace(/(\.gl(b|tf))$/i, `.${id.replace(/[^A-Za-z0-9_\-.]/g, "_")}$1`), scope: { levels: [id], neighbours: false, detail } as JobScope })) : [{ out, scope: levels?.length || detail === "massing" ? ({ levels, neighbours: false, detail } as JobScope) : undefined }];
+      const run = async (): Promise<JobResult> => {
+        let last: JobResult = { ok: true, summary: "" };
+        const done: string[] = [];
+        for (const part of parts) {
+          last = await engine.run({ op: "export", project, baseDir: dirname(file), out: part.out, opts, scope: part.scope });
+          if (!last.ok) return { ...last, summary: `${part.scope?.levels?.join(", ") ?? "model"}: ${last.summary}` };
+          done.push(remote ? `${ws.show(part.out)}: ${remote.fileLink(part.out)}` : part.out);
+        }
+        return parts.length > 1 ? { ...last, summary: `${parts.length} models:\n${done.join("\n")}\n${last.summary}` } : last;
+      };
       if (!remote) {
         const r = await keepAlive(extra, "Exporting", run());
         if (!r.ok) return fail(r.summary);
-        return ok(text(`Wrote ${out}\n${r.summary}`));
+        return ok(text(parts.length > 1 ? `Wrote ${r.summary}` : `Wrote ${out}\n${r.summary}`));
       }
-      const j = remote.startExport(file, out, run);
+      const j = remote.startExport(file, parts[0].out, run);
       // answer within ~25 s either way: past that some clients give up on the call
       await keepAlive(extra, "Exporting", Promise.race([j.promise, sleep(25_000)]));
       return exportReply(j);
@@ -835,6 +1011,25 @@ export function createMcpServer(ctx: ToolContext, profile: ToolProfile = "full")
     guard(async ({ path, level, seconds, height }, extra) => {
       const file = ws.plan(path);
       const r = await job(file, await load(file), { op: "airflow", level, seconds, height }, extra, "Simulating airflow");
+      if (!r.ok) return fail(r.summary);
+      return ok(...(await images(r)), text(r.text!));
+    }),
+  );
+
+  tool(
+    "nav_check",
+    {
+      title: "Navigation check (walkability, wheelchair access)",
+      description:
+        "Bakes a real Recast navmesh from the building's collision geometry — walls, floors, stairs as ramps, furniture as obstacles, doors open, lifts as links between their landings — for a walking person (Ø0.5 m, steps ≤ 20 cm) and a wheelchair user (Ø0.7 m, steps ≤ 2.5 cm, slopes ≤ 6°), " +
+        "then finds the walking path from the entrance to every room. Reports rooms that cannot be reached and why (a door too narrow, stairs only, the furniture in the way by id, a step), walking distances, doors too narrow for a wheelchair, lift landings with no room to stand, and a plan image of the walkable area per floor. " +
+        "It is the same navmesh Unity bakes from export_model engine 'unity' with the Architecturer package.",
+      inputSchema: { path: PathArg },
+      annotations: READ,
+    },
+    guard(async ({ path }, extra) => {
+      const file = ws.plan(path);
+      const r = await job(file, await load(file), { op: "nav" }, extra, "Baking the navmesh");
       if (!r.ok) return fail(r.summary);
       return ok(...(await images(r)), text(r.text!));
     }),

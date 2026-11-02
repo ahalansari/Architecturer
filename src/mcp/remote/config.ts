@@ -18,6 +18,8 @@ export interface RemoteConfig {
   textureSize: number;
   /** Login-form attempts per IP per 15 minutes. */
   loginAttempts: number;
+  /** Largest MCP request body (express size string): write_project of a big hospital plan is tens of MB. */
+  maxRequest: string;
 }
 
 const list = (v: string | undefined) =>
@@ -50,5 +52,6 @@ export function loadConfig(env = process.env, overrides: Partial<{ port: number;
     allowPrivateFetch: /^(1|true|yes)$/i.test(env.ARCHITECTURER_ALLOW_PRIVATE_FETCH ?? ""),
     textureSize: Number(env.ARCHITECTURER_VIEWER_TEXTURE_SIZE || 512),
     loginAttempts: 20,
+    maxRequest: env.ARCHITECTURER_MAX_REQUEST || "256mb",
   };
 }

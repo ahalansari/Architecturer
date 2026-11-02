@@ -15,6 +15,7 @@ import { z } from "zod";
 import { Id, Mat } from "../schema/common.js";
 import { ensureCCW, lineIntersect, m4, offsetPolygon, pointInPolygon, signedArea, v2, type Vec2, type Vec3 } from "../geometry/math.js";
 import type { MeshBuilder } from "../geometry/mesh.js";
+import { boxOf, PolygonIndex } from "../geometry/spatial.js";
 import type { Room } from "../schema/schema.js";
 import type { PlacedOpening } from "./openings.js";
 import { segDir, type FaceBand, type FaceZone, type WallSegment } from "./walls.js";
@@ -288,10 +289,12 @@ export function prepareFinishes(
 ): FinishPlan {
   const faces = wallFaces(segs);
   const polys = rooms.map((r) => ensureCCW(r.polygon as Vec2[]));
+  const index = new PolygonIndex(polys);
   for (const f of faces) {
     const q0 = v2.add(f.p0, v2.scale(f.n, PROBE));
     const taken: [number, number][] = [];
-    polys.forEach((poly, ri) => {
+    index.near(boxOf([q0, v2.add(q0, v2.scale(f.d, f.len))], 0.01)).forEach((ri) => {
+      const poly = polys[ri];
       for (const [t0, t1] of clipToPolygon(q0, f.d, f.len, poly))
         for (const [a, b] of subtract(t0, t1, taken)) {
           f.zones.push({ t0: a, t1: b, room: ri });

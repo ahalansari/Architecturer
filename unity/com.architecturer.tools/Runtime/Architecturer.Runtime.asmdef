@@ -1,6 +1,6 @@
 {
   "name": "Architecturer.Runtime",
   "rootNamespace": "Architecturer",
-  "references": [],
+  "references": ["Unity.AI.Navigation"],
   "autoReferenced": true
 }

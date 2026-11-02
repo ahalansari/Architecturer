@@ -129,6 +129,13 @@ const FURNITURE_ALLOWANCE: Record<string, number> = {
   towel_rail: 25, towel_hook_set: 6, toilet_roll_holder: 4, bath_mat: 6, soap_dispenser: 4, shower_curtain: 6, washing_machine: 160, fridge: 220,
   stove: 150, dishwasher: 180, radiator: 60, fireplace: 600, outdoor_sofa: 280, outdoor_table: 90, garden_chair: 30, sun_lounger: 70, parasol: 45,
   planter: 25, bbq: 120, hot_tub: 1800, outdoor_lounge: 950, stone_table: 220, water_wall: 1400, trash_bin: 10, bedding: 45, box: 30,
+  // medical equipment: indicative budget allowances only (real prices come from vendor quotations; imaging
+  // prices vary several-fold with the model, and exclude shielding, installation, service contracts)
+  hospital_bed: 1500, patient_monitor: 2200, iv_stand: 45, overbed_table: 110, bedside_cabinet: 220, bedhead_unit: 900, privacy_curtain: 120,
+  patient_recliner: 900, wheelchair: 110, stretcher: 1100, patient_lift: 1300, examination_table: 450, medical_cart: 650, defibrillator: 900,
+  scrub_sink: 1600, medicine_cabinet: 650, exam_lamp: 350, dental_chair: 6500, operating_table: 14000, surgical_light: 11000, medical_pendant: 8000,
+  anesthesia_machine: 16000, ventilator: 9000, infant_incubator: 7000, dialysis_machine: 6500, ct_scanner: 200000, mri_scanner: 380000,
+  xray_machine: 35000, ultrasound_machine: 11000, lab_bench: 1400, fume_hood: 4500, biosafety_cabinet: 5500, autoclave: 9000,
 };
 /** Sanitary ware modelled as furniture: priced under plumbing, not furniture. */
 const SANITARY: Record<string, string> = { toilet: "wc", bathroom_sink: "basin", bathtub: "bath", freestanding_bathtub: "bath", shower: "shower", sink_counter: "sink" };

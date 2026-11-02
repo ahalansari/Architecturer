@@ -1,7 +1,7 @@
 {
   "name": "Architecturer.Editor",
   "rootNamespace": "Architecturer.Editor",
-  "references": ["Architecturer.Runtime"],
+  "references": ["Architecturer.Runtime", "Unity.AI.Navigation"],
   "includePlatforms": ["Editor"],
   "autoReferenced": true
 }

@@ -69,7 +69,7 @@ function zRange(r: ResolvedRun, p: Placed): [number, number] {
 }
 
 const SEATS = new Set(["chair", "office_chair", "bar_stool", "counter_stool", "armchair", "bench", "garden_chair", "stool"]);
-const FLAT = new Set(["rug", "door_mat", "ceiling_light"]);
+const FLAT = new Set(["rug", "door_mat", "ceiling_light", "surgical_light", "medical_pendant", "privacy_curtain"]);
 
 /** Minimum clear depth in front of a run, by type. */
 function clearance(r: ResolvedRun): number {

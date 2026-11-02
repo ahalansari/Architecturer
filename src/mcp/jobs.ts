@@ -13,6 +13,7 @@ import type { ContractOptions } from "../contracts/contract.js";
 import type { CostScope } from "../cost/estimate.js";
 import type { LightingMode } from "../render/raster.js";
 import { renderView, type ViewOptions } from "../render/view.js";
+import { condense, massing, scopeProject, unscopeMessage } from "../scale.js";
 
 type Json = Record<string, any>;
 
@@ -20,16 +21,23 @@ interface Base {
   project: Json;
   /** Relative model paths in the plan resolve against this folder (the plan file's). */
   baseDir: string;
+  /** Work on part of a big plan: some levels (with the levels next to them unless neighbours is false) and/or its massing. */
+  scope?: JobScope;
+}
+export interface JobScope {
+  levels?: string[];
+  neighbours?: boolean;
+  detail?: "full" | "massing";
 }
 export type JobRequest =
   | (Base & { op: "validate" })
-  | (Base & { op: "render_plan"; level?: string; sheet?: PlanSheet })
+  | (Base & { op: "render_plan"; level?: string; sheet?: PlanSheet; region?: [number, number, number, number] })
   | (Base & { op: "render_view"; view: ViewOptions; modes: LightingMode[] })
   | (Base & { op: "export"; out: string; opts: ExportOptions })
   | (Base & { op: "cost"; output?: string; lines: boolean; scope?: CostScope })
   // for the live viewer
   | (Base & { op: "info" })
-  | (Base & { op: "plan_svg"; level?: string; sheet?: PlanSheet })
+  | (Base & { op: "plan_svg"; level?: string; sheet?: PlanSheet; region?: [number, number, number, number] })
   | (Base & { op: "glb"; opts: ExportOptions })
   | (Base & { op: "bill"; format: "html" | "csv"; scope?: CostScope })
   // works contract (Word and/or HTML) for a trade package
@@ -43,7 +51,9 @@ export type JobRequest =
   // the water network for the viewer's flow animation
   | (Base & { op: "water_net" })
   // basement pump pits: design + level simulation (report and one chart per pit)
-  | (Base & { op: "pumppit"; level?: string; id?: string });
+  | (Base & { op: "pumppit"; level?: string; id?: string })
+  // walkability: a Recast navmesh for a person and a wheelchair user, paths from the entrance to every room
+  | (Base & { op: "nav" });
 
 export interface JobResult {
   /** False when the plan has errors and nothing could be rendered / exported. */
@@ -59,12 +69,22 @@ export interface JobResult {
   data?: unknown;
 }
 
-export function summary(c: Compiled): string {
+/** Most errors / warnings listed one by one; the rest are folded by kind (big plans can have thousands). */
+const LIST_MAX = 60;
+
+export function summary(c: Compiled, scoped?: { levelMap: number[]; levels: string[]; detail?: string }): string {
   const lines: string[] = [];
-  lines.push(c.ok ? "Plan is valid." : `Plan has ${c.errors.length} error(s).`);
-  for (const e of c.errors) lines.push(`ERROR: ${e}`);
-  for (const w of c.warnings) lines.push(`warning: ${w}`);
-  for (const n of c.notes ?? []) lines.push(`note: ${n}`);
+  const fix = (m: string) => (scoped ? unscopeMessage(m, scoped.levelMap) : m);
+  // with a level scope, messages about the neighbouring (context) levels are left out
+  const others = scoped ? new Set((c.project?.levels ?? []).map((l) => l.id).filter((id) => !scoped.levels.includes(id))) : new Set<string>();
+  const mine = (m: string) => ![...others].some((id) => m.startsWith(`level '${id}'`));
+  const errors = c.errors.map(fix);
+  const warnings = c.warnings.filter(mine).map(fix);
+  const scopeNote = scoped ? `${scoped.detail === "massing" ? "Massing model (no fit-out). " : ""}${scoped.levels.length ? `Checked level(s) ${scoped.levels.join(", ")} only` : "Checked the whole plan"}` : "";
+  lines.push((c.ok ? "Plan is valid." : `Plan has ${errors.length} error(s).`) + (scopeNote ? ` (${scopeNote}.)` : ""));
+  for (const e of condense(errors, LIST_MAX, "errors")) lines.push(e.startsWith(" ") || e.startsWith("…") ? e : `ERROR: ${e}`);
+  for (const w of condense(warnings, LIST_MAX, "warnings")) lines.push(w.startsWith(" ") || w.startsWith("…") ? w : `warning: ${w}`);
+  for (const n of condense(c.notes ?? [], LIST_MAX, "notes")) lines.push(n.startsWith(" ") || n.startsWith("…") ? n : `note: ${n}`);
   if (c.root) lines.push(`${c.stats.triangles} triangles, ${c.stats.nodes} nodes, ${c.stats.materials} materials.`);
   if (c.credits.length) {
     const lic = new Map<string, number>();
@@ -80,6 +100,9 @@ export function summary(c: Compiled): string {
     );
   return lines.join("\n");
 }
+
+/** Plan images past this are re-rendered smaller (chat clients refuse images over ~5 MB). */
+const PLAN_PNG_MAX = 4_500_000;
 
 /** Write via a temp file so a half-written export is never served. */
 async function writeAtomic(path: string, data: Uint8Array | string) {
@@ -106,8 +129,19 @@ function compileCached(project: Json, baseDir: string): Promise<Compiled> {
 }
 
 export async function runJob(req: JobRequest): Promise<JobResult> {
-  const c = await compileCached(req.project, req.baseDir);
-  const sum = summary(c);
+  let project = req.project;
+  let scoped: Parameters<typeof summary>[1];
+  if (req.scope?.detail === "massing") {
+    project = massing(project);
+    scoped = { levelMap: project.levels.map((_: unknown, i: number) => i), levels: [], detail: "massing" };
+  }
+  if (req.scope?.levels?.length) {
+    const s = scopeProject(project, req.scope.levels, req.scope.neighbours ?? true);
+    project = s.project;
+    scoped = { levelMap: s.levelMap, levels: s.levels, detail: req.scope.detail };
+  }
+  const c = await compileCached(project, req.baseDir);
+  const sum = summary(c, scoped);
   if (req.op === "validate") return { ok: c.ok, summary: sum };
   if (req.op === "info")
     return {
@@ -126,7 +160,7 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
   if (!c.root) return { ok: false, summary: sum };
   switch (req.op) {
     case "render_plan":
-      return { ok: true, summary: sum, images: [await svgToPng(renderPlanSVG(c, req.level, { sheet: req.sheet }))] };
+      return { ok: true, summary: sum, images: [await svgToPng(renderPlanSVG(c, req.level, { sheet: req.sheet, region: req.region }), PLAN_PNG_MAX)] };
     case "render_view":
     {
       const images: Uint8Array[] = [];
@@ -145,7 +179,7 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
       } else await writeAtomic(req.out, await exportGLB(c, req.opts));
       return { ok: true, summary: sum };
     case "plan_svg":
-      return { ok: true, summary: sum, text: renderPlanSVG(c, req.level, { sheet: req.sheet }) };
+      return { ok: true, summary: sum, text: renderPlanSVG(c, req.level, { sheet: req.sheet, region: req.region }) };
     case "glb":
       return { ok: true, summary: sum, bytes: await exportGLB(c, req.opts) };
     case "bill": {
@@ -184,6 +218,12 @@ export async function runJob(req: JobRequest): Promise<JobResult> {
           heaters: w.heaters.map((h) => ({ id: h.id, level: h.level, at: h.at, litres: h.litres, z: z(h.level) + 1.6 })),
         },
       };
+    }
+    case "nav": {
+      const { navStudy, navReport, navSVG } = await import("../sim/nav.js");
+      if (!c.root) return { ok: false, summary: sum };
+      const s = await navStudy(c);
+      return { ok: true, summary: sum, text: navReport(s, c.levels.map((l) => l.name)), images: [await svgToPng(navSVG(c, s))] };
     }
     case "pumppit": {
       const { designPumpPits, studyPit, pumpPitReport, pumpPitSVG } = await import("../elements/pumppit.js");

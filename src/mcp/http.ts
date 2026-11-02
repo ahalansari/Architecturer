@@ -206,7 +206,7 @@ export async function startRemoteServer(cfg: RemoteConfig): Promise<RemoteServer
     const path = profile === "core" ? "/mcp/core" : "/mcp";
     const bearer = requireBearerAuth({ verifier: provider, resourceMetadataUrl: at(`/.well-known/oauth-protected-resource${profile === "core" ? "/mcp/core" : ""}`) });
     app.options(path, mcpCors);
-    app.post(path, mcpCors, bearer, express.json({ limit: "25mb" }), async (req, res) => {
+    app.post(path, mcpCors, bearer, express.json({ limit: cfg.maxRequest || "256mb" }), async (req, res) => {
       // stateless: a fresh server + transport per request (no sessions to lose on restart)
       const server = createMcpServer(ctx, profile);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });

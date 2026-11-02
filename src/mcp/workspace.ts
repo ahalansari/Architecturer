@@ -17,6 +17,11 @@ export interface ProjectInfo {
   modified: Date;
 }
 
+/** Plan headers by file (path → mtime/size and what list() shows), so listing a folder of 100 MB plans stays fast. */
+const listed = new Map<string, { mtime: number; size: number; info?: { title?: string; levels: number } }>();
+/** Plans past this size are not listed (parsing them only to show a name would take seconds each). */
+const LIST_MAX_BYTES = 1e9;
+
 export class Workspace {
   constructor(
     readonly root: string,
@@ -79,10 +84,15 @@ export class Workspace {
         else if (e.isFile() && e.name.endsWith(".json")) {
           try {
             const st = await stat(p);
-            if (st.size > 20e6) continue;
-            const j = JSON.parse(await readFile(p, "utf8"));
-            if (!j || !Array.isArray(j.levels)) continue;
-            out.push({ name: this.remote ? this.nameOf(p) : relative(this.root, p).replace(/\.json$/i, ""), path: p, title: typeof j.name === "string" ? j.name : undefined, levels: j.levels.length, modified: st.mtime });
+            if (st.size > LIST_MAX_BYTES) continue;
+            let hit = listed.get(p);
+            if (!hit || hit.mtime !== st.mtimeMs || hit.size !== st.size) {
+              const j = JSON.parse(await readFile(p, "utf8"));
+              hit = { mtime: st.mtimeMs, size: st.size, info: j && Array.isArray(j.levels) ? { title: typeof j.name === "string" ? j.name : undefined, levels: j.levels.length } : undefined };
+              listed.set(p, hit);
+            }
+            if (!hit.info) continue;
+            out.push({ name: this.remote ? this.nameOf(p) : relative(this.root, p).replace(/\.json$/i, ""), path: p, title: hit.info.title, levels: hit.info.levels, modified: st.mtime });
           } catch {
             // not a plan
           }

@@ -13,6 +13,7 @@
  */
 import { z } from "zod";
 import { MeshBuilder } from "../geometry/mesh.js";
+import { boxOf } from "../geometry/spatial.js";
 import { pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2, type Vec3 } from "../geometry/math.js";
 import type { SceneNode } from "../geometry/scene.js";
 import { Id, Point } from "../schema/common.js";
@@ -206,9 +207,8 @@ export function designPumpPits(project: { levels: LevelIn[] }, infos: InfoIn[], 
   const ground = Math.max(0, Math.min(...infos.filter((l) => l.elevation >= -0.5).map((l) => l.elevation), 0));
   // the building's extent, for a default discharge point just outside it
   const allPts = infos.flatMap((l) => l.segments.flatMap((s) => [s.a, s.b]));
-  const box = allPts.length
-    ? { x0: Math.min(...allPts.map((p) => p[0])), x1: Math.max(...allPts.map((p) => p[0])), y0: Math.min(...allPts.map((p) => p[1])), y1: Math.max(...allPts.map((p) => p[1])) }
-    : { x0: -5, x1: 5, y0: -5, y1: 5 };
+  // (a loop, not Math.min(...pts): a campus has more wall ends than the call stack takes arguments)
+  const box = allPts.length ? boxOf(allPts) : { x0: -5, x1: 5, y0: -5, y1: 5 };
   const lvName = (li: number) => project.levels[li]?.name ?? infos[li]?.name ?? project.levels[li]?.id;
 
   for (let li = 0; li < infos.length; li++) {

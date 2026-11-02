@@ -19,12 +19,14 @@ import { z } from "zod";
 import { Direction, Id, Point } from "../schema/common.js";
 import { m4, pointInPolygon, pointSegment, polygonArea, polygonCentroid, signedArea, v2, type Vec2 } from "../geometry/math.js";
 import { MeshBuilder } from "../geometry/mesh.js";
+import { boxOf, GridIndex, PolygonIndex, segmentsNear } from "../geometry/spatial.js";
 import type { SceneNode } from "../geometry/scene.js";
 import type { Level, Room } from "../schema/schema.js";
 import type { ResolvedRun } from "./casework/layout.js";
 import { legPoint } from "./casework/layout.js";
 import type { CeilingLayout } from "./finishes.js";
 import { FURNITURE } from "./furniture.js";
+import { MEDICAL } from "./medical.js";
 import type { PlacedOpening } from "./openings.js";
 import { segDir, type WallSegment } from "./walls.js";
 
@@ -199,14 +201,14 @@ export const KIND_RE: [RoomKind, RegExp][] = [
   ["laundry", /laundry|utility/i],
   ["kitchen", /kitchen|pantry|kitchenette/i],
   ["closet", /closet|wardrobe|dressing|store|storage/i],
-  ["bedroom", /bed|master|guest room|nursery|kids/i],
+  ["bedroom", /bed|master|guest room|nursery|kids|\bward\b|patient room|\bicu\b|recovery/i],
   ["study", /study|office|library|\bden\b|work/i],
   ["living", /living|lounge|family|dining|sitting|majlis|diwaniya|salon|reception/i],
   ["hall", /hall|entry|entrance|corridor|foyer|lobby|landing|passage|vestibule/i],
   ["garage", /garage|carport/i],
 ];
 
-const BEDS = new Set(["bed", "platform_bed", "canopy_bed", "bunk_bed", "kids_bed"]);
+const BEDS = new Set(["bed", "platform_bed", "canopy_bed", "bunk_bed", "kids_bed", ...MEDICAL.beds]);
 const PLUMB_FURN: Record<string, { kind: FixtureKind; cold: boolean; hot: boolean; drain: number }> = {
   toilet: { kind: "wc", cold: true, hot: false, drain: 100 },
   bathroom_sink: { kind: "basin", cold: true, hot: true, drain: 40 },
@@ -216,6 +218,7 @@ const PLUMB_FURN: Record<string, { kind: FixtureKind; cold: boolean; hot: boolea
   sink_counter: { kind: "sink", cold: true, hot: true, drain: 50 },
   dishwasher: { kind: "dishwasher", cold: true, hot: false, drain: 40 },
   washing_machine: { kind: "washing_machine", cold: true, hot: false, drain: 50 },
+  scrub_sink: { kind: "basin", cold: true, hot: true, drain: 50 },
 };
 const PLUMB_CASE: Record<string, { kind: FixtureKind; cold: boolean; hot: boolean; drain: number }> = {
   sink: { kind: "sink", cold: true, hot: true, drain: 50 },
@@ -260,7 +263,8 @@ interface Furn {
 /** Nearest wall face to p: the face point, inward normal (toward p) and distance from the centreline. */
 function nearestFace(p: Vec2, segs: WallSegment[], maxDist = 0.6): { seg: WallSegment; face: Vec2; n: Vec2; u: number; dist: number } | null {
   let best: { seg: WallSegment; t: number; dist: number } | null = null;
-  for (const s of segs) {
+  const reach = segs.reduce((m, s) => Math.max(m, s.thickness / 2), 0) + maxDist;
+  for (const s of segmentsNear(segs, p, reach)) {
     const r = pointSegment(p, s.a, s.b);
     if (r.dist < (best?.dist ?? Infinity)) best = { seg: s, t: r.t, dist: r.dist };
   }
@@ -351,7 +355,8 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
   const set = lv.services;
   const rooms = lv.rooms;
   const polys = rooms.map((r) => ccw(r.polygon as Vec2[]));
-  const roomAt = (p: Vec2) => polys.findIndex((pg) => pointInPolygon(p, pg));
+  const roomIdx = new PolygonIndex(polys);
+  const roomAt = (p: Vec2) => roomIdx.at(p);
   const keys = rooms.map(slug);
   const kinds = rooms.map(() => new Set<RoomKind>());
   const segs = ctx.segments;
@@ -396,13 +401,17 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
 
   // ---- wall stretches per room (wall faces, minus openings and corners) ----
   const stretches: Stretch[] = [];
+  const segIdx = new GridIndex(segs.map((s) => boxOf([s.a, s.b], s.thickness / 2 + 0.05)));
+  const opsOf = new Map<WallSegment, PlacedOpening[]>();
+  for (const o of ctx.openings) opsOf.get(o.seg)?.push(o) ?? opsOf.set(o.seg, [o]);
   polys.forEach((pg, ri) => {
     for (let i = 0; i < pg.length; i++) {
       const a = pg[i], b = pg[(i + 1) % pg.length];
       const len = v2.dist(a, b);
       if (len < 0.3) continue;
       const d = v2.scale(v2.sub(b, a), 1 / len), n = v2.perp(d);
-      for (const s of segs) {
+      for (const si of segIdx.query(boxOf([a, b]))) {
+        const s = segs[si];
         const sd = v2.sub(s.b, s.a), sl = v2.len(sd);
         if (sl < 1e-3 || Math.abs(v2.cross(v2.scale(sd, 1 / sl), d)) > 0.02) continue;
         if (Math.abs(v2.cross(d, v2.sub(s.a, a))) > s.thickness / 2 + 0.03) continue;
@@ -410,8 +419,7 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
         const t1 = Math.min(len, Math.max(v2.dot(v2.sub(s.a, a), d), v2.dot(v2.sub(s.b, a), d)));
         if (t1 - t0 < 0.2) continue;
         let iv: [number, number][] = [[t0 + s.thickness / 2, t1 - s.thickness / 2]];
-        for (const o of ctx.openings) {
-          if (o.seg !== s) continue;
+        for (const o of opsOf.get(s) ?? []) {
           const mid = v2.add(o.seg.a, v2.scale(segDir(o.seg), o.u));
           const tm = v2.dot(v2.sub(mid, a), d);
           iv = iv.flatMap(([x0, x1]) => [[x0, Math.min(x1, tm - o.width / 2)], [Math.max(x0, tm + o.width / 2), x1]] as [number, number][]);
@@ -473,15 +481,19 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
   };
 
   /** Is a wall point free (not in another opening, not behind tall casework or tall furniture)? */
-  const tallBlock = [
+  const tallBlock = new PolygonIndex([
     ...caseMods.filter((m) => m.p.row === "tall" || m.p.kind === "wardrobe").map((m) => m.poly),
-    ...furn.filter((f) => f.h > 1.2 && f.elevation < 0.5 && !["plant_large", "floor_lamp", "coat_rack", "mirror_full_length", "curtain", "tree"].includes(f.type)).map((f) => f.poly),
-  ];
-  const baseBlock = caseMods.filter((m) => m.p.row === "base").map((m) => m.poly);
-  const behind = (p: Vec2, n: Vec2, polysB: Vec2[][]) => {
-    const q = v2.add(p, v2.scale(n, 0.08));
-    return polysB.some((pg) => pointInPolygon(q, pg));
-  };
+    ...furn.filter((f) => f.h > 1.2 && f.elevation < 0.5 && !["plant_large", "floor_lamp", "coat_rack", "mirror_full_length", "curtain", "tree", ...MEDICAL.slim].includes(f.type)).map((f) => f.poly),
+  ]);
+  const baseBlock = new PolygonIndex(caseMods.filter((m) => m.p.row === "base").map((m) => m.poly));
+  const behind = (p: Vec2, n: Vec2, block: PolygonIndex) => block.at(v2.add(p, v2.scale(n, 0.08))) >= 0;
+  // per-room lookups (a hospital floor has thousands of rooms and beds)
+  const furnIdx = new PolygonIndex(furn.map((f) => f.poly));
+  const highFurn = new PolygonIndex(furn.filter((f) => f.h > 0.4).map((f) => f.poly));
+  const caseIdx = new PolygonIndex(caseMods.map((m) => m.poly));
+  const nightstands = furn.filter((g) => g.type === "nightstand");
+  const stretchesIn = new Map<number, Stretch[]>();
+  for (const st of stretches) stretchesIn.get(st.room)?.push(st) ?? stretchesIn.set(st.room, [st]);
   const onSeg = (s: WallSegment, u: number, margin: number) => {
     const len = v2.dist(s.a, s.b);
     if (u < s.thickness / 2 + margin * 0.5 || u > len - s.thickness / 2 - margin * 0.5) return false;
@@ -529,7 +541,7 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
       const ri = door.side > 0 ? door.ds.left : door.ds.right;
       const edge = v2.add(door.ds.mid, v2.scale(door.ds.d, order[0] * (o.width / 2 + 0.15)));
       let best: { at: Vec2; n: Vec2; d: number } | null = null;
-      for (const st of stretches.filter((x) => x.room === ri)) {
+      for (const st of stretchesIn.get(ri) ?? []) {
         const t = Math.max(0.08, Math.min(st.len - 0.08, v2.dot(v2.sub(edge, st.p), st.d)));
         const at = v2.add(st.p, v2.scale(st.d, t));
         const d = v2.dist(at, edge);
@@ -641,7 +653,7 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
       if (BEDS.has(f.type)) {
         const nf = wallBehind(f);
         if (!nf) continue;
-        const stands = furn.filter((g) => g.type === "nightstand" && v2.dist(g.c, f.c) < f.w / 2 + 1.0);
+        const stands = nightstands.filter((g) => v2.dist(g.c, f.c) < f.w / 2 + 1.0);
         const sides = stands.length ? stands.map((g) => v2.dot(v2.sub(g.c, f.c), v2.rotate([1, 0], f.rot)) > 0 ? 1 : -1) : f.w >= 1.3 ? [1, -1] : [1];
         for (const sgn of new Set(sides)) {
           // over the nightstand on that side (socket toward the bed, switch outboard, clear of the lamp), else beside the bed
@@ -785,7 +797,7 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
         for (let x = Math.min(...xs) + 0.3; x < Math.max(...xs) - 0.2; x += 0.15)
           for (let y = Math.min(...ys) + 0.3; y < Math.max(...ys) - 0.2; y += 0.15) {
             const p: Vec2 = [x, y];
-            if (!pointInPolygon(p, pg) || furn.some((f) => pointInPolygon(p, f.poly)) || caseMods.some((m) => pointInPolygon(p, m.poly))) continue;
+            if (!pointInPolygon(p, pg) || furnIdx.at(p) >= 0 || caseIdx.at(p) >= 0) continue;
             if (pg.some((q, i) => pointSegment(p, q, pg[(i + 1) % pg.length]).dist < 0.35)) continue;
             const d = v2.dist(p, c);
             if (!best || d < best.d) best = { p, d };
@@ -958,6 +970,8 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
 
     // ---- general sockets round the walls to a per-room target ----
     const general = new Set<ElectricalType>(["double_socket", "socket", "usb_socket"]);
+    const elecIn = new Map<number, ElecPoint[]>();
+    for (const e of elec) elecIn.get(e.room)?.push(e) ?? elecIn.set(e.room, [e]);
     rooms.forEach((r, ri) => {
       const k = kinds[ri];
       if (k.has("bath")) return;
@@ -965,19 +979,20 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
       const perim = polys[ri].reduce((a, p, i) => a + v2.dist(p, polys[ri][(i + 1) % polys[ri].length]), 0);
       const target = k.has("outdoor") ? 1 : k.has("living") ? Math.max(3, Math.round(perim / 4.5)) : k.has("bedroom") ? 4 : k.has("study") ? 3 : k.has("hall") ? (area > 3 ? (perim > 10 ? 2 : 1) : 0)
         : k.has("kitchen") ? 1 : k.has("laundry") ? 1 : k.has("garage") ? 2 : k.has("closet") ? (area > 6 ? 1 : 0) : 2;
-      const have = () => elec.filter((e) => e.room === ri && general.has(e.type) && e.label !== "worktop").length;
+      const mine = elecIn.get(ri) ?? [];
+      const have = () => mine.filter((e) => general.has(e.type) && e.label !== "worktop").length;
       const cands: { at: Vec2; n: Vec2; pen: number }[] = [];
-      for (const st of stretches.filter((s) => s.room === ri)) {
+      for (const st of stretchesIn.get(ri) ?? []) {
         for (let t = 0.3; t <= st.len - 0.3 + 1e-6; t += 0.25) {
           const at = v2.add(st.p, v2.scale(st.d, t));
           if (behind(at, st.n, tallBlock) || behind(at, st.n, baseBlock)) continue;
-          const pen = furn.some((f) => f.h > 0.4 && pointInPolygon(v2.add(at, v2.scale(st.n, 0.12)), f.poly)) ? 1.5 : 0;
+          const pen = highFurn.at(v2.add(at, v2.scale(st.n, 0.12))) >= 0 ? 1.5 : 0;
           cands.push({ at, n: st.n, pen });
         }
       }
       void r;
       while (have() < target && cands.length) {
-        const existing = elec.filter((e) => e.room === ri && e.n && e.type !== "db").map((e) => e.at);
+        const existing = mine.filter((e) => e.n && e.type !== "db").map((e) => e.at);
         let best = cands[0], bestScore = -Infinity;
         for (const c of cands) {
           const dmin = existing.length ? Math.min(...existing.map((q) => v2.dist(q, c.at))) : 5;
@@ -985,7 +1000,8 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
           if (score > bestScore) (bestScore = score), (best = c);
         }
         if (bestScore < 0.8) break;
-        addE({ type: "double_socket", at: best.at, n: best.n, height: 0.3, room: ri }, "sk");
+        const added = addE({ type: "double_socket", at: best.at, n: best.n, height: 0.3, room: ri }, "sk");
+        if (added) mine.push(added);
         cands.splice(cands.indexOf(best), 1);
       }
     });
@@ -1042,7 +1058,7 @@ export function buildServices(lv: Level, ctx: ServicesContext): { layout: Servic
   // power: general sockets by room
   const general = elec.filter((e) => ["double_socket", "socket", "usb_socket"].includes(e.type) && e.label !== "worktop");
   const byRoom = new Map<number, ElecPoint[]>();
-  for (const e of general) byRoom.set(e.room, [...(byRoom.get(e.room) ?? []), e]);
+  for (const e of general) byRoom.get(e.room)?.push(e) ?? byRoom.set(e.room, [e]);
   assign("P", "power", 20, "sockets", [...byRoom].map(([room, es]) => ({ room, pts: es.length, tag: (id: string) => es.forEach((e) => (e.circuit = id)) })), 8);
   // kitchen worktop + fridge + hood
   const kit = elec.filter((e) => e.label === "worktop" || (e.type === "spur" && (e.label === "fridge" || e.label === "hood")));

@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
-import type { LevelInfo } from "../build.js";
+import { siteGroundZ, type LevelInfo } from "../build.js";
 import { segDir } from "../elements/walls.js";
 import { FURNITURE } from "../elements/furniture.js";
 import { terraceGuards } from "../elements/terraces.js";
 import { shapeFootprint } from "../elements/shapes.js";
 import { caseworkPlan, resolveLevelCasework } from "../elements/casework.js";
 import { deg2rad, pointInPolygon, pointSegment, polygonArea, polygonCentroid, v2, type Vec2 } from "../geometry/math.js";
+import { boxOf, GridIndex } from "../geometry/spatial.js";
 import type { Compiled } from "../pipeline.js";
 import { directionToDegrees, type Stair } from "../schema/schema.js";
 import { AC, ductSVG, roofUnitSVG, shaftSVG, splitSVG, terminalSVG, thermostatSVG } from "./plan-hvac.js";
@@ -36,7 +37,12 @@ export interface PlanOptions {
    *   heaters, main stop valve, fixture schedule.
    */
   sheet?: PlanSheet;
+  /** Draw only this window of the level, [minX, minY, maxX, maxY] in meters (close-ups of a huge floor). */
+  region?: [number, number, number, number];
 }
+
+/** Longest side of an automatically scaled sheet, px: a 600 m hospital floor stays a readable overview. */
+export const PLAN_MAX_SIDE = 4800;
 
 export const PLAN_SHEETS = ["plan", "lighting", "finishes", "rcp", "false_ceiling", "electrical", "plumbing", "hvac", "landscape"] as const;
 export type PlanSheet = (typeof PLAN_SHEETS)[number];
@@ -185,7 +191,20 @@ function boxHitsPoly(b: Box, poly: Vec2[]): boolean {
 
 function placeLabels(reqs: LabelReq[], walls: Vec2[][], W: number, H: number): string[] {
   const out: string[] = [];
-  const placed: Box[] = [];
+  // placed labels in a coarse grid, walls in a static one: thousands of labels on a big floor stay fast
+  const CELL = 96;
+  const placed = new Map<number, Box[]>();
+  const cellsOf = (b: Box, f: (k: number) => void) => {
+    for (let i = Math.floor(b.x0 / CELL); i <= Math.floor(b.x1 / CELL); i++) for (let j = Math.floor(b.y0 / CELL); j <= Math.floor(b.y1 / CELL); j++) f(i * 100003 + j);
+  };
+  const wallIdx = new GridIndex(walls.map((w) => boxOf(w)));
+  // soft obstacles are shared lists (all furniture on the floor): index each list once
+  const softIdx = new Map<Box[], GridIndex>();
+  const softNear = (soft: Box[], b: Box) => {
+    let g = softIdx.get(soft);
+    if (!g) softIdx.set(soft, (g = new GridIndex(soft)));
+    return g.query(b).map((k) => soft[k]);
+  };
   const order = reqs.map((r, i) => ({ r, i })).sort((a, b) => a.r.prio - b.r.prio || a.i - b.i);
   for (const { r } of order) {
     const lh = r.lines.map((l) => l.size * 1.15);
@@ -197,21 +216,25 @@ function placeLabels(reqs: LabelReq[], walls: Vec2[][], W: number, H: number): s
       let cost = c.cost;
       if (box.x0 < 2 || box.y0 < 2 || box.x1 > W - 2 || box.y1 > H - 2) cost += 5000;
       let hit = 0;
-      for (const p of placed) hit += overlapArea(box, p);
+      const seen = new Set<Box>();
+      cellsOf(box, (k) => {
+        for (const p of placed.get(k) ?? []) if (!seen.has(p)) (seen.add(p), (hit += overlapArea(box, p)));
+      });
       if (hit > 0) {
         if (r.optional) continue;
         cost += 1000 + hit * 5;
       }
-      if (r.avoidWalls !== false && walls.some((w) => boxHitsPoly(box, w))) cost += 120;
+      if (r.avoidWalls !== false && wallIdx.query(box).some((k) => boxHitsPoly(box, walls[k]))) cost += 120;
       if (r.within) {
         const pts: Vec2[] = [[box.x0, box.y0], [box.x1, box.y0], [box.x1, box.y1], [box.x0, box.y1], [c.x, box.y0], [c.x, box.y1], [box.x0, c.y], [box.x1, c.y]];
         cost += pts.filter((p) => !pointInPolygon(p, r.within!)).length * 150;
       }
-      if (r.soft) for (const s of r.soft) cost += overlapArea(box, s) * (r.softWeight ?? 0.05);
+      if (r.soft) for (const s of softNear(r.soft, box)) cost += overlapArea(box, s) * (r.softWeight ?? 0.05);
       if (!best || cost < best.cost) best = { box, cost };
     }
     if (!best) continue;
-    placed.push(best.box);
+    const nb = best.box;
+    cellsOf(nb, (k) => placed.get(k)?.push(nb) ?? placed.set(k, [nb]));
     if (r.plate) {
       const b = best.box;
       out.push(`<rect x="${(b.x0 - 3).toFixed(1)}" y="${(b.y0 - 2).toFixed(1)}" width="${(b.x1 - b.x0 + 6).toFixed(1)}" height="${(b.y1 - b.y0 + 4).toFixed(1)}" rx="4" fill="${r.plate}" stroke="#00000022" stroke-width="0.6"/>`);
@@ -281,11 +304,19 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   // the pump pits' sewer connections (the plumbing sheet draws them)
   if (opts.sheet === "plumbing") for (const p of c.pumpPits ?? []) if (p.level === li && p.explicit) pts.push(p.main.discharge);
   if (!pts.length) pts.push([0, 0], [10, 10]);
-  let minX = Math.min(...pts.map((p) => p[0])), maxX = Math.max(...pts.map((p) => p[0]));
-  let minY = Math.min(...pts.map((p) => p[1])), maxY = Math.max(...pts.map((p) => p[1]));
+  if (opts.region) {
+    const [ax, ay, bx, by] = opts.region;
+    if (!(bx > ax && by > ay)) throw new Error(`region must be [minX, minY, maxX, maxY] with max > min (got [${opts.region.join(", ")}])`);
+    pts.length = 0;
+    pts.push([ax + 1, ay + 1], [bx - 1, by - 1]);
+  }
+  const bb = boxOf(pts);
+  let minX = bb.x0, maxX = bb.x1, minY = bb.y0, maxY = bb.y1;
   minX = Math.floor(minX - 1); minY = Math.floor(minY - 1); maxX = Math.ceil(maxX + 1); maxY = Math.ceil(maxY + 1);
   const span = Math.max(maxX - minX, maxY - minY);
-  const S = opts.scale ?? Math.max(20, Math.min(80, Math.round(1100 / span)));
+  // 20+ px/m keeps a house legible; past ~240 m that would be a gigapixel sheet, so big floors get an
+  // overview within PLAN_MAX_SIDE (use `region` for a readable close-up)
+  const S = opts.scale ?? Math.min(Math.max(20, Math.min(80, Math.round(1100 / span))), Math.max(0.5, Math.floor(((PLAN_MAX_SIDE - 100) / span) * 10) / 10));
   const pad = 50;
   const W0 = (maxX - minX) * S + pad * 2;
   const LEGEND_W = sheet === "plan" ? 0 : 260;
@@ -336,13 +367,14 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   const sheetTitle = { plan: "", lighting: " — lighting plan", finishes: " — finishes plan", rcp: " — reflected ceiling plan", false_ceiling: " — false ceiling plan", electrical: " — electrical layout", plumbing: " — plumbing layout", hvac: " — air conditioning layout", landscape: " — landscape and irrigation" }[sheet];
   out.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="#222">${esc(project.name)} — ${esc(info.name)}${sheetTitle} (z=${info.elevation.toFixed(2)} m)</text>`);
 
-  // grid with coordinates every meter (labels every `step` meters)
-  const step = span > 40 ? 5 : span > 20 ? 2 : 1;
-  for (let x = minX; x <= maxX; x++) {
+  // grid with coordinates every meter (labels every `step` meters); coarser on overview scales of big floors
+  const gridM = [1, 2, 5, 10, 20, 50, 100, 200, 500].find((g) => g * S >= 8) ?? 1000;
+  const step = gridM === 1 ? (span > 40 ? 5 : span > 20 ? 2 : 1) : [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find((g) => g >= gridM * 5 && g * S >= 40) ?? gridM * 5;
+  for (let x = Math.ceil(minX / gridM) * gridM; x <= maxX; x += gridM) {
     out.push(`<line x1="${X(x)}" y1="${Y(minY)}" x2="${X(x)}" y2="${Y(maxY)}" stroke="${x % step === 0 ? "#dcdcdc" : "#f0f0f0"}" stroke-width="1"/>`);
     if (x % step === 0) out.push(`<text x="${X(x)}" y="${Y(minY) + 14}" font-size="10" fill="#888" text-anchor="middle">${x}</text>`);
   }
-  for (let y = minY; y <= maxY; y++) {
+  for (let y = Math.ceil(minY / gridM) * gridM; y <= maxY; y += gridM) {
     out.push(`<line x1="${X(minX)}" y1="${Y(y)}" x2="${X(maxX)}" y2="${Y(y)}" stroke="${y % step === 0 ? "#dcdcdc" : "#f0f0f0"}" stroke-width="1"/>`);
     if (y % step === 0) out.push(`<text x="${X(minX) - 6}" y="${Y(y) + 3}" font-size="10" fill="#888" text-anchor="end">${y}</text>`);
   }
@@ -355,7 +387,8 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   for (const s of lv.slabs) if (s.offset <= OVERHEAD) out.push(`<polygon points="${poly(s.polygon as Vec2[])}" fill="#eeeeee" stroke="#bbb" stroke-width="1"/>`);
 
   // terraces / balconies: warm deck fill under everything else
-  const terraceGuardLines = lv.terraces.map((t) => terraceGuards(t, info.segments, info.elevation, c.levels[0].elevation));
+  const ground = siteGroundZ(c.levels.map((l) => l.elevation));
+  const terraceGuardLines = lv.terraces.map((t) => terraceGuards(t, info.segments, info.elevation, info.elevation < ground - 0.5 ? info.elevation : ground));
   for (const t of lv.terraces) out.push(`<polygon points="${poly(t.polygon as Vec2[])}" fill="#efe6d6" stroke="#b5a184" stroke-width="1"/>`);
 
   // rooms
@@ -965,6 +998,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       const cc = polygonCentroid(g.polygon as Vec2[]);
       L.push({ lines: [{ text: g.surface === "turf" ? "artificial turf" : g.surface === "planting" ? "planting bed" : g.surface, size: fs - 2, color: "#3d5a2a", bold: true }, { text: `${Math.abs(polygonArea(g.polygon as Vec2[])).toFixed(1)} m²`, size: fs - 4, color: "#557" }], prio: 2, optional: true, cands: [{ x: X(cc[0]), y: Y(cc[1]), cost: 0 }] });
     }
+  const roomSoft = [...furnSoft, ...stairSoft, ...(bigFixtures ? fixtureSoft : []), ...svcSoft];
   [...lv.rooms, ...lv.terraces].forEach((r) => {
     const pg = r.polygon as Vec2[];
     const pgPx = pg.map(px);
@@ -991,7 +1025,7 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
       prio: 0,
       cands,
       within: pgPx,
-      soft: [...furnSoft, ...stairSoft, ...(bigFixtures ? fixtureSoft : []), ...svcSoft],
+      soft: roomSoft,
       softWeight: 0.08,
     });
   });
@@ -1383,13 +1417,21 @@ export function renderPlanSVG(c: Compiled, levelId?: string, opts: PlanOptions =
   return out.join("\n");
 }
 
-export async function svgToPng(svg: string): Promise<Buffer> {
+/** PNG of an SVG; with `maxBytes`, an image over that is rendered again at a smaller size until it fits. */
+export async function svgToPng(svg: string, maxBytes?: number): Promise<Buffer> {
   const { Resvg } = await import("@resvg/resvg-js");
   // macOS has Helvetica; the Linux image ships Liberation Sans (Arial / Helvetica metrics) and DejaVu Sans.
   // resvg's own system scan needs fontconfig, which a slim image lacks: name the font folders too.
   const sans = process.platform === "darwin" ? "Helvetica" : "Liberation Sans";
   const fontDirs = ["/usr/share/fonts", "/usr/local/share/fonts"].filter((d) => existsSync(d));
-  return Buffer.from(new Resvg(svg, { font: { loadSystemFonts: true, fontDirs, defaultFontFamily: sans, sansSerifFamily: sans } }).render().asPng());
+  const font = { loadSystemFonts: true, fontDirs, defaultFontFamily: sans, sansSerifFamily: sans };
+  let png = Buffer.from(new Resvg(svg, { font }).render().asPng());
+  const width = Number(/<svg[^>]*\swidth="([\d.]+)"/.exec(svg)?.[1]);
+  for (let k = 0.75; maxBytes && png.byteLength > maxBytes && width && k > 0.2; k -= 0.15) {
+    const w = Math.round(width * k * Math.sqrt(maxBytes / png.byteLength));
+    png = Buffer.from(new Resvg(svg, { font, fitTo: { mode: "width", value: w } }).render().asPng());
+  }
+  return png;
 }
 
 /** Plan fill of a garden surface (stronger on the landscape sheet). */

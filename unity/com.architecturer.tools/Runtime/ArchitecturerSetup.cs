@@ -20,8 +20,9 @@ namespace Architecturer
             public int meshColliders;
             public int convexColliders;
             public int staticObjects;
+            public int lightmapped;
             public override string ToString() =>
-                $"{meshColliders} mesh colliders, {convexColliders} box colliders, {staticObjects} static objects";
+                $"{meshColliders} mesh colliders, {convexColliders} box colliders, {staticObjects} static objects{(lightmapped > 0 ? $" ({lightmapped} lightmap static)" : "")}";
         }
 
         public static bool IsColliderNode(Transform t) =>

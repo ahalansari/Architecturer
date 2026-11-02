@@ -1,0 +1,1827 @@
+{
+ "name": "Hospital wing",
+ "description": "One-storey hospital wing, 40 × 22 m: operating theatre with scrub room, CT suite, four two-bed wards, ICU, nurse station, laboratory, consult room and dialysis around a 2.4 m corridor. Equipment is generic and indicative.",
+ "defaults": {
+  "wallThickness": 0.2,
+  "exteriorWallThickness": 0.3,
+  "wallMaterial": "paint_off_white",
+  "exteriorMaterial": "plaster_white"
+ },
+ "levels": [
+  {
+   "id": "ground",
+   "name": "Ground floor",
+   "height": 4.2,
+   "walls": [
+    {
+     "id": "ext",
+     "points": [
+      [
+       0,
+       0
+      ],
+      [
+       40,
+       0
+      ],
+      [
+       40,
+       22
+      ],
+      [
+       0,
+       22
+      ]
+     ],
+     "closed": true,
+     "thickness": 0.3
+    },
+    {
+     "id": "corr_s",
+     "points": [
+      [
+       0,
+       9.6
+      ],
+      [
+       40,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "corr_n",
+     "points": [
+      [
+       0,
+       12
+      ],
+      [
+       40,
+       12
+      ]
+     ]
+    },
+    {
+     "id": "ps1",
+     "points": [
+      [
+       7.5,
+       0
+      ],
+      [
+       7.5,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "ps2",
+     "points": [
+      [
+       10.5,
+       0
+      ],
+      [
+       10.5,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "ps3",
+     "points": [
+      [
+       17.5,
+       0
+      ],
+      [
+       17.5,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "ps4",
+     "points": [
+      [
+       20.5,
+       0
+      ],
+      [
+       20.5,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "ps5",
+     "points": [
+      [
+       25.375,
+       0
+      ],
+      [
+       25.375,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "ps6",
+     "points": [
+      [
+       30.25,
+       0
+      ],
+      [
+       30.25,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "ps7",
+     "points": [
+      [
+       35.125,
+       0
+      ],
+      [
+       35.125,
+       9.6
+      ]
+     ]
+    },
+    {
+     "id": "pn1",
+     "points": [
+      [
+       12,
+       12
+      ],
+      [
+       12,
+       22
+      ]
+     ]
+    },
+    {
+     "id": "pn2",
+     "points": [
+      [
+       18,
+       12
+      ],
+      [
+       18,
+       22
+      ]
+     ]
+    },
+    {
+     "id": "pn3",
+     "points": [
+      [
+       26,
+       12
+      ],
+      [
+       26,
+       22
+      ]
+     ]
+    },
+    {
+     "id": "pn4",
+     "points": [
+      [
+       32,
+       12
+      ],
+      [
+       32,
+       22
+      ]
+     ]
+    }
+   ],
+   "openings": [
+    {
+     "id": "entrance",
+     "type": "door",
+     "at": [
+      0,
+      10.8
+     ],
+     "width": 1.8,
+     "style": "double"
+    },
+    {
+     "id": "exit_e",
+     "type": "door",
+     "at": [
+      40,
+      10.8
+     ],
+     "width": 1.2
+    },
+    {
+     "id": "d_theatre",
+     "type": "door",
+     "at": [
+      3.75,
+      9.6
+     ],
+     "width": 1.6,
+     "style": "double"
+    },
+    {
+     "id": "d_scrub",
+     "type": "door",
+     "at": [
+      9,
+      9.6
+     ],
+     "width": 1
+    },
+    {
+     "id": "d_theatre_scrub",
+     "type": "door",
+     "at": [
+      7.5,
+      8.3
+     ],
+     "width": 1.2,
+     "style": "sliding"
+    },
+    {
+     "id": "d_ct",
+     "type": "door",
+     "at": [
+      12.4,
+      9.6
+     ],
+     "width": 1.4,
+     "style": "double"
+    },
+    {
+     "id": "d_ct_control",
+     "type": "door",
+     "at": [
+      19,
+      9.6
+     ],
+     "width": 0.9
+    },
+    {
+     "id": "w_ct_control",
+     "type": "window",
+     "at": [
+      17.5,
+      4.8
+     ],
+     "width": 1.6,
+     "sill": 0.9,
+     "height": 1
+    },
+    {
+     "id": "d_ward1",
+     "type": "door",
+     "at": [
+      24.2,
+      9.6
+     ],
+     "width": 1.2
+    },
+    {
+     "id": "d_ward2",
+     "type": "door",
+     "at": [
+      29.075,
+      9.6
+     ],
+     "width": 1.2
+    },
+    {
+     "id": "d_ward3",
+     "type": "door",
+     "at": [
+      33.95,
+      9.6
+     ],
+     "width": 1.2
+    },
+    {
+     "id": "d_ward4",
+     "type": "door",
+     "at": [
+      38.825,
+      9.6
+     ],
+     "width": 1.2
+    },
+    {
+     "id": "w_ward1",
+     "type": "window",
+     "at": [
+      23.7,
+      0
+     ],
+     "width": 1.8,
+     "sill": 0.9
+    },
+    {
+     "id": "w_ward2",
+     "type": "window",
+     "at": [
+      28.575,
+      0
+     ],
+     "width": 1.8,
+     "sill": 0.9
+    },
+    {
+     "id": "w_ward3",
+     "type": "window",
+     "at": [
+      33.45,
+      0
+     ],
+     "width": 1.8,
+     "sill": 0.9
+    },
+    {
+     "id": "w_ward4",
+     "type": "window",
+     "at": [
+      38.325,
+      0
+     ],
+     "width": 1.8,
+     "sill": 0.9
+    },
+    {
+     "id": "d_icu",
+     "type": "door",
+     "at": [
+      6,
+      12
+     ],
+     "width": 1.6,
+     "style": "double"
+    },
+    {
+     "id": "d_nurse",
+     "type": "opening",
+     "at": [
+      15,
+      12
+     ],
+     "width": 2.4
+    },
+    {
+     "id": "d_lab",
+     "type": "door",
+     "at": [
+      22,
+      12
+     ],
+     "width": 1.2
+    },
+    {
+     "id": "d_consult",
+     "type": "door",
+     "at": [
+      30.8,
+      12
+     ],
+     "width": 1
+    },
+    {
+     "id": "d_dialysis",
+     "type": "door",
+     "at": [
+      36,
+      12
+     ],
+     "width": 1.4,
+     "style": "double"
+    },
+    {
+     "id": "w_icu1",
+     "type": "window",
+     "at": [
+      2,
+      22
+     ],
+     "width": 1.2,
+     "sill": 1.6,
+     "height": 1
+    },
+    {
+     "id": "w_icu2",
+     "type": "window",
+     "at": [
+      6,
+      22
+     ],
+     "width": 1.2,
+     "sill": 1.6,
+     "height": 1
+    },
+    {
+     "id": "w_icu3",
+     "type": "window",
+     "at": [
+      10,
+      22
+     ],
+     "width": 1.2,
+     "sill": 1.6,
+     "height": 1
+    },
+    {
+     "id": "w_lab1",
+     "type": "window",
+     "at": [
+      20,
+      22
+     ],
+     "width": 1.4,
+     "sill": 1.1
+    },
+    {
+     "id": "w_lab2",
+     "type": "window",
+     "at": [
+      24,
+      22
+     ],
+     "width": 1.4,
+     "sill": 1.1
+    },
+    {
+     "id": "w_consult",
+     "type": "window",
+     "at": [
+      29,
+      22
+     ],
+     "width": 1.4,
+     "sill": 0.9
+    },
+    {
+     "id": "w_dialysis1",
+     "type": "window",
+     "at": [
+      35.5,
+      22
+     ],
+     "width": 1.2,
+     "sill": 0.9
+    },
+    {
+     "id": "w_dialysis2",
+     "type": "window",
+     "at": [
+      38,
+      22
+     ],
+     "width": 1.2,
+     "sill": 0.9
+    }
+   ],
+   "rooms": [
+    {
+     "id": "theatre",
+     "name": "Operating theatre",
+     "polygon": [
+      [
+       0,
+       0
+      ],
+      [
+       7.5,
+       0
+      ],
+      [
+       7.5,
+       9.6
+      ],
+      [
+       0,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "scrub",
+     "name": "Scrub room",
+     "polygon": [
+      [
+       7.5,
+       0
+      ],
+      [
+       10.5,
+       0
+      ],
+      [
+       10.5,
+       9.6
+      ],
+      [
+       7.5,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "ct",
+     "name": "CT room",
+     "polygon": [
+      [
+       10.5,
+       0
+      ],
+      [
+       17.5,
+       0
+      ],
+      [
+       17.5,
+       9.6
+      ],
+      [
+       10.5,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "ct_control",
+     "name": "CT control",
+     "polygon": [
+      [
+       17.5,
+       0
+      ],
+      [
+       20.5,
+       0
+      ],
+      [
+       20.5,
+       9.6
+      ],
+      [
+       17.5,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "ward1",
+     "name": "Ward 1",
+     "polygon": [
+      [
+       20.5,
+       0
+      ],
+      [
+       25.375,
+       0
+      ],
+      [
+       25.375,
+       9.6
+      ],
+      [
+       20.5,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "ward2",
+     "name": "Ward 2",
+     "polygon": [
+      [
+       25.375,
+       0
+      ],
+      [
+       30.25,
+       0
+      ],
+      [
+       30.25,
+       9.6
+      ],
+      [
+       25.375,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "ward3",
+     "name": "Ward 3",
+     "polygon": [
+      [
+       30.25,
+       0
+      ],
+      [
+       35.125,
+       0
+      ],
+      [
+       35.125,
+       9.6
+      ],
+      [
+       30.25,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "ward4",
+     "name": "Ward 4",
+     "polygon": [
+      [
+       35.125,
+       0
+      ],
+      [
+       40,
+       0
+      ],
+      [
+       40,
+       9.6
+      ],
+      [
+       35.125,
+       9.6
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "corridor",
+     "name": "Corridor",
+     "polygon": [
+      [
+       0,
+       9.6
+      ],
+      [
+       40,
+       9.6
+      ],
+      [
+       40,
+       12
+      ],
+      [
+       0,
+       12
+      ]
+     ],
+     "floorMaterial": "terrazzo_white"
+    },
+    {
+     "id": "icu",
+     "name": "ICU",
+     "polygon": [
+      [
+       0,
+       12
+      ],
+      [
+       12,
+       12
+      ],
+      [
+       12,
+       22
+      ],
+      [
+       0,
+       22
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "nurse",
+     "name": "Nurse station",
+     "polygon": [
+      [
+       12,
+       12
+      ],
+      [
+       18,
+       12
+      ],
+      [
+       18,
+       22
+      ],
+      [
+       12,
+       22
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "lab",
+     "name": "Laboratory",
+     "polygon": [
+      [
+       18,
+       12
+      ],
+      [
+       26,
+       12
+      ],
+      [
+       26,
+       22
+      ],
+      [
+       18,
+       22
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "consult",
+     "name": "Consult / exam room",
+     "polygon": [
+      [
+       26,
+       12
+      ],
+      [
+       32,
+       12
+      ],
+      [
+       32,
+       22
+      ],
+      [
+       26,
+       22
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    },
+    {
+     "id": "dialysis",
+     "name": "Dialysis",
+     "polygon": [
+      [
+       32,
+       12
+      ],
+      [
+       40,
+       12
+      ],
+      [
+       40,
+       22
+      ],
+      [
+       32,
+       22
+      ]
+     ],
+     "floorMaterial": "vinyl_plank_gray"
+    }
+   ],
+   "furniture": [
+    {
+     "id": "or_table",
+     "type": "operating_table",
+     "position": [
+      3.75,
+      4.6
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "or_light",
+     "type": "surgical_light",
+     "position": [
+      3.75,
+      4.6
+     ],
+     "elevation": 3
+    },
+    {
+     "id": "or_pendant",
+     "type": "medical_pendant",
+     "position": [
+      1.6,
+      5.4
+     ],
+     "elevation": 0.9,
+     "height": 3.1,
+     "facing": "east"
+    },
+    {
+     "id": "or_anaesthesia",
+     "type": "anesthesia_machine",
+     "position": [
+      3.75,
+      7.4
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "or_cart1",
+     "type": "medical_cart",
+     "position": [
+      6.95,
+      2.2
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "or_cart2",
+     "type": "medical_cart",
+     "position": [
+      6.95,
+      3.2
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "or_monitor",
+     "type": "patient_monitor",
+     "position": [
+      5.6,
+      7.3
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "or_cabinet",
+     "type": "medicine_cabinet",
+     "position": [
+      1,
+      0.4
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "scrub_sink",
+     "type": "scrub_sink",
+     "position": [
+      10.075,
+      4
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "scrub_cabinet",
+     "type": "medicine_cabinet",
+     "position": [
+      10.1,
+      6.5
+     ],
+     "facing": "west",
+     "width": 0.9,
+     "depth": 0.4
+    },
+    {
+     "id": "ct_scanner",
+     "type": "ct_scanner",
+     "position": [
+      14,
+      4.4
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "ct_cart",
+     "type": "medical_cart",
+     "position": [
+      17,
+      1
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "ct_desk",
+     "type": "desk",
+     "position": [
+      18.25,
+      4.8
+     ],
+     "facing": "east",
+     "width": 1.6,
+     "depth": 0.7
+    },
+    {
+     "id": "ct_chair",
+     "type": "office_chair",
+     "position": [
+      19,
+      4.8
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w1b1_bed",
+     "type": "hospital_bed",
+     "position": [
+      21.8,
+      2.8
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w1b1_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      20.650000000000002,
+      2.8
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w1b1_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      21.93,
+      2.8
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w1b1_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      20.900000000000002,
+      3.65
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w1b1_iv",
+     "type": "iv_stand",
+     "position": [
+      21.05,
+      1.9499999999999997
+     ]
+    },
+    {
+     "id": "w1b2_bed",
+     "type": "hospital_bed",
+     "position": [
+      21.8,
+      6.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w1b2_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      20.650000000000002,
+      6.6
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w1b2_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      21.93,
+      6.6
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w1b2_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      20.900000000000002,
+      5.75
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w1b2_iv",
+     "type": "iv_stand",
+     "position": [
+      21.05,
+      7.449999999999999
+     ]
+    },
+    {
+     "id": "w1_chair",
+     "type": "armchair",
+     "position": [
+      24.5,
+      4.7
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w1_sink",
+     "type": "bathroom_sink",
+     "position": [
+      25.005,
+      1.4
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w2b1_bed",
+     "type": "hospital_bed",
+     "position": [
+      26.675,
+      2.8
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w2b1_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      25.525000000000002,
+      2.8
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w2b1_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      26.805,
+      2.8
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w2b1_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      25.775000000000002,
+      3.65
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w2b1_iv",
+     "type": "iv_stand",
+     "position": [
+      25.925,
+      1.9499999999999997
+     ]
+    },
+    {
+     "id": "w2b2_bed",
+     "type": "hospital_bed",
+     "position": [
+      26.675,
+      6.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w2b2_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      25.525000000000002,
+      6.6
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w2b2_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      26.805,
+      6.6
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w2b2_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      25.775000000000002,
+      5.75
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w2b2_iv",
+     "type": "iv_stand",
+     "position": [
+      25.925,
+      7.449999999999999
+     ]
+    },
+    {
+     "id": "w2_chair",
+     "type": "armchair",
+     "position": [
+      29.375,
+      4.7
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w2_sink",
+     "type": "bathroom_sink",
+     "position": [
+      29.88,
+      1.4
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w3b1_bed",
+     "type": "hospital_bed",
+     "position": [
+      31.55,
+      2.8
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w3b1_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      30.400000000000002,
+      2.8
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w3b1_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      31.68,
+      2.8
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w3b1_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      30.650000000000002,
+      3.65
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w3b1_iv",
+     "type": "iv_stand",
+     "position": [
+      30.8,
+      1.9499999999999997
+     ]
+    },
+    {
+     "id": "w3b2_bed",
+     "type": "hospital_bed",
+     "position": [
+      31.55,
+      6.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w3b2_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      30.400000000000002,
+      6.6
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w3b2_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      31.68,
+      6.6
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w3b2_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      30.650000000000002,
+      5.75
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w3b2_iv",
+     "type": "iv_stand",
+     "position": [
+      30.8,
+      7.449999999999999
+     ]
+    },
+    {
+     "id": "w3_chair",
+     "type": "armchair",
+     "position": [
+      34.25,
+      4.7
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w3_sink",
+     "type": "bathroom_sink",
+     "position": [
+      34.754999999999995,
+      1.4
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w4b1_bed",
+     "type": "hospital_bed",
+     "position": [
+      36.425000000000004,
+      2.8
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w4b1_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      35.275,
+      2.8
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w4b1_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      36.555,
+      2.8
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w4b1_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      35.525,
+      3.65
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w4b1_iv",
+     "type": "iv_stand",
+     "position": [
+      35.675000000000004,
+      1.9499999999999997
+     ]
+    },
+    {
+     "id": "w4b2_bed",
+     "type": "hospital_bed",
+     "position": [
+      36.425000000000004,
+      6.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w4b2_bedhead",
+     "type": "bedhead_unit",
+     "position": [
+      35.275,
+      6.6
+     ],
+     "facing": "east",
+     "elevation": 1.4
+    },
+    {
+     "id": "w4b2_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      36.555,
+      6.6
+     ],
+     "facing": "east",
+     "width": 3,
+     "depth": 2.6
+    },
+    {
+     "id": "w4b2_locker",
+     "type": "bedside_cabinet",
+     "position": [
+      35.525,
+      5.75
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "w4b2_iv",
+     "type": "iv_stand",
+     "position": [
+      35.675000000000004,
+      7.449999999999999
+     ]
+    },
+    {
+     "id": "w4_chair",
+     "type": "armchair",
+     "position": [
+      39.125,
+      4.7
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "w4_sink",
+     "type": "bathroom_sink",
+     "position": [
+      39.58,
+      1.4
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "icu1_bed",
+     "type": "hospital_bed",
+     "position": [
+      2,
+      20.6
+     ],
+     "facing": "south",
+     "options": {
+      "backrest": 20
+     }
+    },
+    {
+     "id": "icu1_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      2,
+      20.5
+     ],
+     "facing": "south",
+     "width": 3.6,
+     "depth": 2.7
+    },
+    {
+     "id": "icu1_vent",
+     "type": "ventilator",
+     "position": [
+      0.7,
+      21
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "icu1_monitor",
+     "type": "patient_monitor",
+     "position": [
+      3.3,
+      21
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "icu1_iv",
+     "type": "iv_stand",
+     "position": [
+      3.2,
+      19.6
+     ]
+    },
+    {
+     "id": "icu2_bed",
+     "type": "hospital_bed",
+     "position": [
+      6,
+      20.6
+     ],
+     "facing": "south",
+     "options": {
+      "backrest": 20
+     }
+    },
+    {
+     "id": "icu2_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      6,
+      20.5
+     ],
+     "facing": "south",
+     "width": 3.6,
+     "depth": 2.7
+    },
+    {
+     "id": "icu2_vent",
+     "type": "ventilator",
+     "position": [
+      4.7,
+      21
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "icu2_monitor",
+     "type": "patient_monitor",
+     "position": [
+      7.3,
+      21
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "icu2_iv",
+     "type": "iv_stand",
+     "position": [
+      7.2,
+      19.6
+     ]
+    },
+    {
+     "id": "icu3_bed",
+     "type": "hospital_bed",
+     "position": [
+      10,
+      20.6
+     ],
+     "facing": "south",
+     "options": {
+      "backrest": 20
+     }
+    },
+    {
+     "id": "icu3_curtain",
+     "type": "privacy_curtain",
+     "position": [
+      10,
+      20.5
+     ],
+     "facing": "south",
+     "width": 3.6,
+     "depth": 2.7
+    },
+    {
+     "id": "icu3_vent",
+     "type": "ventilator",
+     "position": [
+      8.7,
+      21
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "icu3_monitor",
+     "type": "patient_monitor",
+     "position": [
+      11.3,
+      21
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "icu3_iv",
+     "type": "iv_stand",
+     "position": [
+      11.2,
+      19.6
+     ]
+    },
+    {
+     "id": "icu_crash",
+     "type": "medical_cart",
+     "position": [
+      11.5,
+      14
+     ],
+     "facing": "west",
+     "materials": {
+      "fronts": "paint_red"
+     }
+    },
+    {
+     "id": "icu_hoist",
+     "type": "patient_lift",
+     "position": [
+      0.9,
+      13.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "ns_desk1",
+     "type": "desk",
+     "position": [
+      14.2,
+      16.5
+     ],
+     "facing": "south",
+     "width": 2
+    },
+    {
+     "id": "ns_desk2",
+     "type": "desk",
+     "position": [
+      16.4,
+      16.5
+     ],
+     "facing": "south",
+     "width": 2
+    },
+    {
+     "id": "ns_chair1",
+     "type": "office_chair",
+     "position": [
+      14.2,
+      17.4
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "ns_chair2",
+     "type": "office_chair",
+     "position": [
+      16.4,
+      17.4
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "ns_meds",
+     "type": "medicine_cabinet",
+     "position": [
+      13,
+      21.6
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "ns_meds2",
+     "type": "medicine_cabinet",
+     "position": [
+      14.1,
+      21.6
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "ns_cart",
+     "type": "medical_cart",
+     "position": [
+      16.8,
+      21.55
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "ns_wheelchair",
+     "type": "wheelchair",
+     "position": [
+      17.3,
+      13
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "lab_bench1",
+     "type": "lab_bench",
+     "position": [
+      22,
+      15.6
+     ],
+     "facing": "south",
+     "options": {
+      "sink": true
+     }
+    },
+    {
+     "id": "lab_bench2",
+     "type": "lab_bench",
+     "position": [
+      22,
+      18
+     ],
+     "facing": "north"
+    },
+    {
+     "id": "lab_hood",
+     "type": "fume_hood",
+     "position": [
+      22,
+      21.4
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "lab_bsc",
+     "type": "biosafety_cabinet",
+     "position": [
+      25.28,
+      21.45
+     ],
+     "facing": "south",
+     "width": 1.2
+    },
+    {
+     "id": "lab_autoclave",
+     "type": "autoclave",
+     "position": [
+      25.4,
+      13
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "cx_couch",
+     "type": "examination_table",
+     "position": [
+      27.2,
+      18.5
+     ],
+     "facing": "east",
+     "width": 0.7,
+     "depth": 1.9
+    },
+    {
+     "id": "cx_lamp",
+     "type": "exam_lamp",
+     "position": [
+      28.3,
+      20.6
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "cx_desk",
+     "type": "desk",
+     "position": [
+      30.6,
+      15
+     ],
+     "facing": "west",
+     "width": 1.4
+    },
+    {
+     "id": "cx_chair",
+     "type": "office_chair",
+     "position": [
+      31.2,
+      15
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "cx_patient_chair",
+     "type": "chair",
+     "position": [
+      29.5,
+      14.6
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "cx_sink",
+     "type": "bathroom_sink",
+     "position": [
+      31.65,
+      20.5
+     ],
+     "facing": "west"
+    },
+    {
+     "id": "cx_ultrasound",
+     "type": "ultrasound_machine",
+     "position": [
+      27.2,
+      16.5
+     ],
+     "facing": "east"
+    },
+    {
+     "id": "dx1_chair",
+     "type": "patient_recliner",
+     "position": [
+      33.5,
+      20.6
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dx1_machine",
+     "type": "dialysis_machine",
+     "position": [
+      34.3,
+      21.3
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dx2_chair",
+     "type": "patient_recliner",
+     "position": [
+      36,
+      20.6
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dx2_machine",
+     "type": "dialysis_machine",
+     "position": [
+      36.8,
+      21.3
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dx3_chair",
+     "type": "patient_recliner",
+     "position": [
+      38.5,
+      20.6
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "dx3_machine",
+     "type": "dialysis_machine",
+     "position": [
+      39.3,
+      21.3
+     ],
+     "facing": "south"
+    },
+    {
+     "id": "aed",
+     "type": "defibrillator",
+     "position": [
+      20,
+      11.8
+     ],
+     "facing": "south",
+     "elevation": 1
+    }
+   ]
+  }
+ ],
+ "hvac": {
+  "system": "ducted_split"
+ }
+}

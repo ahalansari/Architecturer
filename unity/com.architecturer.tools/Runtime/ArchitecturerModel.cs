@@ -3,8 +3,8 @@ using UnityEngine;
 namespace Architecturer
 {
     /// <summary>
-    /// Runtime fallback: add to a model that is spawned at runtime (e.g. loaded with glTFast's GltfAsset)
-    /// to create its colliders. Models placed in the editor are set up automatically instead.
+    /// Runtime set-up: add to a model that is spawned at runtime (e.g. loaded with glTFast's GltfAsset) to create its
+    /// colliders and, optionally, bake its NavMesh. Models placed in the editor are set up automatically instead.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Architecturer/Architecturer Model")]
@@ -13,7 +13,10 @@ namespace Architecturer
         [Tooltip("Create colliders on Awake (and again when children appear, e.g. after an async glTF load).")]
         public bool setupOnAwake = true;
 
-        bool _done;
+        [Tooltip("Add NavMesh areas, lift links and door obstacles, and bake the NavMesh once the model is loaded.")]
+        public bool navigation = true;
+
+        bool _done, _nav;
 
         void Awake()
         {
@@ -29,8 +32,14 @@ namespace Architecturer
         {
             var r = ArchitecturerSetup.SetupColliders(gameObject);
             if (r.meshColliders + r.convexColliders > 0) _done = true;
+            if (_done && navigation && !_nav)
+            {
+                var n = ArchitecturerNav.Setup(gameObject, build: true);
+                _nav = n.built;
+            }
         }
 
         public bool IsSetUp => _done;
+        public bool HasNavMesh => _nav;
     }
 }

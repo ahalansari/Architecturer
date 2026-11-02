@@ -261,6 +261,42 @@ Call get_schema for every field; this guide covers conventions and good practice
   other angles) and elevation=<wall id> elevationRoom=<room> (flat square-on view of one wall: kitchen runs,
   wardrobes, tiling heights, art placement). CLI: arch render plan.json --room Kitchen / --elevation w1.
 
+## Medical buildings (hospitals, clinics, laboratories)
+- Equipment is furniture (see the furniture list): wards hospital_bed, bedhead_unit (wall, elevation ~1.4),
+  privacy_curtain (track round a bed space), patient_monitor, iv_stand, overbed_table, bedside_cabinet, patient_recliner,
+  wheelchair, stretcher, patient_lift; clinics examination_table, exam_lamp, ultrasound_machine, dental_chair,
+  medical_cart (red fronts = crash cart), defibrillator (wall), medicine_cabinet, scrub_sink (plumbed like a basin);
+  theatres / ICU operating_table, surgical_light and medical_pendant (both hang from the ceiling: elevation = ceiling
+  height − height), anesthesia_machine, ventilator, infant_incubator, dialysis_machine; imaging ct_scanner, mri_scanner,
+  xray_machine; laboratories lab_bench, fume_hood, biosafety_cabinet, autoclave. Beds and stretchers lie along y with
+  the head at +y: facing = the direction the foot points.
+- Room names drive the engineering: Ward / Patient room / ICU / Recovery get bedroom-style sockets; theatres (Operating
+  theatre, OR), imaging (CT, MRI, X-ray), ICU, labs / pharmacy / CSSD and clinics get healthcare equipment and occupancy
+  heat gains in hvac_design. Medical gases, nurse call, pressure cascades for isolation rooms and theatres, radiation
+  shielding and MRI safety zoning are NOT designed: they are specialist work from the applicable healthcare standards
+  and the equipment vendor's site-planning guides.
+- Typical starting dimensions to check against the guideline that applies to the project: bed corridors 2.4 m+ clear,
+  bed-room doors 1.2 m+ clear (theatres, ICU, imaging 1.6–1.8 m double), bed spaces with 1.2 m+ beside the bed, bed lifts
+  capacity 13 (stretcher car). validate catches furniture in door swings and doorways; nav_check checks wheelchair access.
+- Equipment prices in cost_estimate are indicative allowances (key furniture:<type>, e.g. furniture:ct_scanner):
+  replace them with quotations through project.costs.rates. Example plan: examples/medical_wing.json.
+
+## Large projects (hospitals, airports, campuses: up to millions of m²)
+- project_summary first: levels, element counts, room areas, extents. read_project with level / kinds / ids /
+  region / offset / limit reads a piece (a big plan is never returned whole).
+- Build by repetition, not by typing every room: duplicate_level for typical floors; copy_elements for a row of patient
+  rooms or bays (call twice for a grid; toLevel copies onto another floor); add_elements / write_project one wing or
+  zone at a time. A campus of separate buildings is best one plan file per building.
+- On a big plan (15,000+ elements or 60,000+ m² of rooms) edits re-check only the levels they touch (with the levels
+  next to them); run validate for the whole plan at milestones, or validate levels=[...] / detail "massing". Long
+  warning lists are folded by kind.
+- render_plan of a big floor is an overview: pass region=[minX, minY, maxX, maxY] for a readable close-up.
+  render_view of a whole big plan shows its massing (no fit-out); level= / room= renders just that level.
+- export_model split "level" writes one model per floor at its real height (stream floors in the engine);
+  detail "massing" leaves out furniture, services and lighting; levels=[...] exports a part.
+- Memory: the arch CLI and MCP servers raise Node's heap to 75% of RAM (ARCHITECTURER_HEAP_MB; render workers
+  ARCHITECTURER_WORKER_HEAP_MB); the remote server accepts requests up to ARCHITECTURER_MAX_REQUEST (256mb).
+
 ## Workflow
 1. Sketch the footprint and rooms on a grid; write the plan (create_project / write_project).
 2. validate until there are no errors AND no warnings. Warnings are layout bugs found geometrically: furniture inside
@@ -279,9 +315,13 @@ Call get_schema for every field; this guide covers conventions and good practice
    (extra points, AC units, switches with "controls"), level.plumbing (your own stacks / heaters / inlet replace the
    automatic ones) and level.services.omit (auto ids such as sk.master.3, shown as sk3 on the sheet).
 4. render_view: iso plus a cutaway per level (level=<id>); close-ups with focus=[x, y] (+ radius, zoom).
-5. export_model to .glb (engine "unity"/"godot" adds merged meshes + colliders; textureFormat "ktx2" for the
-   smallest, GPU-compressed textures). Y-up, meters; furniture and door
-   leaves are separate nodes with pivots; node extras carry ids/room names.
+5. nav_check: a Recast navmesh for a walking person and a wheelchair user — can every room be reached from the
+   entrance? It names the cause (a door narrower than 0.82 m, stairs only, the furniture id in the way, a step).
+6. export_model to .glb (engine "unity"/"godot" adds merged meshes, colliders and navigation markers; "unity" also
+   lightmap UVs; textureFormat "ktx2" for the smallest, GPU-compressed textures). Y-up, meters; furniture and door
+   leaves are separate nodes with pivots; node extras carry ids/room names. With the Architecturer Unity package
+   (unity/com.architecturer.tools) the placed model gets colliders, static / lightmap flags and a baked NavMesh:
+   room areas (indoor, outdoor, wet, stairs, service), lift links, door obstacles, the "Architecturer Person" agent.
 `;
 
 const materialSection = () =>

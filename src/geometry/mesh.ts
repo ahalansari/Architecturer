@@ -12,6 +12,8 @@ export interface MeshData {
   normals: number[];
   uvs: number[];
   indices: number[];
+  /** Lightmap UVs (glTF TEXCOORD_1), only on game exports that ask for them. */
+  uv2?: number[];
 }
 
 /** Planar UV projection in meters: u runs horizontally along the face, v runs "up" the face. */

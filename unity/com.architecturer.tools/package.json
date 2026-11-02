@@ -1,13 +1,15 @@
 {
   "name": "com.architecturer.tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "Architecturer Tools",
-  "description": "Sets up colliders and static flags on models exported by Architecturer (arch build --unity). Installs glTFast (imports .glb) and KTX for Unity (decodes --texture-format ktx2).",
+  "description": "Sets up models exported by Architecturer (export_model engine 'unity' / arch build --unity): colliders, static and lightmap flags, and a NavMesh with room areas, lift links and door obstacles. Installs glTFast (imports .glb), KTX for Unity (decodes ktx2 textures) and AI Navigation.",
   "unity": "2022.3",
   "dependencies": {
     "com.unity.cloud.gltfast": "6.20.0",
-    "com.unity.cloud.ktx": "3.7.0"
+    "com.unity.cloud.ktx": "3.7.0",
+    "com.unity.ai.navigation": "1.1.7"
   },
+  "license": "MIT",
   "author": {
     "name": "Architecturer"
   }

@@ -163,7 +163,9 @@ const COMMANDS: Record<string, Command> = {
       { name: "ktx2-quality", arg: "fast|high", desc: "ktx2 only: high = UASTC normal maps (sharper, larger, slow to encode)" },
       { name: "merge", desc: "one static mesh per level (sub-mesh per material); furniture/doors stay separate" },
       { name: "collision", desc: "add collider nodes (*-colonly static mesh, *-convcolonly boxes on movable items)" },
-      { name: "unity", desc: "--merge --collision, oriented so plan (x, y) == Unity world (x, z)" },
+      { name: "lightmap-uv", desc: "a second, non-overlapping UV set on the merged static meshes for baked lighting (on with --unity)" },
+      { name: "nav", desc: "navigation markers: room / stair NavMesh areas, lift landings, closed-door markers (on with --unity / --godot)" },
+      { name: "unity", desc: "--merge --collision --lightmap-uv --nav, oriented so plan (x, y) == Unity world (x, z)" },
       { name: "godot", desc: "--merge --collision (Godot turns *-colonly nodes into physics bodies)" },
     ],
     async run(file, f) {
@@ -177,7 +179,16 @@ const COMMANDS: Record<string, Command> = {
       const ktx2Quality = (f["ktx2-quality"] ?? "fast") as "fast" | "high";
       if (!["fast", "high"].includes(ktx2Quality)) throw new Error("--ktx2-quality must be fast or high");
       const engine = f.unity ? "unity" : f.godot ? "godot" : undefined;
-      const opts = { textureSize, textureFormat, ktx2Quality, merge: !!(f.merge || engine), collision: !!(f.collision || engine), unityAxes: engine === "unity" };
+      const opts = {
+        textureSize,
+        textureFormat,
+        ktx2Quality,
+        merge: !!(f.merge || engine),
+        collision: !!(f.collision || engine),
+        unityAxes: engine === "unity",
+        lightmapUV: !!(f["lightmap-uv"] || engine === "unity"),
+        navigation: !!(f.nav || engine),
+      };
       if (extname(out) === ".gltf") {
         await mkdir(dirname(out), { recursive: true });
         await exportGLTF(c, out, opts);
@@ -482,6 +493,21 @@ const COMMANDS: Record<string, Command> = {
       const { waterReport } = await import("../elements/water.js");
       if (!c.water) throw new Error("no water design: the plan has no wet rooms");
       console.log(waterReport(c.water, c.levels.map((l) => l.name), !f.brief));
+    },
+  },
+  nav: {
+    usage: "arch nav <plan.json> [-o nav.png]",
+    desc: "Navigation check: a Recast navmesh for a walking person and a wheelchair user; can every room be reached from the entrance, and if not why; walking distances; plan image",
+    file: true,
+    flags: [OUT],
+    async run(file, f) {
+      const c = await compiled(file);
+      const { navStudy, navReport, navSVG } = await import("../sim/nav.js");
+      const s = await navStudy(c);
+      console.log(navReport(s, c.levels.map((l) => l.name)));
+      const out = (f.o as string) ?? `${base(file)}.nav.png`;
+      const svg = navSVG(c, s);
+      await write(out, out.endsWith(".svg") ? svg : await svgToPng(svg));
     },
   },
   pumppit: {

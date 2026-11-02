@@ -1,8 +1,10 @@
 import { FACING_ROT, type LevelInfo } from "../build.js";
 import { FURNITURE } from "../elements/furniture.js";
+import { MEDICAL } from "../elements/medical.js";
 import { checkCasework } from "../elements/casework/validate.js";
 import { segDir, segLength, type WallSegment } from "../elements/walls.js";
 import { deg2rad, ensureCCW, offsetPolygon, pointInPolygon, v2, type Vec2 } from "../geometry/math.js";
+import { boxOf, GridIndex, PolygonIndex } from "../geometry/spatial.js";
 import type { Furniture, Project } from "../schema/schema.js";
 
 /**
@@ -68,19 +70,19 @@ interface Item {
 
 /** Items that lie flat on the floor or hang overhead and never block anything. */
 const FLAT = new Set(["rug", "door_mat", "bath_mat"]);
-const OVERHEAD = new Set(["ceiling_light", "hanging_plant"]);
+const OVERHEAD = new Set(["ceiling_light", "hanging_plant", ...MEDICAL.overhead]);
 const SEATS = new Set(["chair", "office_chair", "bar_stool", "counter_stool", "armchair", "bench", "garden_chair", "dining_bench", "ottoman"]);
 const TABLES = new Set(["table", "desk", "kitchen_island", "coffee_table", "side_table", "dresser", "piano", "kitchen_counter", "outdoor_table", "console_table", "round_dining_table", "dressing_table", "stone_table"]);
 /** Symmetric objects without a meaningful front. */
-const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat", "table", "coffee_table", "side_table", "floor_lamp", "table_lamp", "ceiling_light", "kitchen_island", "bunk_bed", "outdoor_table", "parasol", "planter", "bush", "tree", "hedge", "agave", "grass_clump", "water_wall", "stone_table", "fence", "hot_tub", "lamp_post", "car", "bicycle", "vase", "books_stack", "decor_bowl", "candle_set", "sculpture", "lantern", "plant_large", "round_dining_table", "ottoman", "umbrella_stand", "coat_rack", "fruit_bowl", "utensil_jar", "laundry_basket", "tray_with_decor", "throw_blanket"]);
+const NO_FRONT = new Set(["box", "cylinder", "crate", "plant", "rug", "door_mat", "table", "coffee_table", "side_table", "floor_lamp", "table_lamp", "ceiling_light", "kitchen_island", "bunk_bed", "outdoor_table", "parasol", "planter", "bush", "tree", "hedge", "agave", "grass_clump", "water_wall", "stone_table", "fence", "hot_tub", "lamp_post", "car", "bicycle", "vase", "books_stack", "decor_bowl", "candle_set", "sculpture", "lantern", "plant_large", "round_dining_table", "ottoman", "umbrella_stand", "coat_rack", "fruit_bowl", "utensil_jar", "laundry_basket", "tray_with_decor", "throw_blanket", ...MEDICAL.noFront]);
 /** Mounted flat on a wall (back at +Y): never "faces into a wall", fine beside/over windows. */
-const WALL_MOUNTED = new Set(["wall_art", "gallery_wall", "floating_shelf", "wall_clock", "mirror", "mirror_round", "mirror_arched", "mirror_full_length", "towel_rail", "towel_hook_set", "toilet_roll_holder", "shower_curtain"]);
+const WALL_MOUNTED = new Set(["wall_art", "gallery_wall", "floating_shelf", "wall_clock", "mirror", "mirror_round", "mirror_arched", "mirror_full_length", "towel_rail", "towel_hook_set", "toilet_roll_holder", "shower_curtain", ...MEDICAL.wallMounted]);
 /** Small decor that rests on other furniture (sofas, counters, tables): no overlap warning when raised above the other item's base. */
 const ON_TOP = new Set(["bedding", "vase", "books_stack", "decor_bowl", "candle_set", "cushion", "throw_blanket", "sculpture", "tray_with_decor", "lantern", "kettle", "coffee_machine", "fruit_bowl", "cutting_boards", "utensil_jar", "plant_herbs", "soap_dispenser", "table_lamp"]);
 /** Canopies that other furniture is meant to stand under. */
-const CANOPY = new Set(["parasol", "tree"]);
+const CANOPY = new Set(["parasol", "tree", ...MEDICAL.surrounds]);
 /** Things that are fine in front of a window. */
-const WINDOW_OK = new Set(["curtain", "plant", "shower", "floor_lamp", "table_lamp", "bathtub", "radiator", "bush", "planter", "hedge", "fence", "trash_bin", "bicycle", "garden_chair", "sun_lounger", "plant_large", "lantern", "tree", "agave", "grass_clump", "bush"]);
+const WINDOW_OK = new Set(["curtain", "plant", "shower", "floor_lamp", "table_lamp", "bathtub", "radiator", "bush", "planter", "hedge", "fence", "trash_bin", "bicycle", "garden_chair", "sun_lounger", "plant_large", "lantern", "tree", "agave", "grass_clump", "bush", ...MEDICAL.windowOk]);
 const FACING_NAMES: Record<number, string> = { 0: "south", 90: "east", 180: "north", 270: "west" };
 
 function items(lv: Project["levels"][number]): Item[] {
@@ -137,10 +139,12 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       ...(lv.autoSlab ? lv.walls.filter((w) => w.closed && w.points.length >= 3).map((w) => offsetPolygon(ensureCCW(w.points as Vec2[]), (w.thickness ?? 0.2) / 2)) : []),
     ];
   };
-  const onFloor = (li: number, p: Vec2) => floors(li).some((poly) => pointInPolygon(p, poly));
+  const floorIdx: PolygonIndex[] = [];
+  const onFloor = (li: number, p: Vec2) => (floorIdx[li] ??= new PolygonIndex(floors(li))).at(p) >= 0;
   /** Stairwells cut into a level by stairs arriving from below. */
   const wells = (li: number) => levels.flatMap((L) => L.stairs.filter((s) => s.target === li).flatMap((s) => s.footprints));
-  const roomAt = (li: number, p: Vec2): number => project.levels[li].rooms.findIndex((r) => pointInPolygon(p, r.polygon as Vec2[]));
+  const roomIdx: PolygonIndex[] = [];
+  const roomAt = (li: number, p: Vec2): number => (roomIdx[li] ??= new PolygonIndex(project.levels[li].rooms.map((r) => r.polygon as Vec2[]))).at(p);
   /** Graph node for a point: a room, the outside (ground level), or an unnamed open area. */
   const nodeAt = (li: number, p: Vec2): string => {
     const ri = roomAt(li, p);
@@ -157,6 +161,10 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
     const segs = info.segments;
     const its = items(lv);
     lv.rooms.forEach((r, ri) => roomName.set(roomKey(li, ri), r.name));
+    // big floors: only nearby walls / furniture are compared (ascending order keeps "first match wins")
+    const segIdx = new GridIndex(segs.map((s) => boxOf([s.a, s.b], s.thickness / 2 + 0.05)));
+    const itemIdx = new GridIndex(its.map((it) => boxOf(it.rect)));
+    const itemsNear = (zone: Vec2[]) => itemIdx.query(boxOf(zone, 0.01)).map((k) => its[k]);
 
     // --- furniture vs walls ---
     for (const it of its) {
@@ -164,7 +172,8 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       // a tree's footprint is its canopy, which may overhang walls: only the trunk has to clear them
       const rect = it.type === "tree" ? ([[-0.25, -0.25], [0.25, -0.25], [0.25, 0.25], [-0.25, 0.25]] as Vec2[]).map((q) => v2.add(it.center, q)) : it.rect;
       let worst: { need: number; seg: WallSegment; dir: Vec2 } | null = null;
-      for (const s of segs) {
+      for (const si of segIdx.query(boxOf(rect))) {
+        const s = segs[si];
         if (it.z0 >= s.z1 - info.elevation - 0.01) continue; // above the wall
         const d = segDir(s), N = v2.perp(d), len = segLength(s);
         // overlap along the wall?
@@ -188,7 +197,8 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
 
     // --- furniture vs furniture ---
     for (let i = 0; i < its.length; i++)
-      for (let j = i + 1; j < its.length; j++) {
+      for (const j of itemIdx.query(itemIdx.boxes[i])) {
+        if (j <= i) continue;
         const A = its[i], B = its[j];
         if (FLAT.has(A.type) || FLAT.has(B.type) || OVERHEAD.has(A.type) || OVERHEAD.has(B.type)) continue;
         if (Math.min(A.z1, B.z1) - Math.max(A.z0, B.z0) <= 0.02) continue; // stacked (tv on a stand, lamp on a table)
@@ -201,7 +211,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       }
 
     // --- facing into a wall ---
-    const inWall = (p: Vec2) => segs.find((s) => pointInPolygon(p, wallQuad(s)));
+    const inWall = (p: Vec2) => segIdx.queryPoint(p).map((k) => segs[k]).find((s) => pointInPolygon(p, wallQuad(s)));
     for (const it of its) {
       if (NO_FRONT.has(it.type) || WALL_MOUNTED.has(it.type)) continue;
       const frontPt = v2.add(it.center, v2.scale(it.front, it.d / 2 + 0.15));
@@ -240,7 +250,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       const reported = new Set<string>();
 
       if (o.op.type === "window") {
-        for (const it of its) {
+        for (const it of itemsNear([at(u0, -half - 0.35), at(u1, -half - 0.35), at(u1, half + 0.35), at(u0, half + 0.35)])) {
           if (WINDOW_OK.has(it.type) || FLAT.has(it.type) || WALL_MOUNTED.has(it.type)) continue;
           // only tall things matter: furniture below the sill (or under 1.2 m by a low window) is normal
           if (it.z1 <= Math.max(sill + 0.15, 1.2) || it.z0 >= sill + o.height) continue;
@@ -268,7 +278,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       link(nodes[0], nodes[1]);
       if (nodes.includes("outside") && nodes.some((n) => n !== "outside")) entrances++;
 
-      for (const it of its) {
+      for (const it of itemsNear([at(u0, -half - 0.6), at(u1, -half - 0.6), at(u1, half + 0.6), at(u0, half + 0.6)])) {
         if (FLAT.has(it.type) || OVERHEAD.has(it.type) || CANOPY.has(it.type) || it.z0 > 1.8) continue;
         // clear zone 0.6 m deep on both sides of the doorway
         for (const side of [-1, 1]) {
@@ -295,7 +305,7 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
           sector.push(at(L.hinge + Math.sign(L.len) * r * Math.cos(a), toward * (half + r * Math.sin(a))));
         }
         const poly = ensureCCW(sector);
-        for (const it of its) {
+        for (const it of itemsNear(poly)) {
           if (FLAT.has(it.type) || OVERHEAD.has(it.type) || CANOPY.has(it.type) || it.z0 > 2.0 || reported.has(it.name)) continue;
           if (overlapDepth(it.rect, poly) > 0.03) {
             reported.add(it.name);
@@ -306,10 +316,13 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
     }
 
     // --- rooms: access and overlaps ---
+    // doors / openings by position: a big floor has thousands, and each room only looks at its own
+    const passIdx = new GridIndex(info.openings.map((o) => boxOf([v2.add(o.seg.a, v2.scale(segDir(o.seg), o.u))], o.seg.thickness / 2 + 0.31)));
     lv.rooms.forEach((r, ri) => {
       const key = roomKey(li, ri);
       if (!graph.has(key)) graph.set(key, new Set());
-      const touching = info.openings.some((o) => {
+      const touching = passIdx.query(boxOf(r.polygon as Vec2[])).some((oi) => {
+        const o = info.openings[oi];
         if (o.op.type === "window") return false;
         const d = segDir(o.seg), N = v2.perp(d);
         const c = v2.add(o.seg.a, v2.scale(d, o.u));
@@ -319,8 +332,10 @@ export function checkLayout(project: Project, levels: LevelInfo[]): string[] {
       const hasStair = hasLift || info.stairs.some((st) => roomAt(li, st.approach) === ri) || levels.some((L) => L.stairs.some((st) => st.target === li && roomAt(li, st.arrival) === ri));
       if (!touching && !hasStair) warn(`room '${r.name}' has no door or opening into it`);
     });
+    const roomBoxes = new GridIndex(lv.rooms.map((r) => boxOf(r.polygon as Vec2[])));
     for (let a = 0; a < lv.rooms.length; a++)
-      for (let b = a + 1; b < lv.rooms.length; b++) {
+      for (const b of roomBoxes.query(roomBoxes.boxes[a])) {
+        if (b <= a) continue;
         const area = sharedArea(lv.rooms[a].polygon as Vec2[], lv.rooms[b].polygon as Vec2[]);
         if (area > 0.5) warn(`rooms '${lv.rooms[a].name}' and '${lv.rooms[b].name}' overlap by about ${fmt(area)} m²`);
       }
