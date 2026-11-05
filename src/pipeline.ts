@@ -2,6 +2,7 @@ import { buildProject, type LevelInfo } from "./build.js";
 import { walkMeshes, type SceneNode } from "./geometry/scene.js";
 import { resolveMaterial } from "./materials/library.js";
 import { generateTextures } from "./materials/textures.js";
+import { paintInWorkers } from "./materials/texpool.js";
 import type { MaterialDef, TextureSet } from "./materials/types.js";
 import { parseProject, type Project } from "./schema/schema.js";
 import { checkLayout } from "./validate/layout.js";
@@ -226,8 +227,31 @@ export function texturesFor(def: MaterialDef, size: number): TextureSet | undefi
     return t;
   }
   if (def.pattern === "none") return undefined;
-  const key = JSON.stringify([def.pattern, def.roughness, def.metalness, def.opacity, def.normalStrength, def.params, size]);
+  const key = proceduralKey(def, size);
   let t = texCache.get(key);
   if (!t) texCache.set(key, (t = generateTextures({ ...def, color: WHITE }, size)));
   return t;
+}
+
+const proceduralKey = (def: MaterialDef, size: number) =>
+  JSON.stringify([def.pattern, def.roughness, def.metalness, def.opacity, def.normalStrength, def.params, size]);
+
+/**
+ * Paint these materials' procedural textures on worker threads, so later texturesFor calls find them
+ * ready. Best-effort: anything it doesn't paint is painted on demand as before.
+ */
+export async function prefetchTextures(defs: Iterable<MaterialDef>, size: number): Promise<void> {
+  const todo = new Map<string, MaterialDef>();
+  for (const def of defs) {
+    if (def.images || def.pattern === "none") continue;
+    const key = proceduralKey(def, size);
+    if (!texCache.has(key)) todo.set(key, { ...def, color: WHITE });
+  }
+  if (todo.size < 2) return; // not worth starting workers
+  try {
+    const sets = await paintInWorkers([...todo.values()], size);
+    [...todo.keys()].forEach((k, i) => texCache.set(k, sets[i]));
+  } catch {
+    /* painted on demand */
+  }
 }

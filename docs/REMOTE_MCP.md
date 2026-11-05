@@ -48,7 +48,7 @@ Data lives in one folder, mounted at `/data`:
 |---|---|
 | `/data/plans` | Your projects. Exports go to `/data/plans/exports`. |
 | `/data/state` | Accounts (password hashes), sessions, OAuth clients, token hashes, the signing key, and renders kept for 24 hours. Back it up; keep it private. |
-| `/data/cache` | Downloaded CC0 textures, models and vendor pages. |
+| `/data/cache` | Downloaded CC0 textures, models and vendor pages, and encoded textures from earlier exports. |
 
 ### Unraid
 

@@ -217,7 +217,9 @@ arch build plan.json -o MyUnityProject/Assets/Models/house.glb --unity   # or --
 | `png` | 21.0 MB | lossless |
 | `ktx2` | **5.4 MB** | Basis Universal (`KHR_texture_basisu`, required) with mipmaps; stays compressed in GPU memory (BC7/ASTC/ETC2 after transcoding). Unity: installed by the Architecturer package (KTX for Unity). Add `--ktx2-quality high` for sharper UASTC normal maps (larger, slower) |
 
-KTX2 encoding is cached in `~/.cache/architecturer/ktx2` (override with `ARCHITECTURER_CACHE`). A cold build of the house takes ~16 s; later builds take ~3 s. Preview a KTX2 build in the viewer with `http://localhost:5177/?format=ktx2`.
+KTX2 encoding is cached in `~/.cache/architecturer/ktx2` (override with `ARCHITECTURER_CACHE`). A cold build of the house takes ~15 s; later builds take ~1 s. Preview a KTX2 build in the viewer with `http://localhost:5177/?format=ktx2`.
+
+Procedural textures are painted on all CPU cores (up to 8). `jpeg` and `png` exports also cache each material's encoded textures in `~/.cache/architecturer/textures`, so a material already built once, in any plan, isn't painted or encoded again (the villa at 1024 px: ~1.9 s cold, ~0.5 s after). Editing the texture painters invalidates the cache on its own.
 
 Without these flags:
 
