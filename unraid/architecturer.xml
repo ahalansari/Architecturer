@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>architecturer</Name>
-  <Repository>aalansari/architecturer:latest</Repository>
-  <Registry>https://hub.docker.com/r/aalansari/architecturer</Registry>
+  <Repository>100.73.59.10:5000/architecturer:latest</Repository>
+  <Registry>http://100.73.59.10:5000/v2/architecturer/tags/list</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>bash</Shell>

@@ -7,7 +7,7 @@
 services:
   architecturer:
     build: .
-    image: aalansari/architecturer:latest
+    image: 100.73.59.10:5000/architecturer:latest
     restart: unless-stopped
     env_file: .env
     environment:

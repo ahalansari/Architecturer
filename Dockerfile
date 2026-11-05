@@ -1,5 +1,5 @@
 # Architecturer remote MCP server (OAuth + personal tokens, live viewer, download links).
-# docker run -p 5178:5178 -v ./data:/data -e ARCHITECTURER_PUBLIC_URL=https://arch.example.com aalansari/architecturer
+# docker run -p 5178:5178 -v ./data:/data -e ARCHITECTURER_PUBLIC_URL=https://arch.example.com 100.73.59.10:5000/architecturer
 # then open /setup with the setup code from `docker logs`.
 # Settings: README, "Remote MCP server". compose.yaml runs it behind a Cloudflare Tunnel.
 

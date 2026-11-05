@@ -60,7 +60,11 @@ Data lives in one folder, mounted at `/data`:
 4. Point the tunnel's public hostname to `http://<unraid-ip>:5178`.
 5. Open the WebUI. It sends you to `/setup`; the setup code is in the container's log (Docker tab → the container's icon → **Logs**).
 
-The image is `aalansari/architecturer` (amd64 and arm64).
+The image is `100.73.59.10:5000/architecturer` (amd64 and arm64), on a private registry over plain HTTP: the Docker host must list `100.73.59.10:5000` under `insecure-registries` (Unraid: `/etc/docker/daemon.json`). Publish a new build with:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 --output type=image,name=100.73.59.10:5000/architecturer:latest,push=true,registry.insecure=true .
+```
 
 **Option B: Compose.** Install the **Compose Manager** plugin, create a stack, and paste in `compose.yaml` and your `.env`.
 
